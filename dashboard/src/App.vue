@@ -1,0 +1,272 @@
+<template>
+  <el-container class="app-container">
+    <el-aside width="220px" class="sidebar" :class="{ 'sidebar-light': isLight }">
+      <div class="logo">
+        <h2>LogMonitor</h2>
+        <span class="version">v1.0</span>
+      </div>
+      <el-menu
+        :default-active="activeMenu"
+        router
+        :background-color="isLight ? '#ffffff' : '#0a0e27'"
+        :text-color="isLight ? '#606266' : '#94a3b8'"
+        :active-text-color="'#6366f1'"
+      >
+        <el-menu-item index="/">
+          <el-icon><DataLine /></el-icon>
+          <span>概览</span>
+        </el-menu-item>
+        <el-menu-item index="/logs">
+          <el-icon><Document /></el-icon>
+          <span>日志列表</span>
+        </el-menu-item>
+        <el-menu-item index="/performance">
+          <el-icon><TrendCharts /></el-icon>
+          <span>性能分析</span>
+        </el-menu-item>
+        <el-menu-item index="/alerts">
+          <el-icon><Bell /></el-icon>
+          <span>告警管理</span>
+        </el-menu-item>
+        <el-menu-item index="/live">
+          <el-icon><VideoCamera /></el-icon>
+          <span>实时会话</span>
+        </el-menu-item>
+        <el-menu-item index="/recordings">
+          <el-icon><Film /></el-icon>
+          <span>录制回放</span>
+        </el-menu-item>
+        <el-menu-item index="/settings">
+          <el-icon><Setting /></el-icon>
+          <span>系统设置</span>
+        </el-menu-item>
+      </el-menu>
+    </el-aside>
+
+    <el-main class="main-content">
+      <div class="app-header" :class="{ 'app-header-light': isLight }">
+        <el-select
+          v-model="selectedAppId"
+          placeholder="选择应用"
+          filterable
+          @change="handleAppChange"
+          style="width: 300px"
+        >
+          <el-option
+            v-for="app in apps"
+            :key="app.app_id"
+            :label="app.app_id"
+            :value="app.app_id"
+          >
+            <span>{{ app.app_id }}</span>
+            <span class="app-stats">({{ app.error_count }} errors)</span>
+          </el-option>
+        </el-select>
+        <div class="header-actions">
+          <el-switch
+            v-model="isDark"
+            :active-action-icon="Moon"
+            :inactive-action-icon="Sunny"
+            @change="toggleTheme"
+            style="--el-switch-on-color: #2d3748; --el-switch-off-color: #f59e0b"
+          />
+          <el-button @click="refreshData" :loading="loading" :icon="Refresh" circle />
+        </div>
+      </div>
+
+      <div class="page-content">
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" :key="route.fullPath" />
+          </transition>
+        </router-view>
+      </div>
+    </el-main>
+  </el-container>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny } from '@element-plus/icons-vue'
+import { logApi } from './api'
+import type { App } from './types'
+
+const route = useRoute()
+const router = useRouter()
+
+const selectedAppId = ref<string>('')
+const apps = ref<App[]>([])
+const loading = ref(false)
+
+// Theme
+const isDark = ref(true)
+const isLight = computed(() => !isDark.value)
+
+const initTheme = () => {
+  const saved = localStorage.getItem('logmon-theme')
+  if (saved === 'light') {
+    isDark.value = false
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  } else {
+    isDark.value = true
+    document.documentElement.setAttribute('data-theme', 'dark')
+    document.documentElement.classList.add('dark')
+  }
+}
+
+const toggleTheme = (val: boolean) => {
+  if (val) {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    document.documentElement.classList.add('dark')
+    localStorage.setItem('logmon-theme', 'dark')
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+    localStorage.setItem('logmon-theme', 'light')
+  }
+}
+
+const activeMenu = computed(() => route.path)
+
+const fetchApps = async () => {
+  try {
+    const { data } = await logApi.getApps()
+    apps.value = data
+    if (apps.value.length > 0 && !selectedAppId.value) {
+      selectedAppId.value = apps.value[0].app_id
+    }
+  } catch (error) {
+    ElMessage.error('获取应用列表失败')
+  }
+}
+
+const handleAppChange = (appId: string) => {
+  const currentPath = route.path
+  if (currentPath.startsWith('/logs') || currentPath.startsWith('/performance') || currentPath.startsWith('/alerts')) {
+    router.replace({ path: currentPath, query: { appId } })
+  }
+}
+
+const refreshData = () => {
+  loading.value = true
+  fetchApps().finally(() => {
+    loading.value = false
+    ElMessage.success('刷新成功')
+  })
+}
+
+onMounted(() => {
+  initTheme()
+  fetchApps()
+})
+</script>
+
+<style scoped>
+.app-container {
+  height: 100vh;
+}
+
+.sidebar {
+  background: var(--color-bg);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-light {
+  background: var(--color-bg-secondary);
+  border-right-color: var(--color-border);
+}
+
+.logo {
+  padding: 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.logo h2 {
+  color: var(--color-text);
+  font-size: 24px;
+  margin: 0;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.version {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.el-menu {
+  border-right: none;
+  flex: 1;
+}
+
+.el-menu-item {
+  height: 48px;
+  line-height: 48px;
+}
+
+.el-menu-item:hover {
+  background: var(--color-bg-secondary) !important;
+}
+
+.el-menu-item.is-active {
+  background: var(--color-bg-secondary) !important;
+  border-right: 3px solid #6366f1;
+}
+
+.main-content {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+}
+
+.app-header {
+  padding: 16px 24px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.app-header-light {
+  background: var(--color-bg-secondary);
+  border-bottom-color: var(--color-border);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.app-stats {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

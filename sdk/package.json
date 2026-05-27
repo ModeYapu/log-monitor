@@ -1,0 +1,26 @@
+{
+  "name": "@logmonitor/sdk",
+  "version": "1.0.0",
+  "description": "Frontend log monitoring SDK",
+  "main": "dist/logmonitor.min.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "monitoring",
+    "logging",
+    "error-tracking"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^6.0.1",
+    "vite-plugin-dts": "^4.3.0"
+  }
+}

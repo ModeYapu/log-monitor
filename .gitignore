@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+npm-debug.log
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist-python/
+build-python/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDE settings
+.vscode/
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+*.bak
+
+# Claude Code settings
+.claude/
+
+# Test files
+test_api.py
+test.html
+test.sh
+
+# Documentation drafts (keep only final docs)
+*_COMPLETE.md
+*_DONE.md
+FIX_DONE.md
+DARK_MODE_AND_TESTS.md
+ALL_DONE.md
+CODE_REVIEW*.md
+CODE_REVIEW_TASK.md
+*FIX-PROMPT*.md
+*OPTIMIZE*.txt
+
+# Data directories
+data/
+screenshots/

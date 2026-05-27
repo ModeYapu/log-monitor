@@ -1,0 +1,30 @@
+[Unit]
+Description=LogMonitor Collector Service
+Documentation=https://github.com/logmonitor/collector
+After=network.target
+
+[Service]
+Type=simple
+User=logmonitor
+Group=logmonitor
+WorkingDirectory=/opt/logmonitor/collector
+ExecStart=/opt/logmonitor/collector/logmonitor-collector -config /opt/logmonitor/collector/config.yaml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=logmonitor-collector
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/logmonitor/data
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

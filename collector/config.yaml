@@ -1,0 +1,12 @@
+server:
+  port: 9200
+  cors: true
+
+database:
+  path: ./data/logmonitor.db
+  retention_days: 30
+
+buffer:
+  size: 10000
+  flush_interval_ms: 2000
+  flush_batch_size: 500
