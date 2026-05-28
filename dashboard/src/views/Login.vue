@@ -48,9 +48,7 @@
         </el-form-item>
       </el-form>
 
-      <div class="login-footer">
-        <p>默认管理员账号: admin / admin123</p>
-      </div>
+
     </div>
   </div>
 </template>
@@ -143,7 +141,7 @@ const handleLogin = async () => {
 }
 
 .login-form {
-  margin-bottom: 24px;
+  /* no extra margin */
 }
 
 .login-form :deep(.el-form-item) {

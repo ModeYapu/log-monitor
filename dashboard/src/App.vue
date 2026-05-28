@@ -1,5 +1,8 @@
 <template>
-  <el-container class="app-container">
+  <div v-if="isLoginPage">
+    <router-view />
+  </div>
+  <el-container v-else class="app-container">
     <el-aside width="220px" class="sidebar" :class="{ 'sidebar-light': isLight }">
       <div class="logo">
         <h2>LogMonitor</h2>
@@ -111,6 +114,8 @@ const selectedAppId = ref<string>('')
 const apps = ref<App[]>([])
 const loading = ref(false)
 const currentUser = ref<UserInfo | null>(null)
+
+const isLoginPage = computed(() => route.path === '/login')
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
