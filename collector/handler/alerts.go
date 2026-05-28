@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/logmonitor/collector/alerter"
 	"github.com/logmonitor/collector/storage"
 )
 
@@ -25,6 +26,7 @@ func (h *AlertsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/query/alerts", h.GetAlerts)
 	mux.HandleFunc("POST /api/query/alerts", h.CreateAlert)
 	mux.HandleFunc("DELETE /api/query/alerts/", h.DeleteAlert)
+	mux.HandleFunc("POST /api/alerts/test", h.TestAlert)
 }
 
 // GetAlerts returns alert rules and logs for an app
@@ -185,4 +187,105 @@ func boolToInt(b bool) int {
 
 func intToBool(i int) bool {
 	return i == 1
+}
+
+// TestAlertRequest represents the request to test an alert notification
+type TestAlertRequest struct {
+	NotifyType   string          `json:"notify_type"`   // webhook|feishu|email|wecom|dingtalk|telegram
+	NotifyConfig json.RawMessage `json:"notify_config"` // JSON string
+	Message      string          `json:"message"`       // Test message
+}
+
+// TestAlert tests an alert notification
+func (h *AlertsHandler) TestAlert(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req TestAlertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Message == "" {
+		req.Message = "这是一条测试告警消息"
+	}
+
+	var notifyConfig map[string]interface{}
+	if err := json.Unmarshal(req.NotifyConfig, &notifyConfig); err != nil {
+		log.Printf("Failed to parse notify config: %v", err)
+		http.Error(w, "Invalid notify config", http.StatusBadRequest)
+		return
+	}
+
+	notifier := alerter.NewNotifier()
+	title := "测试告警规则"
+	hasError := false
+
+	switch req.NotifyType {
+	case "feishu":
+		webhookURL, _ := notifyConfig["url"].(string)
+		if err := notifier.SendFeishu(webhookURL, title, req.Message); err != nil {
+			log.Printf("Failed to send Feishu notification: %v", err)
+			hasError = true
+		}
+	case "wecom":
+		webhookURL, _ := notifyConfig["url"].(string)
+		if err := notifier.SendWeCom(webhookURL, title, req.Message); err != nil {
+			log.Printf("Failed to send WeCom notification: %v", err)
+			hasError = true
+		}
+	case "dingtalk":
+		webhookURL, _ := notifyConfig["url"].(string)
+		if err := notifier.SendDingTalk(webhookURL, title, req.Message); err != nil {
+			log.Printf("Failed to send DingTalk notification: %v", err)
+			hasError = true
+		}
+	case "telegram":
+		botToken, _ := notifyConfig["bot_token"].(string)
+		chatID, _ := notifyConfig["chat_id"].(string)
+		if err := notifier.SendTelegram(botToken, chatID, req.Message); err != nil {
+			log.Printf("Failed to send Telegram notification: %v", err)
+			hasError = true
+		}
+	case "webhook":
+		webhookURL, _ := notifyConfig["url"].(string)
+		if err := notifier.SendWebhook(webhookURL, title, req.Message); err != nil {
+			log.Printf("Failed to send Webhook notification: %v", err)
+			hasError = true
+		}
+	case "email":
+		email, _ := notifyConfig["email"].(string)
+		if err := notifier.SendEmail(email, title, req.Message); err != nil {
+			log.Printf("Failed to send Email notification: %v", err)
+			hasError = true
+		}
+	default:
+		http.Error(w, "Unknown notify type", http.StatusBadRequest)
+		return
+	}
+
+	if hasError {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to send notification",
+		})
+	} else {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Test notification sent successfully",
+		})
+	}
 }

@@ -67,3 +67,4 @@ CODE_REVIEW_TASK.md
 # Data directories
 data/
 screenshots/
+collector/logmonitor-collector

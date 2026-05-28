@@ -17,9 +17,10 @@ type Config struct {
 
 // ServerConfig holds HTTP server configuration
 type ServerConfig struct {
-	Port        int      `yaml:"port"`
-	CORS        bool     `yaml:"cors"`
-	AdminTokens []string `yaml:"admin_tokens"`
+	Port           int      `yaml:"port"`
+	CORS           bool     `yaml:"cors"`
+	AllowedOrigins []string `yaml:"allowed_origins"`
+	AdminTokens    []string `yaml:"admin_tokens"`
 }
 
 // DatabaseConfig holds database configuration
@@ -82,8 +83,9 @@ func Load(path string) (*Config, error) {
 func Default() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Port: 9200,
-			CORS: true,
+			Port:           9200,
+			CORS:           true,
+			AllowedOrigins: nil,
 		},
 		Database: DatabaseConfig{
 			Path:          "./data/logmonitor.db",

@@ -33,6 +33,9 @@ export const logApi = {
   deleteAlert: (id: number) =>
     api.delete(`/query/alerts/${id}`),
 
+  testAlert: (data: { notify_type: string; notify_config: string; message: string }) =>
+    api.post('/alerts/test', data),
+
   health: () =>
     api.get<{ status: string; time: number }>('/health')
 }

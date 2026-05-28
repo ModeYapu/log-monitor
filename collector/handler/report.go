@@ -9,19 +9,24 @@ import (
 	"time"
 
 	"github.com/logmonitor/collector/buffer"
+	"github.com/logmonitor/collector/config"
 	"github.com/logmonitor/collector/model"
 	"github.com/logmonitor/collector/storage"
 )
 
 // ReportHandler handles log report requests from SDK
 type ReportHandler struct {
-	writer *buffer.Writer
+	writer         *buffer.Writer
+	corsEnabled    bool
+	allowedOrigins []string
 }
 
 // NewReportHandler creates a new report handler
-func NewReportHandler(writer *buffer.Writer) *ReportHandler {
+func NewReportHandler(writer *buffer.Writer, cfg *config.ServerConfig) *ReportHandler {
 	return &ReportHandler{
-		writer: writer,
+		writer:         writer,
+		corsEnabled:    cfg.CORS,
+		allowedOrigins: cfg.AllowedOrigins,
 	}
 }
 
@@ -32,10 +37,26 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set CORS headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// Set CORS headers based on config
+	if h.corsEnabled {
+		origin := r.Header.Get("Origin")
+		allowedOrigin := "*"
+
+		if len(h.allowedOrigins) > 0 {
+			allowedOrigin = ""
+			for _, allowed := range h.allowedOrigins {
+				if origin == allowed {
+					allowedOrigin = origin
+					break
+				}
+			}
+		}
+		if allowedOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 
 	// Handle preflight

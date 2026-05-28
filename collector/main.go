@@ -76,7 +76,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Report endpoint
-	reportHandler := handler.NewReportHandler(writer)
+	reportHandler := handler.NewReportHandler(writer, &cfg.Server)
 	mux.Handle("/api/report", reportHandler)
 	mux.Handle("/api/events", reportHandler)
 

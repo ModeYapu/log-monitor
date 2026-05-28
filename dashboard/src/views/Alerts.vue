@@ -135,6 +135,9 @@
         <el-form-item label="通知方式" prop="notify_type">
           <el-select v-model="alertForm.notify_type" style="width: 100%" @change="handleNotifyTypeChange">
             <el-option label="飞书" value="feishu" />
+            <el-option label="企业微信" value="wecom" />
+            <el-option label="钉钉" value="dingtalk" />
+            <el-option label="Telegram" value="telegram" />
             <el-option label="Webhook" value="webhook" />
             <el-option label="邮件" value="email" />
           </el-select>
@@ -144,12 +147,36 @@
           <el-input v-model="alertForm.notify_config.url" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
         </el-form-item>
 
+        <el-form-item v-if="alertForm.notify_type === 'wecom'" label="企业微信 Webhook" prop="notify_config.url">
+          <el-input v-model="alertForm.notify_config.url" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
+        </el-form-item>
+
+        <el-form-item v-if="alertForm.notify_type === 'dingtalk'" label="钉钉 Webhook" prop="notify_config.url">
+          <el-input v-model="alertForm.notify_config.url" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." />
+        </el-form-item>
+
+        <template v-if="alertForm.notify_type === 'telegram'">
+          <el-form-item label="Bot Token" prop="notify_config.bot_token">
+            <el-input v-model="alertForm.notify_config.bot_token" placeholder="123456:ABC-DEF1234..." />
+          </el-form-item>
+          <el-form-item label="Chat ID" prop="notify_config.chat_id">
+            <el-input v-model="alertForm.notify_config.chat_id" placeholder="-1001234567890" />
+          </el-form-item>
+        </template>
+
         <el-form-item v-if="alertForm.notify_type === 'webhook'" label="Webhook URL" prop="notify_config.url">
           <el-input v-model="alertForm.notify_config.url" placeholder="https://your-webhook-url" />
         </el-form-item>
 
         <el-form-item v-if="alertForm.notify_type === 'email'" label="邮箱地址" prop="notify_config.email">
           <el-input v-model="alertForm.notify_config.email" placeholder="admin@example.com" />
+        </el-form-item>
+
+        <el-form-item v-if="alertForm.notify_type" label="测试发送">
+          <el-button @click="handleTestNotification" :loading="testing" size="small">
+            发送测试消息
+          </el-button>
+          <span class="ml-2 text-secondary">验证通知配置是否正确</span>
         </el-form-item>
 
         <el-form-item label="冷却时间" prop="cooldown_minutes">
@@ -178,6 +205,7 @@ import type { AlertRule, AlertLog } from '../types'
 
 const loading = ref(false)
 const creating = ref(false)
+const testing = ref(false)
 const showCreateDialog = ref(false)
 const alertFormRef = ref<FormInstance>()
 
@@ -200,7 +228,9 @@ const alertForm = reactive<AlertRule>({
   notify_type: 'feishu',
   notify_config: {
     url: '',
-    email: ''
+    email: '',
+    bot_token: '',
+    chat_id: ''
   },
   enabled: true,
   cooldown_minutes: 30
@@ -225,6 +255,9 @@ const getConditionTypeLabel = (type: string) => {
 const getNotifyTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
     feishu: '飞书',
+    wecom: '企业微信',
+    dingtalk: '钉钉',
+    telegram: 'Telegram',
     webhook: 'Webhook',
     email: '邮件'
   }
@@ -255,7 +288,7 @@ const handleConditionTypeChange = (type: string) => {
 }
 
 const handleNotifyTypeChange = (type: string) => {
-  alertForm.notify_config = { url: '', email: '' }
+  alertForm.notify_config = { url: '', email: '', bot_token: '', chat_id: '' }
 }
 
 const fetchData = async () => {
@@ -340,6 +373,53 @@ const handleCreateAlert = async () => {
     console.error('Failed to create alert:', error)
   } finally {
     creating.value = false
+  }
+}
+
+const handleTestNotification = async () => {
+  if (!alertForm.notify_type) {
+    ElMessage.warning('请先选择通知方式')
+    return
+  }
+
+  // 检查必需的配置字段
+  if (alertForm.notify_type === 'feishu' || alertForm.notify_type === 'wecom' ||
+      alertForm.notify_type === 'dingtalk' || alertForm.notify_type === 'webhook') {
+    if (!alertForm.notify_config.url) {
+      ElMessage.warning('请先填写 Webhook URL')
+      return
+    }
+  }
+
+  if (alertForm.notify_type === 'telegram') {
+    if (!alertForm.notify_config.bot_token || !alertForm.notify_config.chat_id) {
+      ElMessage.warning('请先填写 Bot Token 和 Chat ID')
+      return
+    }
+  }
+
+  if (alertForm.notify_type === 'email') {
+    if (!alertForm.notify_config.email) {
+      ElMessage.warning('请先填写邮箱地址')
+      return
+    }
+  }
+
+  testing.value = true
+  try {
+    const testData = {
+      notify_type: alertForm.notify_type,
+      notify_config: JSON.stringify(alertForm.notify_config),
+      message: '这是一条来自 LogMonitor 的测试告警消息，如果您收到此消息，说明通知配置正确！'
+    }
+
+    await logApi.testAlert(testData)
+    ElMessage.success('测试消息发送成功，请检查对应平台是否收到消息')
+  } catch (error) {
+    console.error('Failed to send test notification:', error)
+    ElMessage.error('测试消息发送失败，请检查配置是否正确')
+  } finally {
+    testing.value = false
   }
 }
 

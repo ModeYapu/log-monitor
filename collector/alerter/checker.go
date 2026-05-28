@@ -260,6 +260,16 @@ func (c *Checker) triggerAlert(rule storage.AlertRule, message string) {
 	case "feishu":
 		webhookURL, _ := notifyConfig["url"].(string)
 		c.notifier.SendFeishu(webhookURL, rule.Name, message)
+	case "wecom":
+		webhookURL, _ := notifyConfig["url"].(string)
+		c.notifier.SendWeCom(webhookURL, rule.Name, message)
+	case "dingtalk":
+		webhookURL, _ := notifyConfig["url"].(string)
+		c.notifier.SendDingTalk(webhookURL, rule.Name, message)
+	case "telegram":
+		botToken, _ := notifyConfig["bot_token"].(string)
+		chatID, _ := notifyConfig["chat_id"].(string)
+		c.notifier.SendTelegram(botToken, chatID, fmt.Sprintf("%s\n%s", rule.Name, message))
 	case "webhook":
 		webhookURL, _ := notifyConfig["url"].(string)
 		c.notifier.SendWebhook(webhookURL, rule.Name, message)

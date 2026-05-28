@@ -225,11 +225,6 @@ function connectToSession(sessionId: string) {
   }
 }
 
-  ws.onerror = () => {
-    connecting.value = false
-  }
-}
-
 function rebuildReplayer() {
   const container = replayContainerRef.value
   if (!container || allEvents.length < 2) return  // rrweb needs >= 2 events
