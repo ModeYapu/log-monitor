@@ -769,8 +769,8 @@ type RecordingEventData struct {
 	SessionID string `json:"sessionId"`
 	Seq       int    `json:"seq"`
 	Timestamp int64  `json:"timestamp"`
-	EventData string
-	CreatedAt int64
+	EventData string `json:"eventData"`
+	CreatedAt int64  `json:"createdAt"`
 }
 
 // CreateRecording creates a new recording session
