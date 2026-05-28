@@ -188,6 +188,7 @@ import {
   DArrowRight
 } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import rrwebPlayer from 'rrweb-player'
 
 const { showSuccess, showError } = useSnackbar()
 
@@ -301,12 +302,6 @@ async function loadRecordingEvents(sessionId: string) {
 async function initPlayer() {
   if (!replayerRef.value || events.length === 0) return
 
-  // Use rrweb-player from CDN global
-  const rrwebPlayerLib = (window as any).rrwebPlayer
-  if (!rrwebPlayerLib) {
-    return
-  }
-
   // Convert events to rrweb format
   const rrwebEvents = events.map(e => {
     try {
@@ -333,8 +328,8 @@ async function initPlayer() {
     if (replayerRef.value) replayerRef.value.innerHTML = ''
   }
 
-  // Create new player
-  replayer = new rrwebPlayerLib({
+  // Create new player using npm-imported rrwebPlayer
+  replayer = new rrwebPlayer({
     target: replayerRef.value,
     props: {
       events: rrwebEvents,
