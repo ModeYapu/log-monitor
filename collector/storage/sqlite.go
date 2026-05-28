@@ -749,26 +749,26 @@ func (db *DB) GetAlertLogs(appID string, limit int) ([]AlertLog, error) {
 
 // RecordingInfo represents a recording session
 type RecordingInfo struct {
-	ID           int64
-	SessionID    string
-	AppID        string
-	StartTime    int64
-	EndTime      int64
-	DurationMs   int64
-	EventCount   int
-	FullSnapshot string
-	URL          string
-	UA           string
-	Status       string
-	CreatedAt    int64
+	ID           int64  `json:"id"`
+	SessionID    string `json:"sessionId"`
+	AppID        string `json:"appId"`
+	StartTime    int64  `json:"startTime"`
+	EndTime      int64  `json:"endTime"`
+	DurationMs   int64  `json:"durationMs"`
+	EventCount   int    `json:"eventCount"`
+	FullSnapshot string `json:"fullSnapshot"`
+	URL          string `json:"url"`
+	UA           string `json:"ua"`
+	Status       string `json:"status"`
+	CreatedAt    int64  `json:"createdAt"`
 }
 
 // RecordingEventData represents a single recording event
 type RecordingEventData struct {
-	ID        int64
-	SessionID string
-	Seq       int
-	Timestamp int64
+	ID        int64  `json:"id"`
+	SessionID string `json:"sessionId"`
+	Seq       int    `json:"seq"`
+	Timestamp int64  `json:"timestamp"`
 	EventData string
 	CreatedAt int64
 }
