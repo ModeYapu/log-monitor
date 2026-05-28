@@ -13,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Buffer   BufferConfig   `yaml:"buffer"`
 	Alert    AlertConfig    `yaml:"alert"`
+	Auth     AuthConfig     `yaml:"auth"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -39,6 +40,14 @@ type BufferConfig struct {
 // AlertConfig holds alert configuration
 type AlertConfig struct {
 	CheckInterval int `yaml:"check_interval_ms"`
+}
+
+// AuthConfig holds authentication configuration
+type AuthConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	JWTSecret        string `yaml:"jwt_secret"`
+	DefaultPassword  string `yaml:"default_password"`
+	TokenExpireHours int    `yaml:"token_expire_hours"`
 }
 
 // Load loads configuration from a YAML file
@@ -98,6 +107,12 @@ func Default() *Config {
 		},
 		Alert: AlertConfig{
 			CheckInterval: 60000,
+		},
+		Auth: AuthConfig{
+			Enabled:          true,
+			JWTSecret:        "",
+			DefaultPassword:  "admin123",
+			TokenExpireHours: 24,
 		},
 	}
 }

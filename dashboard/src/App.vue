@@ -40,6 +40,10 @@
           <el-icon><Setting /></el-icon>
           <span>系统设置</span>
         </el-menu-item>
+        <el-menu-item index="/users" v-if="isAdmin">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -63,6 +67,12 @@
           </el-option>
         </el-select>
         <div class="header-actions">
+          <div class="user-info" v-if="currentUser">
+            <span class="user-name">{{ currentUser.display_name || currentUser.username }}</span>
+            <el-tag :type="currentUser.role === 'admin' ? 'danger' : 'primary'" size="small">
+              {{ currentUser.role === 'admin' ? '管理员' : '用户' }}
+            </el-tag>
+          </div>
           <el-switch
             v-model="isDark"
             :active-action-icon="Moon"
@@ -71,6 +81,7 @@
             style="--el-switch-on-color: #2d3748; --el-switch-off-color: #f59e0b"
           />
           <el-button @click="refreshData" :loading="loading" :icon="Refresh" circle />
+          <el-button @click="handleLogout" :icon="SwitchButton" circle />
         </div>
       </div>
 
@@ -89,9 +100,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny } from '@element-plus/icons-vue'
+import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { logApi } from './api'
-import type { App } from './types'
+import type { App, UserInfo } from './types'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,6 +110,9 @@ const router = useRouter()
 const selectedAppId = ref<string>('')
 const apps = ref<App[]>([])
 const loading = ref(false)
+const currentUser = ref<UserInfo | null>(null)
+
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
 // Theme
 const isDark = ref(true)
@@ -158,8 +172,27 @@ const refreshData = () => {
   })
 }
 
+const getCurrentUser = () => {
+  const userStr = localStorage.getItem('logmon_user')
+  if (userStr) {
+    try {
+      currentUser.value = JSON.parse(userStr)
+    } catch {
+      currentUser.value = null
+    }
+  }
+}
+
+const handleLogout = () => {
+  localStorage.removeItem('logmon_token')
+  localStorage.removeItem('logmon_user')
+  currentUser.value = null
+  router.push('/login')
+}
+
 onMounted(() => {
   initTheme()
+  getCurrentUser()
   fetchApps()
 })
 </script>
@@ -246,6 +279,21 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--color-bg);
+  border-radius: 6px;
+}
+
+.user-name {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .page-content {

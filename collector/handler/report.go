@@ -16,17 +16,13 @@ import (
 
 // ReportHandler handles log report requests from SDK
 type ReportHandler struct {
-	writer         *buffer.Writer
-	corsEnabled    bool
-	allowedOrigins []string
+	writer *buffer.Writer
 }
 
 // NewReportHandler creates a new report handler
 func NewReportHandler(writer *buffer.Writer, cfg *config.ServerConfig) *ReportHandler {
 	return &ReportHandler{
-		writer:         writer,
-		corsEnabled:    cfg.CORS,
-		allowedOrigins: cfg.AllowedOrigins,
+		writer: writer,
 	}
 }
 
@@ -37,37 +33,11 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set CORS headers based on config
-	if h.corsEnabled {
-		origin := r.Header.Get("Origin")
-		allowedOrigin := "*"
-
-		if len(h.allowedOrigins) > 0 {
-			allowedOrigin = ""
-			for _, allowed := range h.allowedOrigins {
-				if origin == allowed {
-					allowedOrigin = origin
-					break
-				}
-			}
-		}
-		if allowedOrigin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		}
-	}
 	w.Header().Set("Content-Type", "application/json")
 
-	// Handle preflight
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-		// Limit request body size to prevent DoS attacks
-		const maxRequestSize = 10 * 1024 * 1024 // 10MB
-		r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+	// Limit request body size to prevent DoS attacks
+	const maxRequestSize = 10 * 1024 * 1024 // 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
 	// Read request body
 	body, err := io.ReadAll(r.Body)

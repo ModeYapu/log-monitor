@@ -1,14 +1,35 @@
 import axios from 'axios'
-import type { Event, QueryParams, QueryResult, Stats, App, AlertRule, AlertLog, LiveSession, Recording, RecordingEvent } from '../types'
+import type { Event, QueryParams, QueryResult, Stats, App, AlertRule, AlertLog, LiveSession, Recording, RecordingEvent, UserInfo, User, LoginRequest, LoginResponse, CreateUserRequest, UpdateUserRequest, ChangePasswordRequest } from '../types'
+import router from '../router'
 
 const api = axios.create({
   baseURL: '/logmon-api',
   timeout: 30000
 })
 
+// Request interceptor: add token to headers
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('logmon_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Response interceptor: handle 401 errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('logmon_token')
+      localStorage.removeItem('logmon_user')
+      router.push('/login')
+    }
     console.error('API Error:', error)
     return Promise.reject(error)
   }
@@ -60,6 +81,46 @@ export const cobrowseApi = {
 
   deleteRecording: (sessionId: string) =>
     api.delete<{ success: boolean }>(`/query/recordings/${sessionId}`)
+}
+
+export const authApi = {
+  // Login - no token required
+  login: (data: LoginRequest) => {
+    // Create a separate instance without auth interceptor for login
+    const authApi = axios.create({
+      baseURL: '/logmon-api',
+      timeout: 30000
+    })
+    return authApi.post<LoginResponse>('/auth/login', data)
+  },
+
+  // Get current user info
+  me: () =>
+    api.get<UserInfo>('/auth/me'),
+
+  // Change password
+  changePassword: (data: ChangePasswordRequest) =>
+    api.put<{ message: string }>('/auth/password', data),
+
+  // List all users (admin only)
+  listUsers: () =>
+    api.get<{ data: User[] }>('/users'),
+
+  // Create user (admin only)
+  createUser: (data: CreateUserRequest) =>
+    api.post<{ message: string; user: { id: number; username: string; role: string } }>('/users', data),
+
+  // Update user (admin only)
+  updateUser: (id: number, data: UpdateUserRequest) =>
+    api.put<{ message: string }>(`/users/${id}`, data),
+
+  // Delete user (admin only)
+  deleteUser: (id: number) =>
+    api.delete<{ message: string }>(`/users/${id}`),
+
+  // Reset password (admin only)
+  resetPassword: (id: number, data: { new_password: string }) =>
+    api.put<{ message: string }>(`/users/${id}`, data)
 }
 
 export default api

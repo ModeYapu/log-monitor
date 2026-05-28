@@ -69,6 +69,44 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
 
         <el-card class="mt-4">
           <template #header>
+            <span>修改密码</span>
+          </template>
+
+          <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="120px">
+            <el-form-item label="原密码" prop="old_password">
+              <el-input
+                v-model="passwordForm.old_password"
+                type="password"
+                show-password
+                placeholder="请输入原密码"
+              />
+            </el-form-item>
+            <el-form-item label="新密码" prop="new_password">
+              <el-input
+                v-model="passwordForm.new_password"
+                type="password"
+                show-password
+                placeholder="请输入新密码（至少6位）"
+              />
+            </el-form-item>
+            <el-form-item label="确认密码" prop="confirm_password">
+              <el-input
+                v-model="passwordForm.confirm_password"
+                type="password"
+                show-password
+                placeholder="请再次输入新密码"
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="changingPassword" @click="handleChangePassword">
+                修改密码
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <el-card class="mt-4">
+          <template #header>
             <span>数据保留策略</span>
           </template>
 
@@ -150,16 +188,46 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { CircleCheck, Refresh } from '@element-plus/icons-vue'
-import { logApi } from '../api'
+import { logApi, authApi } from '../api'
 import { formatNumber, formatTime } from '../utils/formatters'
 
 const apps = ref<any[]>([])
 const selectedAppId = ref('')
 const retentionDays = ref(30)
 const testingHealth = ref(false)
+const changingPassword = ref(false)
+
+const passwordFormRef = ref<FormInstance>()
+const passwordForm = reactive({
+  old_password: '',
+  new_password: '',
+  confirm_password: ''
+})
+
+const validateConfirmPassword = (rule: any, value: any, callback: any) => {
+  if (value !== passwordForm.new_password) {
+    callback(new Error('两次输入的密码不一致'))
+  } else {
+    callback()
+  }
+}
+
+const passwordRules: FormRules = {
+  old_password: [
+    { required: true, message: '请输入原密码', trigger: 'blur' }
+  ],
+  new_password: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, message: '密码至少 6 个字符', trigger: 'blur' }
+  ],
+  confirm_password: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    { validator: validateConfirmPassword, trigger: 'blur' }
+  ]
+}
 
 const sdkUrl = window.location.origin + '/sdk/logmonitor.min.js'
 const collectorUrl = window.location.protocol + '//' + window.location.hostname + ':9200'
@@ -254,6 +322,39 @@ LogMonitor.track('button_click', { button: 'submit' })`
 
 const saveRetention = () => {
   ElMessage.info(`数据保留策略已设置为 ${retentionDays.value} 天（需要后端支持）`)
+}
+
+const handleChangePassword = async () => {
+  if (!passwordFormRef.value) return
+
+  await passwordFormRef.value.validate(async (valid) => {
+    if (!valid) return
+
+    changingPassword.value = true
+    try {
+      await authApi.changePassword({
+        old_password: passwordForm.old_password,
+        new_password: passwordForm.new_password
+      })
+      ElMessage.success('密码修改成功，请重新登录')
+      // Clear password form
+      Object.assign(passwordForm, {
+        old_password: '',
+        new_password: '',
+        confirm_password: ''
+      })
+      // Logout and redirect to login
+      setTimeout(() => {
+        localStorage.removeItem('logmon_token')
+        localStorage.removeItem('logmon_user')
+        window.location.href = '/logmon/login'
+      }, 1500)
+    } catch (error: any) {
+      ElMessage.error(error.response?.data?.error || '密码修改失败')
+    } finally {
+      changingPassword.value = false
+    }
+  })
 }
 
 onMounted(() => {

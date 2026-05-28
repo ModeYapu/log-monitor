@@ -17,6 +17,7 @@ import (
 	"github.com/logmonitor/collector/handler"
 	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/storage"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -57,6 +58,28 @@ func main() {
 	// Ensure cobrowsing tables exist
 	db.EnsureCobrowseTables()
 
+	// Initialize user storage and create users table
+	userStorage := storage.NewUserStorage(db)
+	if err := userStorage.EnsureUsersTable(); err != nil {
+		log.Fatalf("Failed to create users table: %v", err)
+	}
+
+	// Seed admin user if no users exist
+	if err := seedAdminUser(userStorage, &cfg.Auth); err != nil {
+		log.Fatalf("Failed to seed admin user: %v", err)
+	}
+
+	// Initialize JWT middleware
+	jwtMiddleware := middleware.NewJWT(cfg.Auth.JWTSecret, cfg.Auth.TokenExpireHours)
+	if cfg.Auth.JWTSecret == "" {
+		log.Printf("JWT secret: auto-generated (set auth.jwt_secret in config to persist)")
+	} else {
+		log.Printf("JWT secret: loaded from config")
+	}
+
+	// Initialize CORS middleware
+	corsMiddleware := middleware.NewCORS(cfg.Server.AllowedOrigins)
+
 	// Initialize buffer writer
 	writer := buffer.NewWriter(db, buffer.Config{
 		BufferSize:    cfg.Buffer.Size,
@@ -72,28 +95,68 @@ func main() {
 	log.Printf("Buffer writer initialized: size=%d, interval=%dms, batch=%d",
 		cfg.Buffer.Size, cfg.Buffer.FlushInterval, cfg.Buffer.FlushBatchSize)
 
-	// Setup HTTP handlers
+	// Setup HTTP handlers with route groups
 	mux := http.NewServeMux()
 
-	// Report endpoint
+	// Public routes (no authentication required)
 	reportHandler := handler.NewReportHandler(writer, &cfg.Server)
 	mux.Handle("/api/report", reportHandler)
 	mux.Handle("/api/events", reportHandler)
-
-	// Screenshot endpoint
-	screenshotHandler := handler.NewScreenshotHandler("./data/screenshots")
-	mux.Handle("/api/report/screenshot", screenshotHandler)
-
-	// Serve screenshot files
+	mux.Handle("/api/report/screenshot", handler.NewScreenshotHandler("./data/screenshots"))
 	mux.Handle("/api/screenshots/", http.StripPrefix("/api/screenshots/", http.FileServer(http.Dir("./data/screenshots"))))
+	mux.Handle("/api/auth/login", corsMiddleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.NewAuthHandler(userStorage, jwtMiddleware).Login(w, r)
+	})))
+	mux.Handle("/api/health", corsMiddleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.NewQueryHandler(db).Health(w, r)
+	})))
 
-	// Query endpoints
+	// Protected routes (require authentication)
 	queryHandler := handler.NewQueryHandler(db)
-	queryHandler.RegisterRoutes(mux)
+	authHandler := handler.NewAuthHandler(userStorage, jwtMiddleware)
 
-	// Alerts endpoints
-	alertsHandler := handler.NewAlertsHandler(db)
-	alertsHandler.RegisterRoutes(mux)
+	// API routes that require JWT authentication
+	authRoutes := []struct {
+		pattern string
+		handler http.HandlerFunc
+	}{
+		{"GET /api/auth/me", authHandler.Me},
+		{"PUT /api/auth/password", authHandler.ChangePassword},
+		{"GET /api/query/logs", queryHandler.QueryLogs},
+		{"GET /api/query/stats", queryHandler.QueryStats},
+		{"GET /api/query/apps", queryHandler.QueryApps},
+		{"GET /api/query/alerts", handler.NewAlertsHandler(db).GetAlerts},
+		{"POST /api/query/alerts", handler.NewAlertsHandler(db).CreateAlert},
+		{"DELETE /api/query/alerts/", handler.NewAlertsHandler(db).DeleteAlert},
+		{"POST /api/alerts/test", handler.NewAlertsHandler(db).TestAlert},
+	}
+
+	for _, route := range authRoutes {
+		pattern := route.pattern
+		handler := corsMiddleware.Handler(jwtMiddleware.Handler(http.HandlerFunc(route.handler)))
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			handler.ServeHTTP(w, r)
+		})
+	}
+
+	// Admin-only routes
+	adminRoutes := []struct {
+		pattern string
+		handler http.HandlerFunc
+	}{
+		{"GET /api/users", authHandler.ListUsers},
+		{"POST /api/users", authHandler.CreateUser},
+		{"PUT /api/users/", authHandler.UpdateUser},
+		{"DELETE /api/users/", authHandler.DeleteUser},
+	}
+
+	for _, route := range adminRoutes {
+		pattern := route.pattern
+		handler := corsMiddleware.Handler(jwtMiddleware.Handler(middleware.RequireAdmin(http.HandlerFunc(route.handler))))
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			handler.ServeHTTP(w, r)
+		})
+	}
 
 	// Initialize alert checker
 	alertChecker := alerter.NewChecker(db)
@@ -105,7 +168,7 @@ func main() {
 	// Initialize cobrowse hub
 	cobrowseHub := handler.NewCoBrowseHub(db)
 
-	// Configure auth from config
+	// Configure auth from config (for cobrowse - legacy token-based auth)
 	if len(cfg.Server.AdminTokens) > 0 {
 		auth := &middleware.AuthConfig{
 			AdminTokens: make(map[string]bool),
@@ -116,16 +179,16 @@ func main() {
 			auth.AddAdminToken(t)
 		}
 		cobrowseHub.SetAuthConfig(auth)
-		log.Printf("Auth enabled with %d admin token(s)", len(cfg.Server.AdminTokens))
+		log.Printf("Legacy cobrowse auth enabled with %d admin token(s)", len(cfg.Server.AdminTokens))
 	} else {
-		// No tokens configured = auth disabled
+		// No tokens configured = auth disabled for cobrowse
 		auth := &middleware.AuthConfig{Enabled: false}
 		cobrowseHub.SetAuthConfig(auth)
-		log.Println("Auth disabled (no admin_tokens configured)")
+		log.Println("Legacy cobrowse auth disabled (no admin_tokens configured)")
 	}
 	defer cobrowseHub.Close()
 
-	// Register cobrowse WebSocket routes
+	// Register cobrowse WebSocket routes (with JWT auth support)
 	cobrowseHub.RegisterRoutes(mux)
 
 	// Register cobrowse HTTP API routes
@@ -134,10 +197,13 @@ func main() {
 
 	log.Println("Cobrowse hub initialized")
 
+	// Apply CORS middleware to all routes
+	handlerWithCORS := corsMiddleware.Handler(mux)
+
 	// Server with timeout
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      mux,
+		Handler:      handlerWithCORS,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -167,4 +233,51 @@ func main() {
 	}
 
 	log.Println("Server stopped")
+}
+
+// seedAdminUser creates the default admin user if no users exist
+func seedAdminUser(userStorage *storage.UserStorage, authCfg *config.AuthConfig) error {
+	count, err := userStorage.CountUsers()
+	if err != nil {
+		return fmt.Errorf("failed to count users: %w", err)
+	}
+
+	if count > 0 {
+		log.Printf("Found %d existing user(s), skipping admin seed", count)
+		return nil
+	}
+
+	// No users exist, create default admin
+	password := authCfg.DefaultPassword
+	if password == "" {
+		password = "admin123"
+	}
+
+	log.Printf("Creating default admin user (username: admin, password: %s)", password)
+
+	// Hash password
+	hashedPassword, err := hashPassword(password)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Create admin user
+	userID, err := userStorage.CreateUser("admin", hashedPassword, "Administrator", "admin")
+	if err != nil {
+		return fmt.Errorf("failed to create admin user: %w", err)
+	}
+
+	log.Printf("Admin user created successfully (ID: %d)", userID)
+	log.Println("IMPORTANT: Please change the default admin password after first login!")
+
+	return nil
+}
+
+// hashPassword hashes a password using bcrypt
+func hashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }

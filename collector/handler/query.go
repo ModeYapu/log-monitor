@@ -37,16 +37,7 @@ func (h *QueryHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // QueryLogs handles log queries
 func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
-	// Set CORS headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Content-Type", "application/json")
-
-	// Handle preflight
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 
 	// Parse query parameters
 	query := storage.QueryParams{
@@ -115,8 +106,6 @@ func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
 
 // QueryStats returns statistics for an app
 func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
-	// Set headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 
 	appID := r.URL.Query().Get("appId")
@@ -149,8 +138,6 @@ func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
 
 // QueryApps returns list of all apps
 func (h *QueryHandler) QueryApps(w http.ResponseWriter, r *http.Request) {
-	// Set headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 
 	apps, err := h.db.GetApps()

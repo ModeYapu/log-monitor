@@ -31,14 +31,7 @@ func (h *AlertsHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // GetAlerts returns alert rules and logs for an app
 func (h *AlertsHandler) GetAlerts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 
 	appID := r.URL.Query().Get("appId")
 	if appID == "" {
@@ -80,15 +73,7 @@ type CreateAlertRequest struct {
 
 // CreateAlert creates a new alert rule
 func (h *AlertsHandler) CreateAlert(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -140,14 +125,7 @@ func (h *AlertsHandler) CreateAlert(w http.ResponseWriter, r *http.Request) {
 
 // DeleteAlert deletes an alert rule
 func (h *AlertsHandler) DeleteAlert(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -198,15 +176,7 @@ type TestAlertRequest struct {
 
 // TestAlert tests an alert notification
 func (h *AlertsHandler) TestAlert(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

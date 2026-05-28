@@ -126,3 +126,54 @@ export interface ControlCommand {
   key?: string
   url?: string
 }
+
+// Auth types
+export interface User {
+  id: number
+  username: string
+  display_name: string
+  role: 'admin' | 'user'
+  enabled: boolean
+  last_login_at: number
+  created_at: number
+  updated_at: number
+}
+
+export interface UserInfo {
+  id: number
+  username: string
+  display_name: string
+  role: 'admin' | 'user'
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface LoginResponse {
+  token: string
+  user: UserInfo
+}
+
+export interface CreateUserRequest {
+  username: string
+  password: string
+  display_name: string
+  role: 'admin' | 'user'
+}
+
+export interface UpdateUserRequest {
+  display_name: string
+  role: 'admin' | 'user'
+  enabled: boolean
+}
+
+export interface ChangePasswordRequest {
+  old_password: string
+  new_password: string
+}
+
+export interface ResetPasswordRequest {
+  new_password: string
+}
