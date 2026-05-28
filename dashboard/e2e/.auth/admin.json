@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1",
+      "localStorage": [
+        {
+          "name": "logmon_user",
+          "value": "{\"id\":1,\"username\":\"admin\",\"display_name\":\"Administrator\",\"role\":\"admin\"}"
+        },
+        {
+          "name": "logmon_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODAwMjk4NTQsInJvbGUiOiJhZG1pbiIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoiYWRtaW4ifQ.h56kcKvKkPvWGgu3tgKDi4idSHW1G5W-c3jlz0W5W7Y"
+        }
+      ]
+    }
+  ]
+}
