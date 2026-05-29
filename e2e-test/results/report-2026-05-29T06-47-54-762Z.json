@@ -1,0 +1,243 @@
+{
+  "timestamp": "2026-05-29T06:47:54.762Z",
+  "project": "logmonitor",
+  "total": 11,
+  "passed": 11,
+  "failed": 0,
+  "rate": 100,
+  "results": [
+    {
+      "scenario": "仪表盘数据验证",
+      "passed": true,
+      "steps": [
+        {
+          "step": "select and verify",
+          "passed": true,
+          "details": "选中: vault-reader (共5个选项)"
+        },
+        {
+          "step": "table not empty",
+          "passed": true,
+          "details": "5行, 首行: [vault-reader, vault-reader, , , 0]"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 10563
+    },
+    {
+      "scenario": "日志查询完整验证",
+      "passed": true,
+      "steps": [
+        {
+          "step": "select and verify",
+          "passed": true,
+          "details": "选中: vault-reader (共22个选项)"
+        },
+        {
+          "step": "submit and verify",
+          "passed": true,
+          "details": "HTTP 200, [{\"app_id\":\"vault-reader\",\"release\":\"\",\"first_seen\":1779872082168,\"last_seen\":1780037153669,\"error_c"
+        },
+        {
+          "step": "table not empty",
+          "passed": true,
+          "details": "41行, 首行: [2026-05-29 14:46:21, 2026-05-29 14:46:21, INFO, INFO, performance]"
+        },
+        {
+          "step": "search error",
+          "passed": true,
+          "details": "Search executed"
+        },
+        {
+          "step": "table not empty",
+          "passed": true,
+          "details": "41行, 首行: [2026-05-29 14:46:21, 2026-05-29 14:46:21, INFO, INFO, performance]"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 12254
+    },
+    {
+      "scenario": "级别筛选验证",
+      "passed": true,
+      "steps": [
+        {
+          "step": "select and verify",
+          "passed": true,
+          "details": "选中: vault-reader (共22个选项)"
+        },
+        {
+          "step": "api verify /query/logs?appId=vault-reader&level=info&limit=1",
+          "passed": true,
+          "details": "data=[{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":1,\"domReady\":620,\"load\":730,\"tcp\":0,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780037153669,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":1,\"domReady\":1047,\"load\":1159,\"tcp\":0,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780036913238,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":710,\"load\":836,\"tcp\":0,\"ttfb\":4},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780036584648,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":557,\"load\":700,\"tcp\":1,\"ttfb\":2},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780034526530,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":561,\"load\":673,\"tcp\":0,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780034398163,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":1,\"domReady\":741,\"load\":855,\"tcp\":0,\"ttfb\":4},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780034172331,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":605,\"load\":716,\"tcp\":0,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780033898831,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":941,\"load\":1048,\"tcp\":0,\"ttfb\":2},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780033634966,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":609,\"load\":741,\"tcp\":1,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780030836409,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":817,\"load\":944,\"tcp\":1,\"ttfb\":2},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780028180728,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":1397,\"load\":1509,\"tcp\":1,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780028089989,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":940,\"load\":1059,\"tcp\":0,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780020576683,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":1717,\"load\":1832,\"tcp\":0,\"ttfb\":2},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780020518982,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":1,\"domReady\":737,\"load\":856,\"tcp\":0,\"ttfb\":2},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1780020493453,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":603,\"load\":730,\"tcp\":0,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779968923841,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":612,\"load\":750,\"tcp\":0,\"ttfb\":4},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779964190337,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":594,\"load\":709,\"tcp\":0,\"ttfb\":5},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779964143681,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":581,\"load\":722,\"tcp\":0,\"ttfb\":2},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779964017408,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":1312,\"load\":1432,\"tcp\":1,\"ttfb\":3},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779963931784,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"127.0.0.1\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":598,\"load\":721,\"tcp\":1,\"ttfb\":2},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779963789313,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"http://127.0.0.1/vault/\",\"viewport\":\"1920x1080\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"107.151.187.186\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":3210,\"load\":3225,\"tcp\":0,\"ttfb\":1423},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779933144921,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1199x945\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"107.151.187.186\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":3853,\"load\":3899,\"tcp\":0,\"ttfb\":329},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779933100484,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1199x945\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":3,\"domReady\":2465,\"load\":2475,\"tcp\":403,\"ttfb\":382},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779893864319,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":73,\"domReady\":4889,\"load\":5034,\"tcp\":986,\"ttfb\":357},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779891055313,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":1,\"domReady\":2783,\"load\":2900,\"tcp\":383,\"ttfb\":643},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779877491514,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":2,\"domReady\":2136,\"load\":2145,\"tcp\":437,\"ttfb\":606},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779877442842,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":3,\"domReady\":2762,\"load\":2772,\"tcp\":404,\"ttfb\":509},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779877392433,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":2,\"domReady\":2140,\"load\":2155,\"tcp\":380,\"ttfb\":634},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779877338201,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":3,\"domReady\":2003,\"load\":2013,\"tcp\":587,\"ttfb\":402},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779877151331,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":2,\"domReady\":1612,\"load\":1622,\"tcp\":374,\"ttfb\":356},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779877090248,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":2,\"domReady\":1993,\"load\":2003,\"tcp\":332,\"ttfb\":495},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779877042429,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":2,\"domReady\":2234,\"load\":2246,\"tcp\":314,\"ttfb\":573},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779876981928,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":66,\"domReady\":1848,\"load\":1862,\"tcp\":371,\"ttfb\":361},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779876847903,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":2,\"domReady\":2806,\"load\":2817,\"tcp\":331,\"ttfb\":698},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779875133466,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":4,\"domReady\":2191,\"load\":2202,\"tcp\":398,\"ttfb\":768},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779873233620,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":3,\"domReady\":2089,\"load\":2097,\"tcp\":311,\"ttfb\":636},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779873109382,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":3,\"domReady\":1716,\"load\":1727,\"tcp\":398,\"ttfb\":358},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779872984494,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":3,\"domReady\":2271,\"load\":2282,\"tcp\":469,\"ttfb\":610},\"release\":\"\",\"screen\":\"1400x900\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779872910878,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1400x900\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"240e:46c:b210:1d85:6016:daff:fe51:2bb6\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":4437,\"load\":4984,\"tcp\":0,\"ttfb\":488},\"release\":\"\",\"screen\":\"412x915\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779872782666,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (Linux; U; Android 16; zh-cn; 24031PN0DC Build/BP2A.250605.031.A3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.79 Mobile Safari/537.36 XiaoMi/MiuiBrowser/20.16.1020421\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"411x744\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"14.103.85.111\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":2160,\"load\":2171,\"tcp\":0,\"ttfb\":511},\"release\":\"\",\"screen\":\"800x600\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779872699787,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1280x577\"},{\"app_id\":\"vault-reader\",\"col\":0,\"extra\":{},\"id\":0,\"ip\":\"107.151.187.186\",\"level\":\"info\",\"line\":0,\"message\":\"page load\",\"performance\":{\"dns\":0,\"domReady\":4168,\"load\":4198,\"tcp\":0,\"ttfb\":739},\"release\":\"\",\"screen\":\"1920x1080\",\"stack\":\"\",\"tags\":{},\"timestamp\":1779872082168,\"type\":\"performance\",\"ua\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36\",\"url\":\"https://sanfacheng.cyou/vault/\",\"viewport\":\"1199x945\"}]"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 10537
+    },
+    {
+      "scenario": "性能分析",
+      "passed": true,
+      "steps": [
+        {
+          "step": "select and verify",
+          "passed": true,
+          "details": "选中: vault-reader (共10个选项)"
+        },
+        {
+          "step": "page structure",
+          "passed": true,
+          "details": "269 chars"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 10436
+    },
+    {
+      "scenario": "告警管理",
+      "passed": true,
+      "steps": [
+        {
+          "step": "page structure",
+          "passed": true,
+          "details": "151 chars"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8810
+    },
+    {
+      "scenario": "实时会话",
+      "passed": true,
+      "steps": [
+        {
+          "step": "page structure",
+          "passed": true,
+          "details": "118 chars"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8811
+    },
+    {
+      "scenario": "录制列表数据验证",
+      "passed": true,
+      "steps": [
+        {
+          "step": "table not empty",
+          "passed": true,
+          "details": "20行, 首行: [a15baa1c-75ec-466a-bc45-36a29f, a15baa1c-75ec-466a-bc45-36a29f, vault-reader, vault-reader, /vault/]"
+        },
+        {
+          "step": "api verify /query/recordings?limit=5",
+          "passed": true,
+          "details": "data.0.sessionId=\"a15baa1c-75ec-466a-bc45-36a29f240570\""
+        }
+      ],
+      "retries": 0,
+      "durationMs": 9108
+    },
+    {
+      "scenario": "系统设置",
+      "passed": true,
+      "steps": [
+        {
+          "step": "forms present",
+          "passed": true,
+          "details": "47 form elements"
+        },
+        {
+          "step": "action button",
+          "passed": true,
+          "details": "visible"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8878
+    },
+    {
+      "scenario": "用户管理",
+      "passed": true,
+      "steps": [
+        {
+          "step": "table not empty",
+          "passed": true,
+          "details": "1行, 首行: [1, 1, admin, admin, Administrator]"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8873
+    },
+    {
+      "scenario": "API 数据完整性",
+      "passed": true,
+      "steps": [
+        {
+          "step": "api verify /health",
+          "passed": true,
+          "details": "status=\"ok\" (expected: ok)"
+        },
+        {
+          "step": "api verify /system/info",
+          "passed": true,
+          "details": "totalEvents=128"
+        },
+        {
+          "step": "api verify /query/apps",
+          "passed": true,
+          "details": "0.app_id=\"vault-reader\""
+        }
+      ],
+      "retries": 0,
+      "durationMs": 6116
+    },
+    {
+      "scenario": "全页面导航",
+      "passed": true,
+      "steps": [
+        {
+          "step": "navigate /",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /logs",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /performance",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /alerts",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /live",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /recordings",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /settings",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /users",
+          "passed": true,
+          "details": "HTTP 200"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 15090
+    }
+  ]
+}

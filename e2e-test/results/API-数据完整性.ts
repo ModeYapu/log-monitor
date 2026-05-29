@@ -25,10 +25,12 @@ async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   });
 
 
-  // Step 1: API check (Node.js fetch, avoids CORS)
+  // Step 1: Call API and verify response fields
   try {
     const ep = '/health';
     const fetchUrl = apiUrl ? apiUrl + ep : baseUrl + ep;
+    const expectedField = 'status';
+    const expectedValue = 'ok';
     const http = require('http');
     const nodeResp = await new Promise<{ok: boolean, status: number, data: any}>((resolve) => {
       const opts = new URL(fetchUrl);
@@ -45,14 +47,29 @@ async function run(page: any, baseUrl: string): Promise<StepResult[]> {
       req.on('error', (e: any) => resolve({ ok: false, status: 0, data: e.message }));
       req.setTimeout(5000, () => { req.destroy(); resolve({ ok: false, status: 0, data: 'timeout' }); });
     });
-    const checkResult = nodeResp.ok;
-    results.push({ step: 'api check ' + ep, passed: checkResult, details: 'status=' + nodeResp.status + ' ' + JSON.stringify(nodeResp.data).slice(0, 100) });
-  } catch (e) { results.push({ step: 'api check', passed: false, details: String(e) }); }
+    if (!nodeResp.ok) {
+      results.push({ step: 'api verify ' + ep, passed: false, details: 'status=' + nodeResp.status });
+    } else if (expectedField) {
+      // Navigate nested field like "data.0.app_id"
+      let val: any = nodeResp.data;
+      for (const key of expectedField.split('.')) {
+        val = val?.[isNaN(Number(key)) ? key : Number(key)];
+      }
+      const match = expectedValue ? String(val) === expectedValue : val !== undefined && val !== null && val !== '';
+      results.push({ step: 'api verify ' + ep, passed: match, details: expectedField + '=' + JSON.stringify(val) + (expectedValue ? ' (expected: ' + expectedValue + ')' : '') });
+    } else {
+      // Just verify response has data
+      const hasData = Array.isArray(nodeResp.data) ? nodeResp.data.length > 0 : typeof nodeResp.data === 'object' && nodeResp.data !== null;
+      results.push({ step: 'api verify ' + ep, passed: hasData, details: 'status=' + nodeResp.status + ', data=' + JSON.stringify(nodeResp.data).slice(0, 120) });
+    }
+  } catch (e) { results.push({ step: 'api verify', passed: false, details: String(e) }); }
 
-  // Step 2: API check (Node.js fetch, avoids CORS)
+  // Step 2: Call API and verify response fields
   try {
     const ep = '/system/info';
     const fetchUrl = apiUrl ? apiUrl + ep : baseUrl + ep;
+    const expectedField = 'totalEvents';
+    const expectedValue = '';
     const http = require('http');
     const nodeResp = await new Promise<{ok: boolean, status: number, data: any}>((resolve) => {
       const opts = new URL(fetchUrl);
@@ -69,14 +86,29 @@ async function run(page: any, baseUrl: string): Promise<StepResult[]> {
       req.on('error', (e: any) => resolve({ ok: false, status: 0, data: e.message }));
       req.setTimeout(5000, () => { req.destroy(); resolve({ ok: false, status: 0, data: 'timeout' }); });
     });
-    const checkResult = nodeResp.ok;
-    results.push({ step: 'api check ' + ep, passed: checkResult, details: 'status=' + nodeResp.status + ' ' + JSON.stringify(nodeResp.data).slice(0, 100) });
-  } catch (e) { results.push({ step: 'api check', passed: false, details: String(e) }); }
+    if (!nodeResp.ok) {
+      results.push({ step: 'api verify ' + ep, passed: false, details: 'status=' + nodeResp.status });
+    } else if (expectedField) {
+      // Navigate nested field like "data.0.app_id"
+      let val: any = nodeResp.data;
+      for (const key of expectedField.split('.')) {
+        val = val?.[isNaN(Number(key)) ? key : Number(key)];
+      }
+      const match = expectedValue ? String(val) === expectedValue : val !== undefined && val !== null && val !== '';
+      results.push({ step: 'api verify ' + ep, passed: match, details: expectedField + '=' + JSON.stringify(val) + (expectedValue ? ' (expected: ' + expectedValue + ')' : '') });
+    } else {
+      // Just verify response has data
+      const hasData = Array.isArray(nodeResp.data) ? nodeResp.data.length > 0 : typeof nodeResp.data === 'object' && nodeResp.data !== null;
+      results.push({ step: 'api verify ' + ep, passed: hasData, details: 'status=' + nodeResp.status + ', data=' + JSON.stringify(nodeResp.data).slice(0, 120) });
+    }
+  } catch (e) { results.push({ step: 'api verify', passed: false, details: String(e) }); }
 
-  // Step 3: API check (Node.js fetch, avoids CORS)
+  // Step 3: Call API and verify response fields
   try {
     const ep = '/query/apps';
     const fetchUrl = apiUrl ? apiUrl + ep : baseUrl + ep;
+    const expectedField = '0.app_id';
+    const expectedValue = '';
     const http = require('http');
     const nodeResp = await new Promise<{ok: boolean, status: number, data: any}>((resolve) => {
       const opts = new URL(fetchUrl);
@@ -93,9 +125,22 @@ async function run(page: any, baseUrl: string): Promise<StepResult[]> {
       req.on('error', (e: any) => resolve({ ok: false, status: 0, data: e.message }));
       req.setTimeout(5000, () => { req.destroy(); resolve({ ok: false, status: 0, data: 'timeout' }); });
     });
-    const checkResult = nodeResp.ok;
-    results.push({ step: 'api check ' + ep, passed: checkResult, details: 'status=' + nodeResp.status + ' ' + JSON.stringify(nodeResp.data).slice(0, 100) });
-  } catch (e) { results.push({ step: 'api check', passed: false, details: String(e) }); }
+    if (!nodeResp.ok) {
+      results.push({ step: 'api verify ' + ep, passed: false, details: 'status=' + nodeResp.status });
+    } else if (expectedField) {
+      // Navigate nested field like "data.0.app_id"
+      let val: any = nodeResp.data;
+      for (const key of expectedField.split('.')) {
+        val = val?.[isNaN(Number(key)) ? key : Number(key)];
+      }
+      const match = expectedValue ? String(val) === expectedValue : val !== undefined && val !== null && val !== '';
+      results.push({ step: 'api verify ' + ep, passed: match, details: expectedField + '=' + JSON.stringify(val) + (expectedValue ? ' (expected: ' + expectedValue + ')' : '') });
+    } else {
+      // Just verify response has data
+      const hasData = Array.isArray(nodeResp.data) ? nodeResp.data.length > 0 : typeof nodeResp.data === 'object' && nodeResp.data !== null;
+      results.push({ step: 'api verify ' + ep, passed: hasData, details: 'status=' + nodeResp.status + ', data=' + JSON.stringify(nodeResp.data).slice(0, 120) });
+    }
+  } catch (e) { results.push({ step: 'api verify', passed: false, details: String(e) }); }
 
   return results;
 }

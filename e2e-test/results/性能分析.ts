@@ -25,10 +25,45 @@ async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   });
 
 
-  // Step 1: Verify page structure
+  // Step 1: Select dropdown and verify value is not empty/undefined
+  try {
+    const selectSel = '.el-select';
+    const sel = page.locator(selectSel).first();
+    await sel.waitFor({ state: 'visible', timeout: 5000 });
+    await sel.click();
+    await page.waitForTimeout(800);
+    // Get dropdown options
+    const opts = page.locator('.el-select-dropdown__item, .el-scrollbar__view li, option, [class*="option"]');
+    const optCount = await opts.count();
+    if (optCount === 0) {
+      results.push({ step: 'select and verify', passed: false, details: '下拉框选项为空（0个选项）' });
+    } else {
+      // Click first option
+      const firstOpt = opts.first();
+      const optText = await firstOpt.innerText().catch(() => '');
+      await firstOpt.click();
+      await page.waitForTimeout(500);
+      // Verify the select actually has a value now
+      const selectedValue = await sel.evaluate((el: any) => {
+        // Element Plus v2: check all .el-select__selected-item elements
+        const items = el.querySelectorAll('.el-select__selected-item');
+        const texts: string[] = [];
+        items.forEach((item: any) => { const t = item.textContent?.trim(); if (t) texts.push(t); });
+        if (texts.length > 0) return texts.join(', ');
+        // Fallback: check input
+        const input = el.querySelector('.el-input__inner, input');
+        if (input) return (input as HTMLInputElement).value || '';
+        return el.textContent?.trim() || '';
+      });
+      const hasValidValue = selectedValue.length > 0 && selectedValue !== 'undefined' && selectedValue !== 'null';
+      results.push({ step: 'select and verify', passed: hasValidValue, details: hasValidValue ? '选中: ' + selectedValue + ' (共' + optCount + '个选项)' : '选中值为空或undefined, 选项文本: "' + optText + '", value: "' + selectedValue + '"' });
+    }
+  } catch (e) { results.push({ step: 'select and verify', passed: false, details: String(e) }); }
+
+  // Step 2: Verify page structure
   try {
     const body = await page.locator('body').innerText();
-    const expectParts = 'page content > 100 chars'.split(' AND ');
+    const expectParts = 'charts or stats visible'.split(' AND ');
     let allFound = true;
     const found: string[] = [];
     for (const part of expectParts) {

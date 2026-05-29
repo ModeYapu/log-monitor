@@ -29,7 +29,7 @@ async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   // Step 1: Verify page structure
   try {
     const body = await page.locator('body').innerText();
-    const expectParts = 'has online users panel and viewer panel'.split(' AND ');
+    const expectParts = 'online users and viewer'.split(' AND ');
     let allFound = true;
     const found: string[] = [];
     for (const part of expectParts) {

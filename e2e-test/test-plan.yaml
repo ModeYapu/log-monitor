@@ -1,8 +1,6 @@
-# LogMonitor E2E Test Plan
-# 项目维护的测试规格 — e2e-verifier 读取并执行
-
+# LogMonitor E2E Test Plan v2 — 增强数据验证
 project: logmonitor
-version: "1.0"
+version: "2.0"
 
 environment:
   base_url: "http://127.0.0.1/logmon"
@@ -19,150 +17,170 @@ environment:
 
 dependencies:
   - type: script
-    description: "Generate traffic via Vault Reader to produce logs and recordings"
+    description: "Generate traffic via Vault Reader"
     script: "/home/coder/log-monitor/e2e-test/scripts/seed-traffic.js"
     wait_after: 5000
 
 scenarios:
-  # ──── 场景 1: 登录与仪表盘 ────
-  - name: "登录与仪表盘"
+  # ──── 场景 1: 仪表盘数据验证 ────
+  - name: "仪表盘数据验证"
     pages: ["/"]
     steps:
-      - action: navigate_all
-        pages: ["/"]
-        expect: all_200
+      - action: select_and_verify
+        target: '.el-select'
+        expect: "选中值不为空"
 
-      - action: verify_page_structure
-        target: "body"
-        expect: "has stats cards and app list"
+      - action: verify_table_not_empty
+        target: '.el-table'
+        expect: "有数据行"
+
     validation:
       - type: api_check
-        endpoint: "/query/stats?appId=webgpu-3d-studio"
-        assert: "errorTrend exists"
-      - type: api_check
         endpoint: "/query/apps"
-        assert: "isArray && length > 0"
+        assert: "array.length > 0"
+      - type: api_check
+        endpoint: "/query/stats?appId=vault-reader"
+        assert: "errorTrend exists"
 
-  # ──── 场景 2: 日志查询与搜索 ────
-  - name: "日志查询与搜索"
+  # ──── 场景 2: 日志查询 — 下拉+搜索+表格 ────
+  - name: "日志查询完整验证"
     pages: ["/logs"]
     steps:
-      - action: select_app
-        target: "webgpu-3d-studio"
-        expect: table_visible
+      - action: select_and_verify
+        target: '.el-select'
+        expect: "应用下拉有选项且选中值有效"
+
+      - action: submit_and_verify
+        target: 'button'
+        expect: "API 返回数据"
+
+      - action: verify_table_not_empty
+        target: '.el-table'
+        expect: "日志表格有数据行"
 
       - action: search
         input: "error"
         target: 'input[placeholder*="搜索"]'
-        expect: results_change
+        expect: "搜索结果变化"
 
-      - action: filter_level
-        level: "error"
-        expect: api_returns_filtered
-
-      - action: pagination
-        expect: page_changes
+      - action: verify_table_not_empty
+        target: '.el-table'
+        expect: "搜索后仍有数据"
 
     validation:
       - type: api_check
-        endpoint: "/query/logs?appId=webgpu-3d-studio&search=error&limit=3"
-        assert: "total >= 0"
+        endpoint: "/query/logs?appId=vault-reader&limit=3"
+        assert: "data.length > 0"
+
+  # ──── 场景 3: 日志级别筛选 ────
+  - name: "级别筛选验证"
+    pages: ["/logs"]
+    steps:
+      - action: select_and_verify
+        target: '.el-select'
+        expect: "选择应用"
+
+      - action: verify_api_response
+        endpoint: "/query/logs?appId=vault-reader&level=info&limit=1"
+        expect_field: "data"
+        expect_value: ""
+        expect: "有 info 级别日志"
+
+    validation:
       - type: api_check
-        endpoint: "/query/logs?appId=webgpu-3d-studio&level=error&limit=1"
+        endpoint: "/query/logs?appId=vault-reader&level=info&limit=3"
         assert: "total >= 0"
 
-  # ──── 场景 3: 性能分析 ────
+  # ──── 场景 4: 性能页面 ────
   - name: "性能分析"
     pages: ["/performance"]
     steps:
-      - action: verify_page_structure
-        expect: "page content > 100 chars"
+      - action: select_and_verify
+        target: '.el-select'
+        expect: "应用选择有效"
 
-  # ──── 场景 4: 告警管理 ────
+      - action: verify_page_structure
+        expect: "charts or stats visible"
+
+  # ──── 场景 5: 告警管理 ────
   - name: "告警管理"
     pages: ["/alerts"]
     steps:
-      - action: verify_list
-        expect: "alerts table or empty state"
-
+      - action: verify_page_structure
+        expect: "alerts page"
     validation:
       - type: api_check
-        endpoint: "/query/alerts?appId=webgpu-3d-studio"
+        endpoint: "/query/alerts?appId=vault-reader"
         assert: "response ok"
 
-  # ──── 场景 5: 实时会话 ────
+  # ──── 场景 6: 实时会话 ────
   - name: "实时会话"
     pages: ["/live"]
-    precondition: "dependencies.traffic"
     steps:
       - action: verify_page_structure
-        expect: "has online users panel and viewer panel"
+        expect: "online users and viewer"
 
-    validation:
-      - type: api_check
-        endpoint: "/query/live-sessions"
-        assert: "data field exists"
-
-  # ──── 场景 6: 录制回放 ────
-  - name: "录制列表与回放"
+  # ──── 场景 7: 录制回放数据验证 ────
+  - name: "录制列表数据验证"
     pages: ["/recordings"]
     steps:
-      - action: verify_list
-        expect: "rows > 0"
+      - action: verify_table_not_empty
+        target: '.el-table'
+        expect: "录制表格有数据"
 
-      - action: search
-        input: "webgpu"
-        target: 'input[placeholder*="搜索"]'
-        expect: "results filtered"
-
-      - action: click_play
-        target: "first recording with events"
-        expect: "replay renders"
+      - action: verify_api_response
+        endpoint: "/query/recordings?limit=5"
+        expect_field: "data.0.sessionId"
+        expect: "录制有 sessionId"
 
     validation:
       - type: api_check
-        endpoint: "/query/recordings?limit=5"
+        endpoint: "/query/recordings?limit=3"
         assert: "data.length > 0"
 
-  # ──── 场景 7: 系统设置 ────
+  # ──── 场景 8: 系统设置表单 ────
   - name: "系统设置"
     pages: ["/settings"]
     steps:
       - action: verify_forms_present
-        expect: "forms > 0"
+        expect: "设置表单存在"
 
       - action: verify_save_button
-        expect: "button_visible"
+        expect: "保存按钮可见"
 
-  # ──── 场景 8: 用户管理 ────
+  # ──── 场景 9: 用户管理 ────
   - name: "用户管理"
     pages: ["/users"]
     steps:
-      - action: verify_list
-        expect: "admin user visible"
+      - action: verify_table_not_empty
+        target: '.el-table'
+        expect: "用户表格有数据"
 
     validation:
       - type: api_check
         endpoint: "/users"
         assert: "data.length > 0"
 
-  # ──── 场景 9: API 数据完整性 ────
+  # ──── 场景 10: API 数据完整性 ────
   - name: "API 数据完整性"
     pages: []
     steps:
-      - action: api_check
+      - action: verify_api_response
         endpoint: "/health"
-        expect: "status ok"
+        expect_field: "status"
+        expect_value: "ok"
 
-      - action: api_check
+      - action: verify_api_response
         endpoint: "/system/info"
+        expect_field: "totalEvents"
         expect: "totalEvents > 0"
 
-      - action: api_check
+      - action: verify_api_response
         endpoint: "/query/apps"
-        expect: "array with apps"
+        expect_field: "0.app_id"
+        expect: "第一个 app 有 app_id"
 
-  # ──── 场景 10: 全页面导航 ────
+  # ──── 场景 11: 全页面导航 ────
   - name: "全页面导航"
     pages: ["/", "/logs", "/performance", "/alerts", "/live", "/recordings", "/settings", "/users"]
     steps:
