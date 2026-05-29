@@ -491,12 +491,12 @@ type QueryResult struct {
 
 // AppStats represents application statistics
 type AppStats struct {
-	AppID       string
-	Release     string
-	FirstSeen   int64
-	LastSeen    int64
-	ErrorCount  int64
-	TotalEvents int64
+	AppID       string `json:"app_id"`
+	Release     string `json:"release"`
+	FirstSeen   int64  `json:"first_seen"`
+	LastSeen    int64  `json:"last_seen"`
+	ErrorCount  int64  `json:"error_count"`
+	TotalEvents int64  `json:"total_events"`
 }
 
 // Stats represents application statistics

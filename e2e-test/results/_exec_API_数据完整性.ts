@@ -6,43 +6,96 @@ interface StepResult { step: string; passed: boolean; details: string; }
 
 async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   const results: StepResult[] = [];
+  const apiUrl = 'http://127.0.0.1:9200/api';
 
-  // Navigate to first page
-  await page.goto(baseUrl + '', { waitUntil: 'networkidle', timeout: 15000 });
-  await page.waitForTimeout(2000);
+  // Navigate to first page if specified
+  const firstPage = "";
+  if (firstPage) {
+    await page.goto(baseUrl + firstPage, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForTimeout(2000);
+  }
+  // For API-only scenarios, we stay on whatever page performAuth left us on
+  // (already logged in, token in localStorage)
+
+  // Capture auth token from localStorage (set by performAuth)
+  const authToken = await page.evaluate(() => {
+    try {
+      return localStorage.getItem('token') || localStorage.getItem('logmon_token') || localStorage.getItem('auth_token') || localStorage.getItem('jwt') || '';
+    }
+    catch { return ''; }
+  });
 
 
-  // Step 1: API check
+  // Step 1: API check (Node.js fetch, avoids CORS)
   try {
-    
-    const resp = await page.evaluate(async (url) => {
-      const r = await fetch(url, { headers: { Authorization: 'Bearer ' + (localStorage.getItem('token') || '') } });
-      return r.json();
-    }, 'http://127.0.0.1:9200/api/health');
-    const assertOk = true;
-    results.push({ step: 'api check', passed: true, details: JSON.stringify(resp).slice(0, 100) });
+    const ep = '/health';
+    const fetchUrl = apiUrl ? apiUrl + ep : baseUrl + ep;
+    const http = require('http');
+    const nodeResp = await new Promise<{ok: boolean, status: number, data: any}>((resolve) => {
+      const opts = new URL(fetchUrl);
+      const headers: Record<string, string> = {};
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+      const req = http.get(opts, { headers }, (res: any) => {
+        let body = '';
+        res.on('data', (c: any) => body += c);
+        res.on('end', () => {
+          try { resolve({ ok: res.statusCode < 400, status: res.statusCode, data: JSON.parse(body) }); }
+          catch { resolve({ ok: res.statusCode < 400, status: res.statusCode, data: body.slice(0, 200) }); }
+        });
+      });
+      req.on('error', (e: any) => resolve({ ok: false, status: 0, data: e.message }));
+      req.setTimeout(5000, () => { req.destroy(); resolve({ ok: false, status: 0, data: 'timeout' }); });
+    });
+    const checkResult = nodeResp.ok;
+    results.push({ step: 'api check ' + ep, passed: checkResult, details: 'status=' + nodeResp.status + ' ' + JSON.stringify(nodeResp.data).slice(0, 100) });
   } catch (e) { results.push({ step: 'api check', passed: false, details: String(e) }); }
 
-  // Step 2: API check
+  // Step 2: API check (Node.js fetch, avoids CORS)
   try {
-    
-    const resp = await page.evaluate(async (url) => {
-      const r = await fetch(url, { headers: { Authorization: 'Bearer ' + (localStorage.getItem('token') || '') } });
-      return r.json();
-    }, 'http://127.0.0.1:9200/api/system/info');
-    const assertOk = true;
-    results.push({ step: 'api check', passed: true, details: JSON.stringify(resp).slice(0, 100) });
+    const ep = '/system/info';
+    const fetchUrl = apiUrl ? apiUrl + ep : baseUrl + ep;
+    const http = require('http');
+    const nodeResp = await new Promise<{ok: boolean, status: number, data: any}>((resolve) => {
+      const opts = new URL(fetchUrl);
+      const headers: Record<string, string> = {};
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+      const req = http.get(opts, { headers }, (res: any) => {
+        let body = '';
+        res.on('data', (c: any) => body += c);
+        res.on('end', () => {
+          try { resolve({ ok: res.statusCode < 400, status: res.statusCode, data: JSON.parse(body) }); }
+          catch { resolve({ ok: res.statusCode < 400, status: res.statusCode, data: body.slice(0, 200) }); }
+        });
+      });
+      req.on('error', (e: any) => resolve({ ok: false, status: 0, data: e.message }));
+      req.setTimeout(5000, () => { req.destroy(); resolve({ ok: false, status: 0, data: 'timeout' }); });
+    });
+    const checkResult = nodeResp.ok;
+    results.push({ step: 'api check ' + ep, passed: checkResult, details: 'status=' + nodeResp.status + ' ' + JSON.stringify(nodeResp.data).slice(0, 100) });
   } catch (e) { results.push({ step: 'api check', passed: false, details: String(e) }); }
 
-  // Step 3: API check
+  // Step 3: API check (Node.js fetch, avoids CORS)
   try {
-    
-    const resp = await page.evaluate(async (url) => {
-      const r = await fetch(url, { headers: { Authorization: 'Bearer ' + (localStorage.getItem('token') || '') } });
-      return r.json();
-    }, 'http://127.0.0.1:9200/api/query/apps');
-    const assertOk = true;
-    results.push({ step: 'api check', passed: true, details: JSON.stringify(resp).slice(0, 100) });
+    const ep = '/query/apps';
+    const fetchUrl = apiUrl ? apiUrl + ep : baseUrl + ep;
+    const http = require('http');
+    const nodeResp = await new Promise<{ok: boolean, status: number, data: any}>((resolve) => {
+      const opts = new URL(fetchUrl);
+      const headers: Record<string, string> = {};
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+      const req = http.get(opts, { headers }, (res: any) => {
+        let body = '';
+        res.on('data', (c: any) => body += c);
+        res.on('end', () => {
+          try { resolve({ ok: res.statusCode < 400, status: res.statusCode, data: JSON.parse(body) }); }
+          catch { resolve({ ok: res.statusCode < 400, status: res.statusCode, data: body.slice(0, 200) }); }
+        });
+      });
+      req.on('error', (e: any) => resolve({ ok: false, status: 0, data: e.message }));
+      req.setTimeout(5000, () => { req.destroy(); resolve({ ok: false, status: 0, data: 'timeout' }); });
+    });
+    const checkResult = nodeResp.ok;
+    results.push({ step: 'api check ' + ep, passed: checkResult, details: 'status=' + nodeResp.status + ' ' + JSON.stringify(nodeResp.data).slice(0, 100) });
   } catch (e) { results.push({ step: 'api check', passed: false, details: String(e) }); }
 
   return results;

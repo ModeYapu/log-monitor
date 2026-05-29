@@ -1,0 +1,90 @@
+{
+  "timestamp": "2026-05-29T04:19:16.915Z",
+  "project": "logmonitor",
+  "total": 10,
+  "passed": 0,
+  "failed": 10,
+  "rate": 0,
+  "results": [
+    {
+      "scenario": "登录与仪表盘",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96254,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "日志查询与搜索",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96191,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "性能分析",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96466,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "告警管理",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96349,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "实时会话",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96207,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "录制列表与回放",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96007,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "系统设置",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96010,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "用户管理",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 95991,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "API 数据完整性",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96083,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    },
+    {
+      "scenario": "全页面导航",
+      "passed": false,
+      "steps": [],
+      "retries": 2,
+      "durationMs": 96022,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button[type=\"submit\"]').first()\n"
+    }
+  ]
+}

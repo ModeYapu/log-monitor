@@ -6,25 +6,42 @@ interface StepResult { step: string; passed: boolean; details: string; }
 
 async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   const results: StepResult[] = [];
+  const apiUrl = 'http://127.0.0.1:9200/api';
 
-  // Navigate to first page
-  await page.goto(baseUrl + '/settings', { waitUntil: 'networkidle', timeout: 15000 });
-  await page.waitForTimeout(2000);
+  // Navigate to first page if specified
+  const firstPage = "/settings";
+  if (firstPage) {
+    await page.goto(baseUrl + firstPage, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForTimeout(2000);
+  }
+  // For API-only scenarios, we stay on whatever page performAuth left us on
+  // (already logged in, token in localStorage)
+
+  // Capture auth token from localStorage (set by performAuth)
+  const authToken = await page.evaluate(() => {
+    try {
+      return localStorage.getItem('token') || localStorage.getItem('logmon_token') || localStorage.getItem('auth_token') || localStorage.getItem('jwt') || '';
+    }
+    catch { return ''; }
+  });
 
 
-  // Step 1: Verify forms present
+  // Step 1: Verify forms/inputs present
   try {
-    const forms = page.locator('form, .el-form, [class*="form"]');
+    const forms = page.locator('form, .el-form, [class*="form"], [class*="upload"], [class*="drop"], input[type="file"]');
     const count = await forms.count();
-    results.push({ step: 'forms present', passed: count > 0, details: count + ' forms' });
+    results.push({ step: 'forms present', passed: count > 0, details: count + ' form elements' });
   } catch (e) { results.push({ step: 'forms present', passed: false, details: String(e) }); }
 
-  // Step 2: Verify save button
+  // Step 2: Verify action button
   try {
-    const saveBtn = page.locator('button').filter({ hasText: /保存|save|submit/i }).first();
-    const visible = await saveBtn.isVisible({ timeout: 2000 });
-    results.push({ step: 'save button', passed: visible, details: visible ? 'visible' : 'not found' });
-  } catch (e) { results.push({ step: 'save button', passed: false, details: String(e) }); }
+    const btnSel = '';
+    const saveBtn = btnSel
+      ? page.locator(btnSel).first()
+      : page.locator('button').filter({ hasText: /保存|save|submit|生成|转换|convert/i }).first();
+    const visible = await saveBtn.isVisible({ timeout: 3000 });
+    results.push({ step: 'action button', passed: visible, details: visible ? 'visible' : 'not found' });
+  } catch (e) { results.push({ step: 'action button', passed: false, details: String(e) }); }
 
   return results;
 }

@@ -6,10 +6,24 @@ interface StepResult { step: string; passed: boolean; details: string; }
 
 async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   const results: StepResult[] = [];
+  const apiUrl = 'http://127.0.0.1:9200/api';
 
-  // Navigate to first page
-  await page.goto(baseUrl + '/logs', { waitUntil: 'networkidle', timeout: 15000 });
-  await page.waitForTimeout(2000);
+  // Navigate to first page if specified
+  const firstPage = "/logs";
+  if (firstPage) {
+    await page.goto(baseUrl + firstPage, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForTimeout(2000);
+  }
+  // For API-only scenarios, we stay on whatever page performAuth left us on
+  // (already logged in, token in localStorage)
+
+  // Capture auth token from localStorage (set by performAuth)
+  const authToken = await page.evaluate(() => {
+    try {
+      return localStorage.getItem('token') || localStorage.getItem('logmon_token') || localStorage.getItem('auth_token') || localStorage.getItem('jwt') || '';
+    }
+    catch { return ''; }
+  });
 
 
   // Step 1: Select app "webgpu-3d-studio"
@@ -38,12 +52,13 @@ async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   // Step 3: Filter level "error" (API check)
   try {
     
-    const token = await page.evaluate(() => localStorage.getItem('token') || '');
-    const resp = await fetch('http://127.0.0.1:9200/api/query/logs?appId=webgpu-3d-studio&level=error&limit=1', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    const data = await resp.json();
-    results.push({ step: 'filter level error', passed: data.total !== undefined, details: 'total=' + (data.total || 0) });
+    const levelResp = await page.evaluate(async ([url, token]: [string, string]) => {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const r = await fetch(url, { headers });
+      return r.json();
+    }, ['http://127.0.0.1:9200/api/query/logs?appId=webgpu-3d-studio&level=error&limit=1', authToken] as [string, string]);
+    results.push({ step: 'filter level error', passed: levelResp.total !== undefined, details: 'total=' + (levelResp.total || 0) });
   } catch (e) { results.push({ step: 'filter level error', passed: false, details: String(e) }); }
 
   // Step 4: Check pagination

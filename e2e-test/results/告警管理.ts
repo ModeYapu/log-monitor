@@ -5,18 +5,33 @@ interface StepResult { step: string; passed: boolean; details: string; }
 
 async function run(page: any, baseUrl: string): Promise<StepResult[]> {
   const results: StepResult[] = [];
+  const apiUrl = 'http://127.0.0.1:9200/api';
 
-  // Navigate to first page
-  await page.goto(baseUrl + '/alerts', { waitUntil: 'networkidle', timeout: 15000 });
-  await page.waitForTimeout(2000);
+  // Navigate to first page if specified
+  const firstPage = "/alerts";
+  if (firstPage) {
+    await page.goto(baseUrl + firstPage, { waitUntil: 'networkidle', timeout: 15000 });
+    await page.waitForTimeout(2000);
+  }
+  // For API-only scenarios, we stay on whatever page performAuth left us on
+  // (already logged in, token in localStorage)
+
+  // Capture auth token from localStorage (set by performAuth)
+  const authToken = await page.evaluate(() => {
+    try {
+      return localStorage.getItem('token') || localStorage.getItem('logmon_token') || localStorage.getItem('auth_token') || localStorage.getItem('jwt') || '';
+    }
+    catch { return ''; }
+  });
 
 
   // Step 1: Verify list has rows
   try {
-    const rows = page.locator('.el-table__row, tr');
+    const listSel = '.el-table__row, tr';
+    const rows = page.locator(listSel);
     const count = await rows.count();
     const hasData = count > 0;
-    results.push({ step: 'verify list', passed: hasData, details: count + ' rows found' });
+    results.push({ step: 'verify list', passed: hasData, details: count + ' items found' });
   } catch (e) { results.push({ step: 'verify list', passed: false, details: String(e) }); }
 
   return results;
