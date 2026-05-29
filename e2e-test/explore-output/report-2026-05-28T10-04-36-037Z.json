@@ -1,0 +1,250 @@
+{
+  "discovery": {
+    "pages": [
+      {
+        "url": "http://127.0.0.1/logmon/login",
+        "title": "LogMonitor Dashboard",
+        "screenshot": "/home/coder/log-monitor/e2e-test/explore-output/screenshots/http___127_0_0_1_logmon_login-1779962664857.png",
+        "depth": 0
+      }
+    ],
+    "siteMap": {
+      "url": "http://127.0.0.1/logmon/login",
+      "title": "LogMonitor Dashboard",
+      "children": [],
+      "depth": 0
+    },
+    "uniqueUrls": [
+      "http://127.0.0.1/logmon/login"
+    ]
+  },
+  "testPlan": {
+    "pages": [
+      {
+        "url": "http://127.0.0.1/logmon/login",
+        "pageName": "LogMonitor Dashboard",
+        "tests": [
+          {
+            "name": "LogMonitor Dashboard loads correctly",
+            "description": "Verify http://127.0.0.1/logmon/login loads with correct title",
+            "steps": [
+              "Navigate to page",
+              "Wait for load",
+              "Check title is not empty"
+            ],
+            "assertions": [
+              "Page title is not empty",
+              "No console errors"
+            ],
+            "priority": "high"
+          },
+          {
+            "name": "Form 1 is functional",
+            "description": "Verify form with 2 fields is present",
+            "steps": [
+              "Find form",
+              "Count input fields",
+              "Verify submit button exists"
+            ],
+            "assertions": [
+              "Form has 2 input fields",
+              "Submit button exists"
+            ],
+            "priority": "medium"
+          },
+          {
+            "name": "No undefined or NaN text",
+            "description": "Verify page text does not contain undefined or NaN",
+            "steps": [
+              "Get page text",
+              "Check for undefined",
+              "Check for NaN"
+            ],
+            "assertions": [
+              "No \"undefined\" in page text",
+              "No \"NaN\" in page text"
+            ],
+            "priority": "high"
+          },
+          {
+            "name": "3 interactive elements present",
+            "description": "Verify page has expected interactive elements",
+            "steps": [
+              "Count buttons",
+              "Count inputs",
+              "Count selects"
+            ],
+            "assertions": [
+              "3 interactive elements found"
+            ],
+            "priority": "medium"
+          },
+          {
+            "name": "Verify form \"form\" can be submitted",
+            "description": "Verify form \"form\" can be submitted",
+            "steps": [
+              "Execute suggested test"
+            ],
+            "assertions": [
+              "Test passes"
+            ],
+            "priority": "medium"
+          },
+          {
+            "name": "Verify all buttons are clickable and trigger expected actions",
+            "description": "Verify all buttons are clickable and trigger expected actions",
+            "steps": [
+              "Execute suggested test"
+            ],
+            "assertions": [
+              "Test passes"
+            ],
+            "priority": "medium"
+          }
+        ]
+      }
+    ],
+    "totalTests": 6,
+    "timestamp": "2026-05-28T10:04:25.263Z"
+  },
+  "executions": [
+    {
+      "testCase": {
+        "name": "LogMonitor Dashboard loads correctly",
+        "description": "Verify http://127.0.0.1/logmon/login loads with correct title",
+        "steps": [
+          "Navigate to page",
+          "Wait for load",
+          "Check title is not empty"
+        ],
+        "assertions": [
+          "Page title is not empty",
+          "No console errors"
+        ],
+        "priority": "high"
+      },
+      "url": "http://127.0.0.1/logmon/login",
+      "passed": false,
+      "screenshot": "/home/coder/log-monitor/e2e-test/explore-output/screenshots/explorer/LogMonitor-Dashboard-loads-correctly-1779962666696-2026-05-28T10-04-26-696Z.png",
+      "script": "import { chromium } from '@playwright/test';\n\nasync function main() {\n  const browser = await chromium.launch({ headless: true });\n  const page = await browser.newPage();\n  try {\n\n    // --- Navigate to target page ---\n    await page.goto(`http://127.0.0.1/logmon/login`, { waitUntil: 'networkidle', timeout: 15000 });\n    console.log('Testing: LogMonitor Dashboard loads correctly');\n\n    // Check page title is not empty\n    const title = await page.title();\n    if (!title || title.trim() === '') {\n      console.log('FAIL: Page title is empty');\n      process.exit(1);\n    }\n    console.log('INFO: Title = ' + title);\n\n    // Check not redirected to login\n    const currentUrl = page.url();\n    if (currentUrl.includes('login')) {\n      console.log('FAIL: Redirected to login page');\n      process.exit(1);\n    }\n\n    console.log('PASS: LogMonitor Dashboard loads correctly');\n  } finally {\n    await browser.close();\n  }\n}\n\nmain().catch(e => { console.error('FAIL:', e.message); process.exit(1); });\n",
+      "output": "",
+      "error": "/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859\n    return new TSError(diagnosticText, diagnosticCodes, diagnostics);\n           ^\nTSError: ⨯ Unable to compile TypeScript:\n../../../../home/coder/log-monitor/e2e-test/explore-output/scripts/logmonitor-dashboard-loads-correctly-1.ts(1,26): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.\n\n    at createTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859:12)\n    at reportTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:863:19)\n    at getOutput (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1077:36)\n    at Object.compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1433:41)\n    at Module.m._compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1617:30)\n    at node:internal/modules/cjs/loader:1839:10\n    at Object.require.extensions.<computed> [as .ts] (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1621:12)\n    at Module.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {\n  diagnosticCodes: [ 2307 ]\n}\n",
+      "duration": 1809,
+      "timestamp": "2026-05-28T10:04:27.073Z"
+    },
+    {
+      "testCase": {
+        "name": "Form 1 is functional",
+        "description": "Verify form with 2 fields is present",
+        "steps": [
+          "Find form",
+          "Count input fields",
+          "Verify submit button exists"
+        ],
+        "assertions": [
+          "Form has 2 input fields",
+          "Submit button exists"
+        ],
+        "priority": "medium"
+      },
+      "url": "http://127.0.0.1/logmon/login",
+      "passed": false,
+      "screenshot": "/home/coder/log-monitor/e2e-test/explore-output/screenshots/explorer/Form-1-is-functional-1779962668529-2026-05-28T10-04-28-529Z.png",
+      "script": "import { chromium } from '@playwright/test';\n\nasync function main() {\n  const browser = await chromium.launch({ headless: true });\n  const page = await browser.newPage();\n  try {\n\n    // --- Navigate to target page ---\n    await page.goto(`http://127.0.0.1/logmon/login`, { waitUntil: 'networkidle', timeout: 15000 });\n    console.log('Testing: Form 1 is functional');\n\n    // Check form has input fields\n    const formEl = page.locator('form, .el-form').nth(0);\n    const inputCount = await formEl.locator('input, select, textarea').count();\n    if (inputCount === 0) {\n      console.log('FAIL: Form 1 has no input fields');\n      process.exit(1);\n    }\n    console.log('INFO: Form 1 has ' + inputCount + ' input fields');\n\n    // Check form has submit/save button\n    const submitBtn = formEl.locator('button[type=submit], button:has-text(\"保存\"), button:has-text(\"提交\"), button:has-text(\"确定\")');\n    const hasSubmit = await submitBtn.count();\n    if (hasSubmit === 0) {\n      console.log('WARN: Form 1 has no submit button');\n    }\n\n    console.log('PASS: Form 1 is functional');\n  } finally {\n    await browser.close();\n  }\n}\n\nmain().catch(e => { console.error('FAIL:', e.message); process.exit(1); });\n",
+      "output": "",
+      "error": "/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859\n    return new TSError(diagnosticText, diagnosticCodes, diagnostics);\n           ^\nTSError: ⨯ Unable to compile TypeScript:\n../../../../home/coder/log-monitor/e2e-test/explore-output/scripts/form-1-is-functional-2.ts(1,26): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.\n\n    at createTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859:12)\n    at reportTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:863:19)\n    at getOutput (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1077:36)\n    at Object.compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1433:41)\n    at Module.m._compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1617:30)\n    at node:internal/modules/cjs/loader:1839:10\n    at Object.require.extensions.<computed> [as .ts] (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1621:12)\n    at Module.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {\n  diagnosticCodes: [ 2307 ]\n}\n",
+      "duration": 1830,
+      "timestamp": "2026-05-28T10:04:28.903Z"
+    },
+    {
+      "testCase": {
+        "name": "No undefined or NaN text",
+        "description": "Verify page text does not contain undefined or NaN",
+        "steps": [
+          "Get page text",
+          "Check for undefined",
+          "Check for NaN"
+        ],
+        "assertions": [
+          "No \"undefined\" in page text",
+          "No \"NaN\" in page text"
+        ],
+        "priority": "high"
+      },
+      "url": "http://127.0.0.1/logmon/login",
+      "passed": false,
+      "screenshot": "/home/coder/log-monitor/e2e-test/explore-output/screenshots/explorer/No-undefined-or-NaN-text-1779962670318-2026-05-28T10-04-30-318Z.png",
+      "script": "import { chromium } from '@playwright/test';\n\nasync function main() {\n  const browser = await chromium.launch({ headless: true });\n  const page = await browser.newPage();\n  try {\n\n    // --- Navigate to target page ---\n    await page.goto(`http://127.0.0.1/logmon/login`, { waitUntil: 'networkidle', timeout: 15000 });\n    console.log('Testing: No undefined or NaN text');\n\n    // Check page content for undefined/NaN\n    const bodyText = await page.evaluate(() => document.body.innerText);\n    const problems = [];\n    if (bodyText.includes('undefined')) problems.push('undefined');\n    if (bodyText.includes('NaN')) problems.push('NaN');\n    if (bodyText.includes('null')) problems.push('null');\n    if (problems.length > 0) {\n      console.log('FAIL: Page contains ' + problems.join(', '));\n      process.exit(1);\n    }\n\n    console.log('PASS: No undefined or NaN text');\n  } finally {\n    await browser.close();\n  }\n}\n\nmain().catch(e => { console.error('FAIL:', e.message); process.exit(1); });\n",
+      "output": "",
+      "error": "/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859\n    return new TSError(diagnosticText, diagnosticCodes, diagnostics);\n           ^\nTSError: ⨯ Unable to compile TypeScript:\n../../../../home/coder/log-monitor/e2e-test/explore-output/scripts/no-undefined-or-nan-text-3.ts(1,26): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.\n../../../../home/coder/log-monitor/e2e-test/explore-output/scripts/no-undefined-or-nan-text-3.ts(13,48): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.\n\n    at createTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859:12)\n    at reportTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:863:19)\n    at getOutput (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1077:36)\n    at Object.compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1433:41)\n    at Module.m._compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1617:30)\n    at node:internal/modules/cjs/loader:1839:10\n    at Object.require.extensions.<computed> [as .ts] (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1621:12)\n    at Module.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {\n  diagnosticCodes: [ 2307, 2584 ]\n}\n",
+      "duration": 1798,
+      "timestamp": "2026-05-28T10:04:30.701Z"
+    },
+    {
+      "testCase": {
+        "name": "3 interactive elements present",
+        "description": "Verify page has expected interactive elements",
+        "steps": [
+          "Count buttons",
+          "Count inputs",
+          "Count selects"
+        ],
+        "assertions": [
+          "3 interactive elements found"
+        ],
+        "priority": "medium"
+      },
+      "url": "http://127.0.0.1/logmon/login",
+      "passed": false,
+      "screenshot": "/home/coder/log-monitor/e2e-test/explore-output/screenshots/explorer/3-interactive-elements-present-1779962672144-2026-05-28T10-04-32-144Z.png",
+      "script": "import { chromium } from '@playwright/test';\n\nasync function main() {\n  const browser = await chromium.launch({ headless: true });\n  const page = await browser.newPage();\n  try {\n\n    // --- Navigate to target page ---\n    await page.goto(`http://127.0.0.1/logmon/login`, { waitUntil: 'networkidle', timeout: 15000 });\n    console.log('Testing: 3 interactive elements present');\n\n    // Check interactive elements count\n    const buttons = await page.locator('button').count();\n    const inputs = await page.locator('input, select, textarea').count();\n    const links = await page.locator('a').count();\n    const total = buttons + inputs + links;\n    console.log('INFO: Buttons=' + buttons + ' Inputs=' + inputs + ' Links=' + links + ' Total=' + total);\n    if (total < 1) {\n      console.log('FAIL: Expected at least 1 interactive elements, found ' + total);\n      process.exit(1);\n    }\n\n    console.log('PASS: 3 interactive elements present');\n  } finally {\n    await browser.close();\n  }\n}\n\nmain().catch(e => { console.error('FAIL:', e.message); process.exit(1); });\n",
+      "output": "",
+      "error": "/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859\n    return new TSError(diagnosticText, diagnosticCodes, diagnostics);\n           ^\nTSError: ⨯ Unable to compile TypeScript:\n../../../../home/coder/log-monitor/e2e-test/explore-output/scripts/3-interactive-elements-present-4.ts(1,26): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.\n\n    at createTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859:12)\n    at reportTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:863:19)\n    at getOutput (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1077:36)\n    at Object.compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1433:41)\n    at Module.m._compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1617:30)\n    at node:internal/modules/cjs/loader:1839:10\n    at Object.require.extensions.<computed> [as .ts] (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1621:12)\n    at Module.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {\n  diagnosticCodes: [ 2307 ]\n}\n",
+      "duration": 1809,
+      "timestamp": "2026-05-28T10:04:32.510Z"
+    },
+    {
+      "testCase": {
+        "name": "Verify form \"form\" can be submitted",
+        "description": "Verify form \"form\" can be submitted",
+        "steps": [
+          "Execute suggested test"
+        ],
+        "assertions": [
+          "Test passes"
+        ],
+        "priority": "medium"
+      },
+      "url": "http://127.0.0.1/logmon/login",
+      "passed": false,
+      "screenshot": "/home/coder/log-monitor/e2e-test/explore-output/screenshots/explorer/Verify-form-\"form\"-can-be-submitted-1779962673849-2026-05-28T10-04-33-849Z.png",
+      "script": "import { chromium } from '@playwright/test';\n\nasync function main() {\n  const browser = await chromium.launch({ headless: true });\n  const page = await browser.newPage();\n  try {\n\n    // --- Navigate to target page ---\n    await page.goto(`http://127.0.0.1/logmon/login`, { waitUntil: 'networkidle', timeout: 15000 });\n    console.log('Testing: Verify form \"form\" can be submitted');\n\n    // Check form exists and is submittable\n    const forms = await page.locator('form, .el-form').count();\n    console.log('INFO: Found ' + forms + ' forms');\n\n    console.log('PASS: Verify form \"form\" can be submitted');\n  } finally {\n    await browser.close();\n  }\n}\n\nmain().catch(e => { console.error('FAIL:', e.message); process.exit(1); });\n",
+      "output": "",
+      "error": "/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859\n    return new TSError(diagnosticText, diagnosticCodes, diagnostics);\n           ^\nTSError: ⨯ Unable to compile TypeScript:\n../../../../home/coder/log-monitor/e2e-test/explore-output/scripts/verify-form-\"form\"-can-be-submitted-5.ts(1,26): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.\n\n    at createTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859:12)\n    at reportTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:863:19)\n    at getOutput (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1077:36)\n    at Object.compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1433:41)\n    at Module.m._compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1617:30)\n    at node:internal/modules/cjs/loader:1839:10\n    at Object.require.extensions.<computed> [as .ts] (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1621:12)\n    at Module.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {\n  diagnosticCodes: [ 2307 ]\n}\n",
+      "duration": 1692,
+      "timestamp": "2026-05-28T10:04:34.202Z"
+    },
+    {
+      "testCase": {
+        "name": "Verify all buttons are clickable and trigger expected actions",
+        "description": "Verify all buttons are clickable and trigger expected actions",
+        "steps": [
+          "Execute suggested test"
+        ],
+        "assertions": [
+          "Test passes"
+        ],
+        "priority": "medium"
+      },
+      "url": "http://127.0.0.1/logmon/login",
+      "passed": false,
+      "screenshot": "/home/coder/log-monitor/e2e-test/explore-output/screenshots/explorer/Verify-all-buttons-are-clickable-and-trigger-expected-actions-1779962675647-2026-05-28T10-04-35-648Z.png",
+      "script": "import { chromium } from '@playwright/test';\n\nasync function main() {\n  const browser = await chromium.launch({ headless: true });\n  const page = await browser.newPage();\n  try {\n\n    // --- Navigate to target page ---\n    await page.goto(`http://127.0.0.1/logmon/login`, { waitUntil: 'networkidle', timeout: 15000 });\n    console.log('Testing: Verify all buttons are clickable and trigger expected actions');\n\n    // Check all visible buttons are enabled\n    const buttons = await page.locator('button:visible').all();\n    let disabledCount = 0;\n    for (const btn of buttons) {\n      const disabled = await btn.isDisabled();\n      if (disabled) disabledCount++;\n    }\n    console.log('INFO: ' + buttons.length + ' buttons found, ' + disabledCount + ' disabled');\n\n    console.log('PASS: Verify all buttons are clickable and trigger expected actions');\n  } finally {\n    await browser.close();\n  }\n}\n\nmain().catch(e => { console.error('FAIL:', e.message); process.exit(1); });\n",
+      "output": "",
+      "error": "/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859\n    return new TSError(diagnosticText, diagnosticCodes, diagnostics);\n           ^\nTSError: ⨯ Unable to compile TypeScript:\n../../../../home/coder/log-monitor/e2e-test/explore-output/scripts/verify-all-buttons-are-clickable-and-trigger-expected-actions-6.ts(1,26): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.\n\n    at createTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:859:12)\n    at reportTSError (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:863:19)\n    at getOutput (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1077:36)\n    at Object.compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1433:41)\n    at Module.m._compile (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1617:30)\n    at node:internal/modules/cjs/loader:1839:10\n    at Object.require.extensions.<computed> [as .ts] (/root/.openclaw/workspace/e2e-verifier/node_modules/ts-node/src/index.ts:1621:12)\n    at Module.load (node:internal/modules/cjs/loader:1441:32)\n    at Function._load (node:internal/modules/cjs/loader:1263:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14) {\n  diagnosticCodes: [ 2307 ]\n}\n",
+      "duration": 1834,
+      "timestamp": "2026-05-28T10:04:36.036Z"
+    }
+  ],
+  "timestamp": "2026-05-28T10:04:36.038Z"
+}

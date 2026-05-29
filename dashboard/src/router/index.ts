@@ -68,6 +68,12 @@ const routes: RouteRecordRaw[] = [
     name: 'RecordingPlayer',
     component: () => import('../views/Recordings.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('../views/NotFound.vue'),
+    meta: { public: true }
   }
 ]
 

@@ -390,13 +390,18 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+// Conn returns the underlying SQL connection for direct queries
+func (db *DB) Conn() *sql.DB {
+	return db.conn
+}
+
 // retentionCleanup periodically deletes old events
 func (db *DB) retentionCleanup(retentionDays int) {
 	if retentionDays <= 0 {
 		return
 	}
 
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	// Run once on startup
@@ -412,7 +417,7 @@ func (db *DB) retentionCleanup(retentionDays int) {
 	}
 }
 
-// cleanupOldData deletes events older than retention days
+// cleanupOldData deletes events older than retention days and cleans orphaned recording_events
 func (db *DB) cleanupOldData(retentionDays int) {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 
@@ -423,9 +428,23 @@ func (db *DB) cleanupOldData(retentionDays int) {
 		return
 	}
 
-	_, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
+	// Delete old events
+	result, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
 	if err != nil {
-		fmt.Printf("Failed to cleanup old data: %v\n", err)
+		fmt.Printf("[cleanup] Failed to delete old events: %v\n", err)
+	} else if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
+		fmt.Printf("[cleanup] Deleted %d old events (older than %d days)\n", rowsAffected, retentionDays)
+	}
+
+	// Clean orphaned recording_events (events without a corresponding recording)
+	result, err = db.conn.Exec(`
+		DELETE FROM recording_events
+		WHERE session_id NOT IN (SELECT session_id FROM recordings)
+	`)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to delete orphaned recording_events: %v\n", err)
+	} else if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
+		fmt.Printf("[cleanup] Deleted %d orphaned recording_events\n", rowsAffected)
 	}
 }
 

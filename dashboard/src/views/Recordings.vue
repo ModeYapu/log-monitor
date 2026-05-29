@@ -19,24 +19,35 @@
             :prefix-icon="Search"
             clearable
             style="width: 200px"
-            @change="loadRecordings"
           />
           <el-select
             v-model="filterAppId"
             placeholder="应用筛选"
             clearable
             style="width: 150px"
-            @change="loadRecordings"
           >
-            <el-option label="应用1" value="app1" />
-            <el-option label="应用2" value="app2" />
+            <el-option
+              v-for="app in apps"
+              :key="app.app_id"
+              :label="app.app_id"
+              :value="app.app_id"
+            />
           </el-select>
+          <el-date-picker
+            v-model="filterDateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            clearable
+            style="width: 240px"
+            :default-time="defaultTime"
+          />
           <el-select
             v-model="filterStatus"
             placeholder="状态筛选"
             clearable
             style="width: 120px"
-            @change="loadRecordings"
           >
             <el-option label="录制中" value="recording" />
             <el-option label="已完成" value="completed" />
@@ -48,7 +59,7 @@
         </div>
       </div>
 
-      <el-table :data="filteredRecordings" v-loading="loading" stripe>
+      <el-table :data="paginatedRecordings" v-loading="loading" stripe>
         <el-table-column prop="sessionId" label="会话ID" width="200">
           <template #default="{ row }">
             <span class="session-id">{{ row.sessionId }}</span>
@@ -173,7 +184,7 @@ function useSnackbar() {
     info: (msg: string) => ElMessage.info(msg)
   }
 }
-import { cobrowseApi } from '../api'
+import { cobrowseApi, logApi } from '../api'
 import type { Recording, RecordingEvent } from '../types'
 import {
   Film,
@@ -195,7 +206,7 @@ const { showSuccess, showError } = useSnackbar()
 const loading = ref(false)
 const recordings = ref<Recording[]>([])
 const selectedRecording = ref<Recording | null>(null)
-const searchAppId = ref('')
+const apps = ref<any[]>([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -203,10 +214,12 @@ const total = ref(0)
 // Filter states
 const filterAppId = ref('')
 const filterStatus = ref('')
-const filterStartTimeRange = ref<[Date, Date] | null>(null)
-const filterMinDuration = ref<number>()
-const filterMaxDuration = ref<number>()
+const filterDateRange = ref<[Date, Date] | null>(null)
 const filterSearch = ref('')
+const defaultTime: [Date, Date] = [
+  new Date(2000, 1, 1, 0, 0, 0),
+  new Date(2000, 1, 1, 23, 59, 59)
+]
 
 // Player state
 const playerRef = ref<HTMLElement>()
@@ -221,41 +234,73 @@ let replayer: any = null
 let events: RecordingEvent[] = []
 
 onMounted(() => {
+  loadApps()
   loadRecordings()
 })
 
 const filteredRecordings = computed(() => {
-  if (!searchAppId.value) return recordings.value
-  return recordings.value.filter(r =>
-    r.appId.toLowerCase().includes(searchAppId.value.toLowerCase()) ||
-    r.sessionId.toLowerCase().includes(searchAppId.value.toLowerCase())
-  )
+  let result = recordings.value
+
+  // Filter by search (session ID or URL)
+  if (filterSearch.value) {
+    const search = filterSearch.value.toLowerCase()
+    result = result.filter(r =>
+      r.sessionId.toLowerCase().includes(search) ||
+      (r.url && r.url.toLowerCase().includes(search))
+    )
+  }
+
+  // Filter by app ID
+  if (filterAppId.value) {
+    result = result.filter(r => r.appId === filterAppId.value)
+  }
+
+  // Filter by status
+  if (filterStatus.value) {
+    result = result.filter(r => r.status === filterStatus.value)
+  }
+
+  // Filter by date range
+  if (filterDateRange.value && filterDateRange.value.length === 2) {
+    const [start, end] = filterDateRange.value
+    const startDate = dayjs(start).startOf('day').valueOf()
+    const endDate = dayjs(end).endOf('day').valueOf()
+    result = result.filter(r => {
+      const startTime = r.startTime || 0
+      return startTime >= startDate && startTime <= endDate
+    })
+  }
+
+  return result
+})
+
+const paginatedRecordings = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredRecordings.value.slice(start, end)
 })
 
 const currentTimeDisplay = computed(() => formatTimeMs(currentTime.value))
 const totalTimeDisplay = computed(() => formatTimeMs(totalDuration.value))
 
+async function loadApps() {
+  try {
+    const { data } = await logApi.getApps()
+    apps.value = data
+  } catch (err) {
+    console.error('Failed to load apps:', err)
+  }
+}
+
 async function loadRecordings() {
   loading.value = true
   try {
-    const offset = (page.value - 1) * pageSize.value
-    const params: any = { limit: pageSize.value, offset }
-
-    // Add filter parameters
-    if (filterAppId.value) params.app_id = filterAppId.value
-    if (filterStatus.value) params.status = filterStatus.value
-    if (filterStartTimeRange.value && filterStartTimeRange.value.length === 2) {
-      params.start_from = filterStartTimeRange.value[0].getTime()
-      params.start_to = filterStartTimeRange.value[1].getTime()
-    }
-    if (filterMinDuration.value) params.min_duration = filterMinDuration.value
-    if (filterMaxDuration.value) params.max_duration = filterMaxDuration.value
-    if (filterSearch.value) params.search = filterSearch.value
-
+    // Load all recordings for client-side filtering (use a reasonable limit)
+    const params: any = { limit: 1000, offset: 0 }
     const { data } = await cobrowseApi.getRecordings(params)
     recordings.value = (data.data || [])
-    // For demo, assume we have up to 100 recordings
-    total.value = Math.min(pageSize.value * page.value, 100)
+    // Total is calculated from filtered results
+    total.value = filteredRecordings.value.length
   } catch (err) {
     showError('加载录制列表失败')
   } finally {
@@ -395,6 +440,17 @@ function formatProgress(value: number): string {
 
 watch(playbackSpeed, (speed) => {
   replayer?.setSpeed(speed)
+})
+
+// Update pagination when filters change
+watch([filterSearch, filterAppId, filterStatus, filterDateRange], () => {
+  page.value = 1
+  total.value = filteredRecordings.value.length
+})
+
+// Update total when recordings change
+watch(recordings, () => {
+  total.value = filteredRecordings.value.length
 })
 
 function closePlayer() {

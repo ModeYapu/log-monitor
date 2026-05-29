@@ -51,92 +51,6 @@
         @row-click="handleRowClick"
         style="cursor: pointer"
       >
-        <el-table-column type="expand">
-          <template #default="{ row }">
-            <div class="log-detail">
-              <el-row :gutter="20">
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>错误信息</h4>
-                    <pre>{{ row.message }}</pre>
-                  </div>
-                </el-col>
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>堆栈跟踪</h4>
-                    <pre v-if="row.stack">{{ row.stack }}</pre>
-                    <p v-else class="text-secondary">无堆栈信息</p>
-                  </div>
-                </el-col>
-              </el-row>
-              <el-row :gutter="20" class="mt-4">
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>标签</h4>
-                    <div v-if="parsedTags(row).length > 0" class="tags">
-                      <el-tag
-                        v-for="(value, key) in parsedTags(row)"
-                        :key="key"
-                        size="small"
-                        class="mr-1"
-                      >
-                        {{ key }}: {{ value }}
-                      </el-tag>
-                    </div>
-                    <p v-else class="text-secondary">无标签</p>
-                  </div>
-                </el-col>
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>额外数据</h4>
-                    <pre v-if="row.extra">{{ formatJson(row.extra) }}</pre>
-                    <p v-else class="text-secondary">无额外数据</p>
-                  </div>
-                </el-col>
-              </el-row>
-              <el-row :gutter="20" class="mt-4">
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>环境信息</h4>
-                    <p><strong>URL:</strong> {{ row.url }}</p>
-                    <p><strong>位置:</strong> {{ row.line }}:{{ row.col }}</p>
-                    <p><strong>屏幕:</strong> {{ row.screen }}</p>
-                    <p><strong>视口:</strong> {{ row.viewport }}</p>
-                  </div>
-                </el-col>
-                <el-col :span="12">
-                  <div class="detail-section">
-                    <h4>性能数据</h4>
-                    <pre v-if="row.performance && row.performance !== '{}'">{{ formatJson(row.performance) }}</pre>
-                    <p v-else class="text-secondary">无性能数据</p>
-                  </div>
-                </el-col>
-              </el-row>
-              <el-row :gutter="20" class="mt-4" v-if="row.screenshot_url">
-                <el-col :span="24">
-                  <div class="detail-section">
-                    <h4>错误截图</h4>
-                    <div class="screenshot-container">
-                      <el-image
-                        :src="getScreenshotUrl(row.screenshot_url)"
-                        fit="contain"
-                        :preview-src-list="[getScreenshotUrl(row.screenshot_url)]"
-                        preview-teleported
-                      >
-                        <template #error>
-                          <div class="image-error">
-                            <el-icon><Picture /></el-icon>
-                            <span>截图加载失败</span>
-                          </div>
-                        </template>
-                      </el-image>
-                    </div>
-                  </div>
-                </el-col>
-              </el-row>
-            </div>
-          </template>
-        </el-table-column>
         <el-table-column prop="created_at" label="时间" width="170">
           <template #default="{ row }">
             {{ formatTime(row.created_at) }}
@@ -179,14 +93,91 @@
         />
       </div>
     </el-card>
+
+    <!-- Detail Drawer -->
+    <el-drawer
+      v-model="drawerVisible"
+      title="日志详情"
+      size="600px"
+      direction="rtl"
+    >
+      <template #extra>
+        <el-button type="primary" :icon="DocumentCopy" @click="copyErrorInfo">
+          复制
+        </el-button>
+      </template>
+      <div v-if="selectedLog" class="drawer-content">
+        <div class="detail-section">
+          <h4>错误信息</h4>
+          <pre class="mono">{{ selectedLog.message }}</pre>
+        </div>
+
+        <div class="detail-section" v-if="selectedLog.stack">
+          <h4>堆栈跟踪</h4>
+          <pre class="mono">{{ selectedLog.stack }}</pre>
+        </div>
+
+        <div class="detail-section">
+          <h4>标签</h4>
+          <div v-if="Object.keys(parsedTags(selectedLog)).length > 0" class="key-value-list">
+            <div v-for="(value, key) in parsedTags(selectedLog)" :key="key" class="key-value-item">
+              <span class="key">{{ key }}:</span>
+              <span class="value">{{ value }}</span>
+            </div>
+          </div>
+          <p v-else class="empty">无标签</p>
+        </div>
+
+        <div class="detail-section">
+          <h4>额外数据</h4>
+          <pre v-if="selectedLog.extra && selectedLog.extra !== '{}'" class="mono">{{ formatJson(selectedLog.extra) }}</pre>
+          <p v-else class="empty">无额外数据</p>
+        </div>
+
+        <div class="detail-section">
+          <h4>环境信息</h4>
+          <div class="info-list">
+            <div class="info-item"><span class="label">URL:</span> <span>{{ selectedLog.url || '-' }}</span></div>
+            <div class="info-item"><span class="label">位置:</span> <span>{{ selectedLog.line }}:{{ selectedLog.col }}</span></div>
+            <div class="info-item"><span class="label">浏览器:</span> <span>{{ selectedLog.ua || '-' }}</span></div>
+            <div class="info-item"><span class="label">屏幕尺寸:</span> <span>{{ selectedLog.screen || '-' }}</span></div>
+            <div class="info-item"><span class="label">视口:</span> <span>{{ selectedLog.viewport || '-' }}</span></div>
+          </div>
+        </div>
+
+        <div class="detail-section" v-if="selectedLog.performance && selectedLog.performance !== '{}'">
+          <h4>性能数据</h4>
+          <pre class="mono">{{ formatJson(selectedLog.performance) }}</pre>
+        </div>
+
+        <div class="detail-section" v-if="selectedLog.screenshot_url">
+          <h4>错误截图</h4>
+          <div class="screenshot-container">
+            <el-image
+              :src="getScreenshotUrl(selectedLog.screenshot_url)"
+              fit="contain"
+              :preview-src-list="[getScreenshotUrl(selectedLog.screenshot_url)]"
+              preview-teleported
+            >
+              <template #error>
+                <div class="image-error">
+                  <el-icon><Picture /></el-icon>
+                  <span>截图加载失败</span>
+                </div>
+              </template>
+            </el-image>
+          </div>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, Picture } from '@element-plus/icons-vue'
+import { Search, Picture, DocumentCopy } from '@element-plus/icons-vue'
 import { logApi } from '../api'
 import { formatTime, truncateMessage, getLevelTag } from '../utils/formatters'
 import type { Event, QueryParams } from '../types'
@@ -211,6 +202,8 @@ const pagination = ref({
 const logs = ref<Event[]>([])
 const apps = ref<any[]>([])
 const loading = ref(false)
+const drawerVisible = ref(false)
+const selectedLog = ref<Event | null>(null)
 
 const parsedTags = (row: Event) => {
   try {
@@ -306,12 +299,41 @@ const handleSizeChange = (size: number) => {
 }
 
 const handleRowClick = (row: Event) => {
-  console.log('Row clicked:', row)
+  selectedLog.value = row
+  drawerVisible.value = true
+}
+
+const copyErrorInfo = () => {
+  if (!selectedLog.value) return
+
+  const log = selectedLog.value
+  const text = `Error: ${log.message}
+Type: ${log.type}
+Level: ${log.level}
+URL: ${log.url}
+Line: ${log.line}:${log.col}
+User Agent: ${log.ua}
+Screen: ${log.screen}
+Viewport: ${log.viewport}
+
+Stack Trace:
+${log.stack || '(none)'}
+
+Tags:
+${JSON.stringify(parsedTags(log), null, 2)}
+
+Extra:
+${log.extra || '(none)'}`
+
+  navigator.clipboard.writeText(text).then(() => {
+    ElMessage.success('已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
 }
 
 const getScreenshotUrl = (url: string) => {
   if (!url) return ''
-  // If it's a relative path, prepend the API base URL
   if (url.startsWith('/api/')) {
     return window.location.protocol + '//' + window.location.hostname + ':9200' + url
   }
@@ -359,44 +381,91 @@ onMounted(() => {
   color: #e0e6ed;
 }
 
-.log-detail {
-  padding: 20px;
-  background: #0a0e27;
+.drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .detail-section h4 {
   color: #94a3b8;
-  margin-bottom: 10px;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  margin: 0;
+  font-weight: 600;
 }
 
-.detail-section pre {
+.detail-section pre.mono {
   background: #131829;
   padding: 12px;
   border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 12px;
   color: #e0e6ed;
   overflow-x: auto;
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.detail-section p {
-  color: #94a3b8;
-  font-size: 13px;
-  margin: 4px 0;
-}
-
-.tags {
+.key-value-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
 }
 
-.mr-1 {
-  margin-right: 4px;
+.key-value-item {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.key-value-item .key {
+  color: #60a5fa;
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.key-value-item .value {
+  color: #e0e6ed;
+  word-break: break-word;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-item {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.info-item .label {
+  color: #94a3b8;
+  min-width: 80px;
+}
+
+.info-item span:not(.label) {
+  color: #e0e6ed;
+  word-break: break-all;
+}
+
+.empty {
+  color: #64748b;
+  font-size: 13px;
+  margin: 0;
 }
 
 .pagination {

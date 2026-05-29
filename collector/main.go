@@ -80,6 +80,9 @@ func main() {
 	// Initialize CORS middleware
 	corsMiddleware := middleware.NewCORS(cfg.Server.AllowedOrigins)
 
+	// Initialize system handler
+	systemHandler := handler.NewSystemHandler(db, cfg.Database.Path, cfg.Database.RetentionDays)
+
 	// Initialize buffer writer
 	writer := buffer.NewWriter(db, buffer.Config{
 		BufferSize:    cfg.Buffer.Size,
@@ -129,6 +132,8 @@ func main() {
 		{"POST /api/query/alerts", handler.NewAlertsHandler(db).CreateAlert},
 		{"DELETE /api/query/alerts/", handler.NewAlertsHandler(db).DeleteAlert},
 		{"POST /api/alerts/test", handler.NewAlertsHandler(db).TestAlert},
+		{"GET /api/system/info", systemHandler.GetSystemInfo},
+		{"POST /api/system/cleanup", systemHandler.TriggerCleanup},
 	}
 
 	for _, route := range authRoutes {

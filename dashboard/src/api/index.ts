@@ -21,7 +21,7 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor: handle 401 errors
+// Response interceptor: handle 401 and 500 errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -29,6 +29,11 @@ api.interceptors.response.use(
       localStorage.removeItem('logmon_token')
       localStorage.removeItem('logmon_user')
       router.push('/login')
+    } else if (error.response?.status === 500) {
+      // Show error toast for 500 errors
+      if (typeof window !== 'undefined' && (window as any).ElMessage) {
+        ;(window as any).ElMessage.error('服务器错误，请稍后重试')
+      }
     }
     console.error('API Error:', error)
     return Promise.reject(error)
@@ -121,6 +126,25 @@ export const authApi = {
   // Reset password (admin only)
   resetPassword: (id: number, data: { new_password: string }) =>
     api.put<{ message: string }>(`/users/${id}`, data)
+}
+
+export const systemApi = {
+  getSystemInfo: () =>
+    api.get<{
+      status: string
+      dbSize: number
+      totalEvents: number
+      totalRecordings: number
+      retentionDays: number
+      uptime: number
+      serverTime: number
+    }>('/system/info'),
+
+  triggerCleanup: () =>
+    api.post<{
+      eventsDeleted: number
+      recordingEventsDeleted: number
+    }>('/system/cleanup')
 }
 
 export default api

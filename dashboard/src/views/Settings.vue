@@ -136,32 +136,40 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
             <span>系统信息</span>
           </template>
 
-          <div class="system-info">
+          <div v-loading="loadingSystemInfo" class="system-info">
             <div class="info-item">
               <span class="info-label">Collector 状态</span>
-              <el-tag :type="systemStatus.collector ? 'success' : 'danger'">
-                {{ systemStatus.collector ? '运行中' : '离线' }}
+              <el-tag :type="systemInfo.status === 'ok' ? 'success' : 'danger'">
+                {{ systemInfo.status === 'ok' ? '运行中' : '离线' }}
               </el-tag>
             </div>
             <div class="info-item">
-              <span class="info-label">API 端点</span>
-              <span class="info-value">{{ collectorUrl }}/api</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">数据库路径</span>
-              <span class="info-value">./data/logmonitor.db</span>
+              <span class="info-label">数据库大小</span>
+              <span class="info-value">{{ formatBytes(systemInfo.dbSize) }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">总事件数</span>
-              <span class="info-value">{{ formatNumber(systemStatus.totalEvents) }}</span>
+              <span class="info-value">{{ formatNumber(systemInfo.totalEvents) }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">总录制数</span>
+              <span class="info-value">{{ formatNumber(systemInfo.totalRecordings) }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">应用数量</span>
               <span class="info-value">{{ apps.length }}</span>
             </div>
             <div class="info-item">
+              <span class="info-label">数据保留天数</span>
+              <span class="info-value">{{ systemInfo.retentionDays }} 天</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">系统运行时间</span>
+              <span class="info-value">{{ formatUptime(systemInfo.uptime) }}</span>
+            </div>
+            <div class="info-item">
               <span class="info-label">服务器时间</span>
-              <span class="info-value">{{ formatTime(systemStatus.serverTime) }}</span>
+              <span class="info-value">{{ formatTime(systemInfo.serverTime) }}</span>
             </div>
           </div>
         </el-card>
@@ -176,9 +184,13 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
               <el-icon><CircleCheck /></el-icon>
               健康检查
             </el-button>
-            <el-button @click="refreshSystemInfo">
+            <el-button @click="refreshSystemInfo" :loading="loadingSystemInfo">
               <el-icon><Refresh /></el-icon>
               刷新信息
+            </el-button>
+            <el-button type="warning" @click="triggerCleanup" :loading="cleaningUp">
+              <el-icon><Delete /></el-icon>
+              立即清理
             </el-button>
           </div>
         </el-card>
@@ -190,8 +202,8 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { CircleCheck, Refresh } from '@element-plus/icons-vue'
-import { logApi, authApi } from '../api'
+import { CircleCheck, Refresh, Delete } from '@element-plus/icons-vue'
+import { logApi, authApi, systemApi } from '../api'
 import { formatNumber, formatTime } from '../utils/formatters'
 
 const apps = ref<any[]>([])
@@ -199,6 +211,8 @@ const selectedAppId = ref('')
 const retentionDays = ref(30)
 const testingHealth = ref(false)
 const changingPassword = ref(false)
+const loadingSystemInfo = ref(false)
+const cleaningUp = ref(false)
 
 const passwordFormRef = ref<FormInstance>()
 const passwordForm = reactive({
@@ -232,9 +246,13 @@ const passwordRules: FormRules = {
 const sdkUrl = window.location.origin + '/sdk/logmonitor.min.js'
 const collectorUrl = window.location.protocol + '//' + window.location.hostname + ':9200'
 
-const systemStatus = ref({
-  collector: false,
+const systemInfo = ref({
+  status: 'unknown',
+  dbSize: 0,
   totalEvents: 0,
+  totalRecordings: 0,
+  retentionDays: 30,
+  uptime: 0,
   serverTime: Date.now()
 })
 
@@ -251,18 +269,44 @@ const fetchApps = async () => {
 }
 
 const refreshSystemInfo = async () => {
+  loadingSystemInfo.value = true
   try {
-    const [healthRes, appsRes] = await Promise.all([
-      logApi.health(),
-      logApi.getApps()
-    ])
-    systemStatus.value = {
-      collector: healthRes.data.status === 'ok',
-      totalEvents: appsRes.data.reduce((sum: number, app: any) => sum + app.event_count, 0),
-      serverTime: healthRes.data.time
-    }
+    const { data } = await systemApi.getSystemInfo()
+    systemInfo.value = data
   } catch (error) {
-    systemStatus.value.collector = false
+    console.error('Failed to fetch system info:', error)
+  } finally {
+    loadingSystemInfo.value = false
+  }
+}
+
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return (bytes / Math.pow(k, i)).toFixed(i > 0 ? 2 : 0) + ' ' + sizes[i]
+}
+
+const formatUptime = (seconds: number): string => {
+  if (seconds < 60) return `${seconds} 秒`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时`
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  return `${days} 天 ${hours} 小时`
+}
+
+const triggerCleanup = async () => {
+  cleaningUp.value = true
+  try {
+    const { data } = await systemApi.triggerCleanup()
+    ElMessage.success(`清理完成: 删除了 ${data.eventsDeleted} 条事件和 ${data.recordingEventsDeleted} 条录制事件`)
+    await refreshSystemInfo()
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '清理失败')
+  } finally {
+    cleaningUp.value = false
   }
 }
 
