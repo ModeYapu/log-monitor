@@ -1,0 +1,170 @@
+# LogMonitor E2E Test Plan
+# 项目维护的测试规格 — e2e-verifier 读取并执行
+
+project: logmonitor
+version: "1.0"
+
+environment:
+  base_url: "http://127.0.0.1/logmon"
+  api_url: "http://127.0.0.1:9200/api"
+  auth:
+    type: form_login
+    login_url: "/login"
+    username_field: 'input[type="text"]'
+    password_field: 'input[type="password"]'
+    submit_button: 'button[type="submit"]'
+    credentials:
+      username: admin
+      password: admin123
+
+dependencies:
+  - type: script
+    description: "Generate traffic via Vault Reader to produce logs and recordings"
+    script: "/home/coder/log-monitor/e2e-test/scripts/seed-traffic.js"
+    wait_after: 5000
+
+scenarios:
+  # ──── 场景 1: 登录与仪表盘 ────
+  - name: "登录与仪表盘"
+    pages: ["/"]
+    steps:
+      - action: navigate_all
+        pages: ["/"]
+        expect: all_200
+
+      - action: verify_page_structure
+        target: "body"
+        expect: "has stats cards and app list"
+    validation:
+      - type: api_check
+        endpoint: "/query/stats?appId=webgpu-3d-studio"
+        assert: "errorTrend exists"
+      - type: api_check
+        endpoint: "/query/apps"
+        assert: "isArray && length > 0"
+
+  # ──── 场景 2: 日志查询与搜索 ────
+  - name: "日志查询与搜索"
+    pages: ["/logs"]
+    steps:
+      - action: select_app
+        target: "webgpu-3d-studio"
+        expect: table_visible
+
+      - action: search
+        input: "error"
+        target: 'input[placeholder*="搜索"]'
+        expect: results_change
+
+      - action: filter_level
+        level: "error"
+        expect: api_returns_filtered
+
+      - action: pagination
+        expect: page_changes
+
+    validation:
+      - type: api_check
+        endpoint: "/query/logs?appId=webgpu-3d-studio&search=error&limit=3"
+        assert: "total >= 0"
+      - type: api_check
+        endpoint: "/query/logs?appId=webgpu-3d-studio&level=error&limit=1"
+        assert: "total >= 0"
+
+  # ──── 场景 3: 性能分析 ────
+  - name: "性能分析"
+    pages: ["/performance"]
+    steps:
+      - action: verify_page_structure
+        expect: "page content > 100 chars"
+
+  # ──── 场景 4: 告警管理 ────
+  - name: "告警管理"
+    pages: ["/alerts"]
+    steps:
+      - action: verify_list
+        expect: "alerts table or empty state"
+
+    validation:
+      - type: api_check
+        endpoint: "/query/alerts?appId=webgpu-3d-studio"
+        assert: "response ok"
+
+  # ──── 场景 5: 实时会话 ────
+  - name: "实时会话"
+    pages: ["/live"]
+    precondition: "dependencies.traffic"
+    steps:
+      - action: verify_page_structure
+        expect: "has online users panel and viewer panel"
+
+    validation:
+      - type: api_check
+        endpoint: "/query/live-sessions"
+        assert: "data field exists"
+
+  # ──── 场景 6: 录制回放 ────
+  - name: "录制列表与回放"
+    pages: ["/recordings"]
+    steps:
+      - action: verify_list
+        expect: "rows > 0"
+
+      - action: search
+        input: "webgpu"
+        target: 'input[placeholder*="搜索"]'
+        expect: "results filtered"
+
+      - action: click_play
+        target: "first recording with events"
+        expect: "replay renders"
+
+    validation:
+      - type: api_check
+        endpoint: "/query/recordings?limit=5"
+        assert: "data.length > 0"
+
+  # ──── 场景 7: 系统设置 ────
+  - name: "系统设置"
+    pages: ["/settings"]
+    steps:
+      - action: verify_forms_present
+        expect: "forms > 0"
+
+      - action: verify_save_button
+        expect: "button_visible"
+
+  # ──── 场景 8: 用户管理 ────
+  - name: "用户管理"
+    pages: ["/users"]
+    steps:
+      - action: verify_list
+        expect: "admin user visible"
+
+    validation:
+      - type: api_check
+        endpoint: "/users"
+        assert: "data.length > 0"
+
+  # ──── 场景 9: API 数据完整性 ────
+  - name: "API 数据完整性"
+    pages: []
+    steps:
+      - action: api_check
+        endpoint: "/health"
+        expect: "status ok"
+
+      - action: api_check
+        endpoint: "/system/info"
+        expect: "totalEvents > 0"
+
+      - action: api_check
+        endpoint: "/query/apps"
+        expect: "array with apps"
+
+  # ──── 场景 10: 全页面导航 ────
+  - name: "全页面导航"
+    pages: ["/", "/logs", "/performance", "/alerts", "/live", "/recordings", "/settings", "/users"]
+    steps:
+      - action: navigate_all
+        expect: all_200

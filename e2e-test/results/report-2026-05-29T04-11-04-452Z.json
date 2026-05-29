@@ -1,0 +1,222 @@
+{
+  "timestamp": "2026-05-29T04:11:04.452Z",
+  "project": "logmonitor",
+  "total": 10,
+  "passed": 8,
+  "failed": 2,
+  "rate": 80,
+  "results": [
+    {
+      "scenario": "登录与仪表盘",
+      "passed": true,
+      "steps": [
+        {
+          "step": "navigate /",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "page structure",
+          "passed": true,
+          "details": "343 chars"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 9926
+    },
+    {
+      "scenario": "日志查询与搜索",
+      "passed": false,
+      "steps": [
+        {
+          "step": "select app",
+          "passed": true,
+          "details": "Selected app"
+        },
+        {
+          "step": "search error",
+          "passed": true,
+          "details": "Search executed"
+        },
+        {
+          "step": "filter level error",
+          "passed": false,
+          "details": "total=0"
+        },
+        {
+          "step": "pagination",
+          "passed": true,
+          "details": "pager exists"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 36991,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "性能分析",
+      "passed": true,
+      "steps": [
+        {
+          "step": "page structure",
+          "passed": true,
+          "details": "253 chars"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 9019
+    },
+    {
+      "scenario": "告警管理",
+      "passed": true,
+      "steps": [
+        {
+          "step": "verify list",
+          "passed": true,
+          "details": "1 rows found"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8946
+    },
+    {
+      "scenario": "实时会话",
+      "passed": true,
+      "steps": [
+        {
+          "step": "page structure",
+          "passed": true,
+          "details": "110 chars"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 9067
+    },
+    {
+      "scenario": "录制列表与回放",
+      "passed": false,
+      "steps": [
+        {
+          "step": "verify list",
+          "passed": true,
+          "details": "35 rows found"
+        },
+        {
+          "step": "search webgpu",
+          "passed": true,
+          "details": "Search executed"
+        },
+        {
+          "step": "click play",
+          "passed": false,
+          "details": "Play button not visible"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 32507,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "系统设置",
+      "passed": true,
+      "steps": [
+        {
+          "step": "forms present",
+          "passed": true,
+          "details": "31 forms"
+        },
+        {
+          "step": "save button",
+          "passed": true,
+          "details": "visible"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8942
+    },
+    {
+      "scenario": "用户管理",
+      "passed": true,
+      "steps": [
+        {
+          "step": "verify list",
+          "passed": true,
+          "details": "2 rows found"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8900
+    },
+    {
+      "scenario": "API 数据完整性",
+      "passed": true,
+      "steps": [
+        {
+          "step": "api check",
+          "passed": true,
+          "details": "{\"status\":\"ok\",\"time\":1780027849080}"
+        },
+        {
+          "step": "api check",
+          "passed": true,
+          "details": "{\"error\":\"Unauthorized\"}"
+        },
+        {
+          "step": "api check",
+          "passed": true,
+          "details": "{\"error\":\"Unauthorized\"}"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 8934
+    },
+    {
+      "scenario": "全页面导航",
+      "passed": true,
+      "steps": [
+        {
+          "step": "navigate /",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /logs",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /performance",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /alerts",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /live",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /recordings",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /settings",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "step": "navigate /users",
+          "passed": true,
+          "details": "HTTP 200"
+        }
+      ],
+      "retries": 0,
+      "durationMs": 15274
+    }
+  ]
+}

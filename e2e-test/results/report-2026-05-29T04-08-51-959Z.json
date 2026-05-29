@@ -1,0 +1,150 @@
+{
+  "timestamp": "2026-05-29T04:08:51.959Z",
+  "project": "logmonitor",
+  "total": 10,
+  "passed": 0,
+  "failed": 10,
+  "rate": 0,
+  "results": [
+    {
+      "scenario": "登录与仪表盘",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_登录与仪表盘.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18468,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "日志查询与搜索",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_日志查询与搜索.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18461,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "性能分析",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_性能分析.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18691,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "告警管理",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_告警管理.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18595,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "实时会话",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_实时会话.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 19010,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "录制列表与回放",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_录制列表与回放.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18598,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "系统设置",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_系统设置.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18361,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "用户管理",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_用户管理.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18515,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "API 数据完整性",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_API_数据完整性.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18653,
+      "error": "1 steps failed"
+    },
+    {
+      "scenario": "全页面导航",
+      "passed": false,
+      "steps": [
+        {
+          "step": "script_execution",
+          "passed": false,
+          "details": "Must use import to load ES Module: /home/coder/log-monitor/e2e-test/results/_exec_全页面导航.mts"
+        }
+      ],
+      "retries": 2,
+      "durationMs": 18455,
+      "error": "1 steps failed"
+    }
+  ]
+}
