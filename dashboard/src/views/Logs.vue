@@ -23,6 +23,7 @@
         <el-form-item label="类型">
           <el-select v-model="filters.type" placeholder="全部" clearable style="width: 140px">
             <el-option label="错误" value="error" />
+            <el-option label="接口请求" value="xhr" />
             <el-option label="性能" value="performance" />
             <el-option label="信息" value="info" />
             <el-option label="警告" value="warn" />
@@ -78,7 +79,13 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="type" label="类型" width="100" />
+        <el-table-column prop="type" label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getTypeTag(row.type)" size="small">
+              {{ getTypeLabel(row.type) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="message" label="消息" min-width="300">
           <template #default="{ row }">
             <span class="log-message">{{ truncateMessage(row.message, 100) }}</span>
@@ -165,6 +172,35 @@
           <pre class="mono">{{ formatJson(selectedLog.performance) }}</pre>
         </div>
 
+        <div class="detail-section" v-if="xhrData">
+          <h4>接口请求详情</h4>
+          <div class="info-list">
+            <div class="info-item"><span class="label">方法:</span> <span class="badge">{{ xhrData.method }}</span></div>
+            <div class="info-item"><span class="label">地址:</span> <span class="mono-inline">{{ xhrData.url }}</span></div>
+            <div class="info-item"><span class="label">状态:</span> <span :class="xhrData.status >= 400 ? 'text-error' : 'text-success'">{{ xhrData.status }} {{ xhrData.statusText }}</span></div>
+            <div class="info-item"><span class="label">耗时:</span> <span>{{ xhrData.duration }}ms</span></div>
+          </div>
+          <div v-if="xhrData.requestBody" class="xhr-body">
+            <h5>请求体</h5>
+            <pre class="mono">{{ formatJson(xhrData.requestBody) }}</pre>
+          </div>
+          <div v-if="xhrData.responseBody" class="xhr-body">
+            <h5>响应体</h5>
+            <pre class="mono">{{ formatJson(xhrData.responseBody) }}</pre>
+          </div>
+        </div>
+
+        <div class="detail-section" v-if="breadcrumbs.length > 0">
+          <h4>用户操作轨迹（面包屑）</h4>
+          <div class="breadcrumb-timeline">
+            <div v-for="(crumb, idx) in breadcrumbs" :key="idx" class="breadcrumb-item" :class="'crumb-' + crumb.type">
+              <span class="crumb-icon">{{ getBreadcrumbIcon(crumb.type) }}</span>
+              <span class="crumb-time">{{ formatBreadcrumbTime(crumb.timestamp) }}</span>
+              <span class="crumb-text">{{ crumb.message }}</span>
+            </div>
+          </div>
+        </div>
+
         <div class="detail-section" v-if="selectedLog.screenshot_url">
           <h4>错误截图</h4>
           <div class="screenshot-container">
@@ -189,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search, Picture, DocumentCopy, Download } from '@element-plus/icons-vue'
@@ -227,6 +263,50 @@ const parsedTags = (row: Event) => {
   } catch {
     return {}
   }
+}
+
+const xhrData = computed(() => {
+  if (!selectedLog.value) return null
+  try {
+    const extra = JSON.parse(selectedLog.value.extra || '{}')
+    if (extra.xhr) return extra.xhr
+    return null
+  } catch {
+    return null
+  }
+})
+
+const breadcrumbs = computed(() => {
+  if (!selectedLog.value) return []
+  try {
+    const extra = JSON.parse(selectedLog.value.extra || '{}')
+    if (extra.breadcrumbs && Array.isArray(extra.breadcrumbs)) {
+      return extra.breadcrumbs
+    }
+    return []
+  } catch {
+    return []
+  }
+})
+
+const getTypeTag = (type: string) => {
+  const map: Record<string, string> = { error: 'danger', xhr: 'warning', performance: '', info: 'info', warn: 'warning', track: 'success', console: 'info' }
+  return map[type] || 'info'
+}
+
+const getTypeLabel = (type: string) => {
+  const map: Record<string, string> = { error: '错误', xhr: '接口', performance: '性能', info: '信息', warn: '警告', track: '追踪', console: '控制台', breadcrumb: '操作' }
+  return map[type] || type
+}
+
+const getBreadcrumbIcon = (type: string) => {
+  const map: Record<string, string> = { click: '👆', navigation: '🔗', xhr: '🌐', console: '🖥️', custom: '⭐', error: '❌' }
+  return map[type] || '📌'
+}
+
+const formatBreadcrumbTime = (ts: number) => {
+  if (!ts) return ''
+  return new Date(ts).toLocaleTimeString()
 }
 
 const formatJson = (jsonStr: string) => {
@@ -360,23 +440,22 @@ const copyErrorInfo = () => {
   if (!selectedLog.value) return
 
   const log = selectedLog.value
-  const text = `Error: ${log.message}
-Type: ${log.type}
-Level: ${log.level}
-URL: ${log.url}
-Line: ${log.line}:${log.col}
-User Agent: ${log.ua}
-Screen: ${log.screen}
-Viewport: ${log.viewport}
+  let text = `Error: ${log.message}\nType: ${log.type}\nLevel: ${log.level}\nURL: ${log.url}\nLine: ${log.line}:${log.col}\nUser Agent: ${log.ua}\nScreen: ${log.screen}\nViewport: ${log.viewport}\n`
 
-Stack Trace:
-${log.stack || '(none)'}
+  if (xhrData.value) {
+    text += `\nXHR Request:\n  ${xhrData.value.method} ${xhrData.value.url}\n  Status: ${xhrData.value.status} ${xhrData.value.statusText}\n  Duration: ${xhrData.value.duration}ms\n`
+    if (xhrData.value.requestBody) text += `  Request: ${xhrData.value.requestBody}\n`
+    if (xhrData.value.responseBody) text += `  Response: ${xhrData.value.responseBody}\n`
+  }
 
-Tags:
-${JSON.stringify(parsedTags(log), null, 2)}
+  if (breadcrumbs.value.length > 0) {
+    text += `\nBreadcrumbs:\n`
+    for (const b of breadcrumbs.value) {
+      text += `  [${new Date(b.timestamp).toLocaleTimeString()}] ${b.type}: ${b.message}\n`
+    }
+  }
 
-Extra:
-${log.extra || '(none)'}`
+  text += `\nStack Trace:\n${log.stack || '(none)'}\n\nTags:\n${JSON.stringify(parsedTags(log), null, 2)}\n\nExtra:\n${log.extra || '(none)'}`
 
   navigator.clipboard.writeText(text).then(() => {
     ElMessage.success('已复制到剪贴板')
@@ -564,5 +643,83 @@ onMounted(() => {
 
 .image-error .el-icon {
   font-size: 32px;
+}
+
+.xhr-body {
+  margin-top: 12px;
+}
+
+.xhr-body h5 {
+  color: #94a3b8;
+  font-size: 12px;
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #2d3748;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  color: #a0aec0;
+}
+
+.mono-inline {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  color: #a0aec0;
+  word-break: break-all;
+}
+
+.text-success {
+  color: #10b981;
+}
+
+.text-error {
+  color: #ef4444;
+}
+
+.breadcrumb-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 8px;
+  background: #131829;
+  border-radius: 6px;
+  border-left: 3px solid #4a5568;
+}
+
+.breadcrumb-item.crumb-click { border-left-color: #6366f1; }
+.breadcrumb-item.crumb-navigation { border-left-color: #10b981; }
+.breadcrumb-item.crumb-xhr { border-left-color: #f59e0b; }
+.breadcrumb-item.crumb-error { border-left-color: #ef4444; }
+
+.crumb-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.crumb-time {
+  color: #64748b;
+  font-size: 11px;
+  flex-shrink: 0;
+  min-width: 70px;
+}
+
+.crumb-text {
+  color: #e0e6ed;
+  word-break: break-all;
 }
 </style>
