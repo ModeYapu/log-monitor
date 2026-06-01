@@ -13,17 +13,18 @@
         @submit.prevent="handleLogin"
         class="login-form"
       >
-        <el-form-item prop="username">
+        <el-form-item prop="username" label="用户名">
           <el-input
             v-model="form.username"
             placeholder="用户名"
             size="large"
             :prefix-icon="User"
+            aria-label="用户名"
             @keyup.enter="handleLogin"
           />
         </el-form-item>
 
-        <el-form-item prop="password">
+        <el-form-item prop="password" label="密码">
           <el-input
             v-model="form.password"
             type="password"
@@ -31,6 +32,7 @@
             size="large"
             :prefix-icon="Lock"
             show-password
+            aria-label="密码"
             @keyup.enter="handleLogin"
           />
         </el-form-item>

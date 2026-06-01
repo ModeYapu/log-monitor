@@ -1,5 +1,6 @@
 <template>
   <div class="logs-page">
+    <h1 class="sr-only">日志查询</h1>
     <el-card class="filter-card">
       <el-form :inline="true" :model="filters" @submit.prevent="handleSearch">
         <el-form-item label="应用">

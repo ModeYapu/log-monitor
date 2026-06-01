@@ -1,5 +1,6 @@
 <template>
   <div class="overview">
+    <h1 class="sr-only">系统概览</h1>
     <el-row :gutter="20">
       <el-col :span="6" v-for="stat in statsCards" :key="stat.key">
         <el-card class="stat-card" shadow="hover">
@@ -136,13 +137,20 @@ const topErrors = computed(() => stats.value?.topErrors || [])
 
 const fetchData = async () => {
   try {
-    const [appsRes, statsRes] = await Promise.all([
-      logApi.getApps(),
-      logApi.getStats('all')
-    ])
+    const appsRes = await logApi.getApps()
     apps.value = appsRes.data
-    stats.value = statsRes.data
-    renderTrendChart()
+
+    // Use first app for stats, or 'all' if no apps
+    const appId = apps.value.length > 0 ? apps.value[0].app_id : 'all'
+    try {
+      const statsRes = await logApi.getStats(appId)
+      stats.value = statsRes.data
+      renderTrendChart()
+    } catch (statsErr) {
+      // Stats may fail if no appId matches, use defaults
+      stats.value = { totalEvents: 0, errorCount: 0, warnCount: 0, infoCount: 0, topErrors: [], errorTrend: [] }
+      renderTrendChart()
+    }
   } catch (error) {
     console.error('Failed to fetch overview data:', error)
   }
@@ -153,7 +161,9 @@ const refreshStats = () => {
 }
 
 const renderTrendChart = () => {
-  if (!trendChartRef.value || !stats.value?.errorTrend) return
+  if (!trendChartRef.value) return
+  const trend = stats.value?.errorTrend || []
+  if (trend.length === 0) return
 
   // Dispose previous chart instance to prevent memory leak
   if (trendChart) {
@@ -167,7 +177,7 @@ const renderTrendChart = () => {
     grid: { top: 20, right: 20, bottom: 30, left: 50 },
     xAxis: {
       type: 'category',
-      data: stats.value.errorTrend.map((t: any) => {
+      data: trend.map((t: any) => {
         const date = new Date(t.timestamp)
         return `${date.getHours().toString().padStart(2, '0')}:00`
       }),
@@ -181,7 +191,7 @@ const renderTrendChart = () => {
       splitLine: { lineStyle: { color: 'var(--color-border)' } }
     },
     series: [{
-      data: stats.value.errorTrend.map((t: any) => t.count),
+      data: trend.map((t: any) => t.count),
       type: 'line',
       smooth: true,
       areaStyle: {

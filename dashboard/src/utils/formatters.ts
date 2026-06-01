@@ -4,7 +4,8 @@ export const formatTime = (timestamp: number, format = 'YYYY-MM-DD HH:mm:ss'): s
   return dayjs(timestamp).format(format)
 }
 
-export const formatRelativeTime = (timestamp: number): string => {
+export const formatRelativeTime = (timestamp: number | undefined | null): string => {
+  if (timestamp == null) return '-'
   const now = Date.now()
   const diff = now - timestamp
 
@@ -16,7 +17,8 @@ export const formatRelativeTime = (timestamp: number): string => {
   return formatTime(timestamp)
 }
 
-export const formatNumber = (num: number): string => {
+export const formatNumber = (num: number | undefined | null): string => {
+  if (num == null) return '0'
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
   return num.toString()

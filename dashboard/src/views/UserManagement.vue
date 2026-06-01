@@ -1,5 +1,6 @@
 <template>
   <div class="users-page">
+    <h1 class="sr-only">用户管理</h1>
     <el-row :gutter="20">
       <el-col :span="24">
         <el-card>

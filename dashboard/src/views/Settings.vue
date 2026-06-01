@@ -1,5 +1,6 @@
 <template>
   <div class="settings-page">
+    <h1 class="sr-only">系统设置</h1>
     <el-row :gutter="20">
       <el-col :span="16">
         <el-card>

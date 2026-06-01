@@ -28,14 +28,19 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('logmon_token')
       localStorage.removeItem('logmon_user')
-      router.push('/login')
+      // Only redirect if not already on login page
+      if (router.currentRoute.value.path !== '/login') {
+        router.push('/login')
+      }
     } else if (error.response?.status === 500) {
-      // Show error toast for 500 errors
       if (typeof window !== 'undefined' && (window as any).ElMessage) {
         ;(window as any).ElMessage.error('服务器错误，请稍后重试')
       }
     }
-    console.error('API Error:', error)
+    // Only log non-401 errors to reduce noise
+    if (error.response?.status !== 401) {
+      console.error('API Error:', error.message)
+    }
     return Promise.reject(error)
   }
 )

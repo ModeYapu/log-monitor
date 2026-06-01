@@ -1,5 +1,6 @@
 <template>
   <div class="performance-page">
+    <h1 class="sr-only">性能分析</h1>
     <el-card class="filter-card">
       <el-form :inline="true">
         <el-form-item label="应用">

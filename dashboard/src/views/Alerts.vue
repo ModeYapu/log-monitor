@@ -1,5 +1,6 @@
 <template>
   <div class="alerts-page">
+    <h1 class="sr-only">告警管理</h1>
     <el-row :gutter="20">
       <el-col :span="16">
         <el-card>
