@@ -29,6 +29,17 @@ export interface PrivacyConfig {
   maskHeaders?: string[];             // HTTP headers to mask
   blockUrls?: (string | RegExp)[];    // URLs to not capture at all
   blockXhrUrls?: (string | RegExp)[]; // XHR URLs to not capture
+  /** Custom masking function — called for every string value before storage */
+  customMaskFn?: (value: string, context?: MaskContext) => string;
+}
+
+export interface MaskContext {
+  /** Where the data came from */
+  source: 'text' | 'url' | 'header' | 'field' | 'body' | 'custom';
+  /** Field/key name if available */
+  key?: string;
+  /** Full parent object path, e.g. 'request.headers.authorization' */
+  path?: string;
 }
 
 export interface MaskPattern {
@@ -154,45 +165,67 @@ class PrivacyEngine {
   }
 
   maskText(text: string): string {
-    if (!this.config.enabled || !text) return text;
+    if (!text) return text;
+    return this.applyMask(text, { source: 'text' });
+  }
 
-    let masked = text;
-    const patterns = [...this.defaultPatterns, ...(this.config.maskPatterns || [])];
-    for (const { pattern, replacement = '***' } of patterns) {
-      masked = masked.replace(pattern, replacement);
+  /** Core masking — applies built-in patterns + custom function */
+  private applyMask(value: string, context: MaskContext): string {
+    let result = value;
+    // 1. Built-in + user-defined regex patterns
+    if (this.config.enabled) {
+      const patterns = [...this.defaultPatterns, ...(this.config.maskPatterns || [])];
+      for (const { pattern, replacement = '***' } of patterns) {
+        result = result.replace(pattern, replacement);
+      }
     }
-    return masked;
+    // 2. Custom masking function (always called if provided)
+    if (this.config.customMaskFn) {
+      result = this.config.customMaskFn(result, context);
+    }
+    return result;
   }
 
   maskUrl(url: string): string {
-    if (!this.config.enabled || !url) return url;
-    try {
-      const u = new URL(url);
-      const paramsToMask = this.config.maskUrlParams || [];
-      for (const key of paramsToMask) {
-        if (u.searchParams.has(key)) {
-          u.searchParams.set(key, '***');
+    if (!url) return url;
+    let result = url;
+    if (this.config.enabled) {
+      try {
+        const u = new URL(url);
+        for (const key of (this.config.maskUrlParams || [])) {
+          if (u.searchParams.has(key)) {
+            u.searchParams.set(key, '***');
+          }
         }
-      }
-      return u.toString();
-    } catch {
-      return url;
+        result = u.toString();
+      } catch {}
     }
+    if (this.config.customMaskFn) {
+      result = this.config.customMaskFn(result, { source: 'url' });
+    }
+    return result;
   }
 
-  maskObject(obj: Record<string, any>, depth = 0): Record<string, any> {
-    if (!this.config.enabled || depth > 5) return obj;
+  maskObject(obj: Record<string, any>, depth = 0, parentPath = ''): Record<string, any> {
+    if (depth > 5) return obj;
     const result: Record<string, any> = {};
     const fieldsToMask = this.config.maskFields || [];
 
     for (const [key, value] of Object.entries(obj)) {
+      const path = parentPath ? `${parentPath}.${key}` : key;
       const keyLower = key.toLowerCase();
       if (fieldsToMask.some(f => keyLower.includes(f.toLowerCase()))) {
         result[key] = '***';
       } else if (typeof value === 'string') {
-        result[key] = this.maskText(value);
+        result[key] = this.applyMask(value, { source: 'body', key, path });
       } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        result[key] = this.maskObject(value, depth + 1);
+        result[key] = this.maskObject(value, depth + 1, path);
+      } else if (Array.isArray(value)) {
+        result[key] = value.map((item: any, idx: number) => {
+          if (typeof item === 'string') return this.applyMask(item, { source: 'body', key: `${key}[${idx}]`, path: `${path}[${idx}]` });
+          if (typeof item === 'object' && item !== null) return this.maskObject(item, depth + 1, `${path}[${idx}]`);
+          return item;
+        });
       } else {
         result[key] = value;
       }
@@ -201,15 +234,13 @@ class PrivacyEngine {
   }
 
   maskHeaders(headers: Record<string, string>): Record<string, string> {
-    if (!this.config.enabled) return headers;
     const result: Record<string, string> = {};
     const headersToMask = this.config.maskHeaders || [];
-
     for (const [key, value] of Object.entries(headers)) {
       if (headersToMask.some(h => key.toLowerCase() === h.toLowerCase())) {
         result[key] = '***';
       } else {
-        result[key] = value;
+        result[key] = this.applyMask(value, { source: 'header', key });
       }
     }
     return result;
@@ -230,6 +261,16 @@ class PrivacyEngine {
 
   shouldBlockXhr(url: string): boolean {
     return this.shouldBlockUrl(url, this.config.blockXhrUrls);
+  }
+
+  /** Public method — manually mask any data */
+  maskData(data: any): any {
+    if (data === null || data === undefined) return data;
+    if (typeof data === 'string') return this.applyMask(data, { source: 'custom' });
+    if (typeof data === 'number' || typeof data === 'boolean') return data;
+    if (Array.isArray(data)) return data.map((item: any) => this.maskData(item));
+    if (typeof data === 'object') return this.maskObject(data);
+    return data;
   }
 }
 
@@ -1153,6 +1194,27 @@ function generateSessionId(): string {
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+/**
+ * Manually mask any data using the configured privacy rules.
+ * Works with strings, objects, arrays — returns a masked copy.
+ *
+ * @example
+ *   import { maskData } from '@logmonitor/sdk'
+ *   const safe = maskData({ user: '张三', phone: '13800138000', email: 'test@qq.com' })
+ *   // => { user: '张三', phone: '[PHONE]', email: '[EMAIL]' }
+ *
+ *   // With custom function:
+ *   init({ ..., privacy: { customMaskFn: (val, ctx) => val.replace(/secret/g, '***') } })
+ *   maskData('my secret key') // => 'my *** key'
+ */
+export function maskData(data: any): any {
+  if (!privacyEngine) {
+    // Auto-create a default engine if not initialized
+    privacyEngine = new PrivacyEngine({ enabled: true });
+  }
+  return privacyEngine.maskData(data)
+}
+
 // Export as UMD global
 if (typeof window !== 'undefined') {
   (window as any).LogMonitor = {
@@ -1166,6 +1228,7 @@ if (typeof window !== 'undefined') {
     getConfig,
     getBufferSize,
     addBreadcrumb: addCustomBreadcrumb,
+    maskData,
     captureScreenshot: captureException,
     cobrowse: {
       start: () => import('./cobrowse').then(m => m.start()),
