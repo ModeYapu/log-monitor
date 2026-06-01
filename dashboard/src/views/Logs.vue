@@ -29,17 +29,31 @@
             <el-option label="追踪" value="track" />
           </el-select>
         </el-form-item>
+        <el-form-item label="时间范围">
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="datetimerange"
+            range-separator="至"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+            format="YYYY-MM-DD HH:mm"
+            value-format="x"
+            style="width: 360px"
+          />
+        </el-form-item>
         <el-form-item label="关键词">
           <el-input
             v-model="filters.keyword"
             placeholder="搜索消息内容"
             clearable
             style="width: 200px"
+            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch" :icon="Search">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button :icon="Download" @click="handleExport">导出</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -178,18 +192,19 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, Picture, DocumentCopy } from '@element-plus/icons-vue'
+import { Search, Picture, DocumentCopy, Download } from '@element-plus/icons-vue'
 import { logApi } from '../api'
 import { formatTime, truncateMessage, getLevelTag } from '../utils/formatters'
 import type { Event, QueryParams } from '../types'
 
 const route = useRoute()
 
-const filters = ref<QueryParams>({
+const filters = ref<QueryParams & { dateRange?: [number, number] }>({
   appId: route.params.appId as string || '',
   level: '',
   type: '',
   keyword: '',
+  dateRange: undefined,
   page: 1,
   pageSize: 50
 })
@@ -249,10 +264,17 @@ const fetchLogs = async () => {
 
   loading.value = true
   try {
-    const params = {
-      ...filters.value,
+    const params: any = {
+      appId: filters.value.appId,
+      level: filters.value.level || undefined,
+      type: filters.value.type || undefined,
+      keyword: filters.value.keyword || undefined,
       page: pagination.value.page,
-      pageSize: pagination.value.pageSize
+      pageSize: pagination.value.pageSize,
+    }
+    if (filters.value.dateRange && filters.value.dateRange.length === 2) {
+      params.startTime = filters.value.dateRange[0]
+      params.endTime = filters.value.dateRange[1]
     }
     const { data } = await logApi.query(params)
     logs.value = data.data
@@ -285,7 +307,37 @@ const handleReset = () => {
   filters.value.level = ''
   filters.value.type = ''
   filters.value.keyword = ''
+  filters.value.dateRange = undefined
   handleSearch()
+}
+
+const handleExport = () => {
+  if (!logs.value.length) {
+    ElMessage.warning('没有可导出的数据')
+    return
+  }
+
+  const headers = ['时间', '级别', '类型', '消息', 'URL', '浏览器', '屏幕']
+  const rows = logs.value.map(log => [
+    formatTime(log.created_at),
+    log.level?.toUpperCase() || '',
+    log.type || '',
+    `"${(log.message || '').replace(/"/g, '""')}"`,
+    log.url || '',
+    log.ua || '',
+    log.screen || ''
+  ])
+
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+  const BOM = '\uFEFF'
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `logmonitor-${filters.value.appId}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success(`已导出 ${logs.value.length} 条日志`)
 }
 
 const handlePageChange = (page: number) => {
