@@ -143,12 +143,12 @@ const DEFAULT_CONFIG = {
 class PrivacyEngine {
   private config: PrivacyConfig;
   private defaultPatterns: MaskPattern[] = [
-    { name: 'credit_card', pattern: /\b(?:\d[ -]*?){13,16}\b/g, replacement: '[CARD]' },
-    { name: 'email', pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, replacement: '[EMAIL]' },
-    { name: 'phone_cn', pattern: /\b1[3-9]\d{9}\b/g, replacement: '[PHONE]' },
-    { name: 'id_card_cn', pattern: /\b\d{17}[\dXx]\b/g, replacement: '[ID]' },
-    { name: 'ip_address', pattern: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, replacement: '[IP]' },
-    { name: 'jwt_token', pattern: /\beyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\b/g, replacement: '[TOKEN]' },
+    { name: 'credit_card', pattern: /\b(\d{4})[\d -]{5,12}(\d{4})\b/g, replacement: '$1****$2' },
+    { name: 'email', pattern: /\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Z|a-z]{2,})\b/g, replacement: '$1***@$2' },
+    { name: 'phone_cn', pattern: /\b(1[3-9]\d)\d{4}(\d{4})\b/g, replacement: '$1****$2' },
+    { name: 'id_card_cn', pattern: /\b(\d{4})\d{10}(\d{4})\b/g, replacement: '$1**********$2' },
+    { name: 'ip_address', pattern: /\b(\d{1,3})\.\d{1,3}\.\d{1,3}\.(\d{1,3})\b/g, replacement: '$1.*.*.$2' },
+    { name: 'jwt_token', pattern: /\b(eyJ[A-Za-z0-9-_]{4})[A-Za-z0-9-_]+\.(eyJ[A-Za-z0-9-_]{4})[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\b/g, replacement: '$1***.$2***.***' },
   ];
 
   constructor(config: PrivacyConfig) {
