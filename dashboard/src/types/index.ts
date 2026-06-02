@@ -73,10 +73,14 @@ export interface AlertRule {
   name: string
   condition_type: 'threshold' | 'rate' | 'new_error'
   condition_config: Record<string, any>
-  notify_type: 'webhook' | 'feishu' | 'email'
+  notify_type: 'webhook' | 'feishu' | 'email' | 'wecom' | 'dingtalk' | 'telegram'
   notify_config: Record<string, any>
   enabled: boolean
   cooldown_minutes: number
+  last_triggered_at?: number
+  silenced_until?: number
+  created_at?: number
+  _toggling?: boolean
 }
 
 export interface AlertLog {

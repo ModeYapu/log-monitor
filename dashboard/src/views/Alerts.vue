@@ -14,33 +14,64 @@
           </template>
 
           <el-table :data="alertRules" v-loading="loading" stripe>
-            <el-table-column prop="name" label="规则名称" width="200" />
-            <el-table-column prop="condition_type" label="条件类型" width="120">
+            <el-table-column prop="name" label="规则名称" width="180" />
+            <el-table-column prop="condition_type" label="条件类型" width="110">
               <template #default="{ row }">
                 <el-tag size="small">{{ getConditionTypeLabel(row.condition_type) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="condition_config" label="触发条件" min-width="200">
+            <el-table-column prop="condition_config" label="触发条件" min-width="180">
               <template #default="{ row }">
                 {{ formatConditionConfig(row.condition_type, row.condition_config) }}
               </template>
             </el-table-column>
-            <el-table-column prop="notify_type" label="通知方式" width="100">
+            <el-table-column prop="notify_type" label="通知方式" width="90">
               <template #default="{ row }">
                 {{ getNotifyTypeLabel(row.notify_type) }}
               </template>
             </el-table-column>
-            <el-table-column prop="enabled" label="状态" width="80">
+            <el-table-column prop="last_triggered_at" label="最后触发" width="110">
+              <template #default="{ row }">
+                <span v-if="row.last_triggered_at" class="text-secondary">{{ formatRelativeTime(row.last_triggered_at) }}</span>
+                <span v-else class="text-secondary">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="90">
               <template #default="{ row }">
                 <el-switch
                   v-model="row.enabled"
                   @change="toggleRule(row)"
                   :loading="row._toggling"
+                  size="small"
                 />
+                <div v-if="isSilenced(row)" class="text-warning mt-1" style="font-size: 11px;">
+                  <el-tooltip :content="`静默至 ${formatDateTime(row.silenced_until)}`" placement="top">
+                    <span>已静默</span>
+                  </el-tooltip>
+                </div>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120" align="center">
+            <el-table-column label="操作" width="160" align="center">
               <template #default="{ row }">
+                <el-button
+                  v-if="isSilenced(row)"
+                  type="success"
+                  size="small"
+                  link
+                  @click="handleUnsilence(row)"
+                  :loading="row._unsilencing"
+                >
+                  取消静默
+                </el-button>
+                <el-button
+                  v-else
+                  size="small"
+                  link
+                  @click="handleSilence(row)"
+                  :loading="row._silencing"
+                >
+                  静默
+                </el-button>
                 <el-button type="danger" size="small" link @click="handleDelete(row)">
                   删除
                 </el-button>
@@ -382,6 +413,59 @@ const handleDelete = async (rule: any) => {
   }
 }
 
+const isSilenced = (rule: any) => {
+  return rule.silenced_until && rule.silenced_until > Date.now()
+}
+
+const handleSilence = async (rule: any) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '请输入静默时长（分钟）',
+      '静默告警规则',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputValue: '60',
+        inputPattern: /^\d+$/,
+        inputErrorMessage: '请输入有效的分钟数'
+      }
+    )
+
+    rule._silencing = true
+    try {
+      await logApi.silenceAlert({
+        id: rule.id,
+        durationMinutes: parseInt(value)
+      })
+      ElMessage.success(`已静默 ${value} 分钟`)
+      fetchData()
+    } catch (error) {
+      ElMessage.error('操作失败')
+    } finally {
+      rule._silencing = false
+    }
+  } catch (error) {
+    // User cancelled
+  }
+}
+
+const handleUnsilence = async (rule: any) => {
+  rule._unsilencing = true
+  try {
+    await logApi.unsilenceAlert({ id: rule.id })
+    ElMessage.success('已取消静默')
+    fetchData()
+  } catch (error) {
+    ElMessage.error('操作失败')
+  } finally {
+    rule._unsilencing = false
+  }
+}
+
+const formatDateTime = (timestamp: number) => {
+  return new Date(timestamp).toLocaleString('zh-CN')
+}
+
 const handleCreateAlert = async () => {
   if (!alertFormRef.value) return
 
@@ -518,5 +602,17 @@ onMounted(() => {
 
 .ml-2 {
   margin-left: 8px;
+}
+
+.mt-1 {
+  margin-top: 4px;
+}
+
+.text-warning {
+  color: #f59e0b;
+}
+
+.text-secondary {
+  color: #94a3b8;
 }
 </style>

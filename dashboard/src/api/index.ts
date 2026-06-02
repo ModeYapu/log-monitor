@@ -67,6 +67,12 @@ export const logApi = {
   testAlert: (data: { notify_type: string; notify_config: string; message: string }) =>
     api.post('/alerts/test', data),
 
+  silenceAlert: (data: { id: number; durationMinutes: number }) =>
+    api.post('/alerts/silence', data),
+
+  unsilenceAlert: (data: { id: number }) =>
+    api.post('/alerts/unsilence', data),
+
   health: () =>
     api.get<{ status: string; time: number }>('/health')
 }
