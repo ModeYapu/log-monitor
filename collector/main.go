@@ -58,6 +58,16 @@ func main() {
 	// Ensure cobrowsing tables exist
 	db.EnsureCobrowseTables()
 
+	// Ensure source maps table exists
+	db.EnsureSourceMapsTable()
+
+	// Initialize source map storage
+	smStorage, err := storage.NewSourceMapStorage("./data")
+	if err != nil {
+		log.Fatalf("Failed to initialize source map storage: %v", err)
+	}
+	log.Println("Source map storage initialized")
+
 	// Initialize user storage and create users table
 	userStorage := storage.NewUserStorage(db)
 	if err := userStorage.EnsureUsersTable(); err != nil {
@@ -117,6 +127,8 @@ func main() {
 	// Protected routes (require authentication)
 	queryHandler := handler.NewQueryHandler(db)
 	authHandler := handler.NewAuthHandler(userStorage, jwtMiddleware)
+	sourceMapHandler := handler.NewSourceMapHandler(db, smStorage)
+	sourceMapHandler.SetAllowedOrigins(cfg.Server.AllowedOrigins)
 
 	// API routes that require JWT authentication
 	authRoutes := []struct {
@@ -134,6 +146,22 @@ func main() {
 		{"POST /api/alerts/test", handler.NewAlertsHandler(db).TestAlert},
 		{"GET /api/system/info", systemHandler.GetSystemInfo},
 		{"POST /api/system/cleanup", systemHandler.TriggerCleanup},
+		{"GET /api/sourcemaps", sourceMapHandler.List},
+		{"GET /api/sourcemaps/download", sourceMapHandler.Download},
+		{"DELETE /api/sourcemaps/", sourceMapHandler.Delete},
+		{"POST /api/sourcemaps/deobfuscate", sourceMapHandler.Deobfuscate},
+	}
+
+	// Admin-only routes for source map upload
+	adminRoutes := []struct {
+		pattern string
+		handler http.HandlerFunc
+	}{
+		{"POST /api/sourcemaps/upload", sourceMapHandler.Upload},
+		{"GET /api/users", authHandler.ListUsers},
+		{"POST /api/users", authHandler.CreateUser},
+		{"PUT /api/users/", authHandler.UpdateUser},
+		{"DELETE /api/users/", authHandler.DeleteUser},
 	}
 
 	for _, route := range authRoutes {
@@ -145,14 +173,12 @@ func main() {
 	}
 
 	// Admin-only routes
-	adminRoutes := []struct {
-		pattern string
-		handler http.HandlerFunc
-	}{
-		{"GET /api/users", authHandler.ListUsers},
-		{"POST /api/users", authHandler.CreateUser},
-		{"PUT /api/users/", authHandler.UpdateUser},
-		{"DELETE /api/users/", authHandler.DeleteUser},
+	for _, route := range adminRoutes {
+		pattern := route.pattern
+		handler := corsMiddleware.Handler(jwtMiddleware.Handler(middleware.RequireAdmin(http.HandlerFunc(route.handler))))
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			handler.ServeHTTP(w, r)
+		})
 	}
 
 	for _, route := range adminRoutes {
