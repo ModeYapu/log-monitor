@@ -2,6 +2,10 @@ export interface Event {
   id: number
   app_id: string
   release: string
+  env: string
+  build_id: string
+  user_id: string
+  session_id: string
   type: string
   level: string
   message: string
@@ -22,6 +26,8 @@ export interface Event {
 
 export interface QueryParams {
   appId: string
+  release?: string
+  env?: string
   type?: string
   level?: string
   keyword?: string

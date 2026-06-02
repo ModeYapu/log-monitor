@@ -4,13 +4,31 @@
     <el-card class="filter-card">
       <el-form :inline="true" :model="filters" @submit.prevent="handleSearch">
         <el-form-item label="应用">
-          <el-select v-model="filters.appId" placeholder="选择应用" style="width: 180px">
+          <el-select v-model="filters.appId" placeholder="选择应用" style="width: 180px" @change="handleAppChange">
             <el-option
               v-for="app in apps"
               :key="app.app_id"
               :label="app.app_id"
               :value="app.app_id"
             />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Release">
+          <el-select v-model="filters.release" placeholder="全部" clearable style="width: 150px" @change="handleReleaseChange">
+            <el-option
+              v-for="rel in releases"
+              :key="rel"
+              :label="rel"
+              :value="rel"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="环境">
+          <el-select v-model="filters.env" placeholder="全部" clearable style="width: 120px">
+            <el-option label="生产" value="production" />
+            <el-option label="预发" value="staging" />
+            <el-option label="开发" value="development" />
+            <el-option label="测试" value="test" />
           </el-select>
         </el-form-item>
         <el-form-item label="级别">
@@ -161,6 +179,10 @@
           <div class="info-list">
             <div class="info-item"><span class="label">URL:</span> <span>{{ selectedLog.url || '-' }}</span></div>
             <div class="info-item"><span class="label">位置:</span> <span>{{ selectedLog.line }}:{{ selectedLog.col }}</span></div>
+            <div class="info-item"><span class="label">Release:</span> <span>{{ selectedLog.release || '-' }}</span></div>
+            <div class="info-item"><span class="label">环境:</span> <span>{{ selectedLog.env || '-' }}</span></div>
+            <div class="info-item"><span class="label">用户ID:</span> <span>{{ selectedLog.user_id || '-' }}</span></div>
+            <div class="info-item"><span class="label">会话ID:</span> <span class="mono-inline">{{ selectedLog.session_id || '-' }}</span></div>
             <div class="info-item"><span class="label">浏览器:</span> <span>{{ selectedLog.ua || '-' }}</span></div>
             <div class="info-item"><span class="label">屏幕尺寸:</span> <span>{{ selectedLog.screen || '-' }}</span></div>
             <div class="info-item"><span class="label">视口:</span> <span>{{ selectedLog.viewport || '-' }}</span></div>
@@ -237,6 +259,8 @@ const route = useRoute()
 
 const filters = ref<QueryParams & { dateRange?: [number, number] }>({
   appId: route.params.appId as string || '',
+  release: '',
+  env: '',
   level: '',
   type: '',
   keyword: '',
@@ -253,6 +277,7 @@ const pagination = ref({
 
 const logs = ref<Event[]>([])
 const apps = ref<any[]>([])
+const releases = ref<string[]>([])
 const loading = ref(false)
 const drawerVisible = ref(false)
 const selectedLog = ref<Event | null>(null)
@@ -346,6 +371,8 @@ const fetchLogs = async () => {
   try {
     const params: any = {
       appId: filters.value.appId,
+      release: filters.value.release || undefined,
+      env: filters.value.env || undefined,
       level: filters.value.level || undefined,
       type: filters.value.type || undefined,
       keyword: filters.value.keyword || undefined,
@@ -359,6 +386,13 @@ const fetchLogs = async () => {
     const { data } = await logApi.query(params)
     logs.value = data.data
     pagination.value.total = data.total
+
+    // Extract unique releases from current result
+    const uniqueReleases = new Set<string>()
+    logs.value.forEach((log: Event) => {
+      if (log.release) uniqueReleases.add(log.release)
+    })
+    releases.value = Array.from(uniqueReleases).sort().reverse()
   } catch (error) {
     ElMessage.error('获取日志失败')
   } finally {
@@ -383,7 +417,21 @@ const handleSearch = () => {
   fetchLogs()
 }
 
+const handleAppChange = () => {
+  // Reset release and env when app changes
+  filters.value.release = ''
+  filters.value.env = ''
+  handleSearch()
+}
+
+const handleReleaseChange = () => {
+  pagination.value.page = 1
+  fetchLogs()
+}
+
 const handleReset = () => {
+  filters.value.release = ''
+  filters.value.env = ''
   filters.value.level = ''
   filters.value.type = ''
   filters.value.keyword = ''
