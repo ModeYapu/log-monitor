@@ -77,6 +77,10 @@ npm run build
 - [ ] R3: 性能页 + 告警系统
 - [ ] R4: 生产化
 
+## 路线图
+
+- 产品路线图见 `docs/ROADMAP.md`
+
 ## 配置
 
 Collector 配置文件 `collector/config.yaml`:
