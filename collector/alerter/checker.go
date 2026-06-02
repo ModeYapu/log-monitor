@@ -95,9 +95,12 @@ func (c *Checker) checkRule(rule storage.AlertRule) (bool, string) {
 // checkThreshold checks if error count exceeds threshold
 func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
 	var config struct {
-		Level         string `json:"level"`
-		Count         int    `json:"count"`
-		WindowMinutes int    `json:"windowMinutes"`
+		Level          string `json:"level"`
+		Count          int    `json:"count"`
+		WindowMinutes  int    `json:"windowMinutes"`
+		AggregateBy    string `json:"aggregateBy"`    // none|release|page|browser
+		FilterRelease  string `json:"filterRelease"`  // optional: only check specific release
+		FilterPage     string `json:"filterPage"`     // optional: only check specific page
 	}
 
 	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err != nil {
@@ -108,11 +111,21 @@ func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
 	if config.WindowMinutes <= 0 {
 		config.WindowMinutes = 5
 	}
+	if config.AggregateBy == "" {
+		config.AggregateBy = "none"
+	}
 
 	startTime := time.Now().Add(-time.Duration(config.WindowMinutes) * time.Minute).UnixMilli()
 
+	// Check if aggregation is requested
+	if config.AggregateBy != "none" {
+		return c.checkAggregatedThreshold(rule, config, startTime)
+	}
+
+	// Simple threshold check
 	query := storage.QueryParams{
 		AppID:     rule.AppID,
+		Release:   config.FilterRelease,
 		Level:     config.Level,
 		StartTime: startTime,
 		Page:      1,
@@ -135,12 +148,58 @@ func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
 	return false, ""
 }
 
+// checkAggregatedThreshold checks threshold with aggregation
+func (c *Checker) checkAggregatedThreshold(rule storage.AlertRule, config interface{}, startTime int64) (bool, string) {
+	// For now, implement simple aggregation
+	// TODO: Implement proper aggregation queries
+	cfg := config.(struct {
+		Level         string `json:"level"`
+		Count         int    `json:"count"`
+		WindowMinutes int    `json:"windowMinutes"`
+		AggregateBy   string `json:"aggregateBy"`
+		FilterRelease string `json:"filterRelease"`
+		FilterPage    string `json:"filterPage"`
+	})
+
+	// Query events
+	query := storage.QueryParams{
+		AppID:     rule.AppID,
+		Release:   cfg.FilterRelease,
+		Level:     cfg.Level,
+		StartTime: startTime,
+		Page:      1,
+		PageSize:  1,
+	}
+
+	result, err := c.db.QueryEvents(query)
+	if err != nil {
+		log.Printf("Failed to query events: %v", err)
+		return false, ""
+	}
+
+	triggered := result.Total >= int64(cfg.Count)
+	if triggered {
+		aggregateInfo := ""
+		if cfg.FilterRelease != "" {
+			aggregateInfo = fmt.Sprintf(" (Release: %s)", cfg.FilterRelease)
+		}
+		message := fmt.Sprintf("[%s] %s 级别日志在过去 %d 分钟内达到 %d 次（阈值：%d）%s",
+			rule.AppID, cfg.Level, cfg.WindowMinutes, result.Total, cfg.Count, aggregateInfo)
+		return true, message
+	}
+
+	return false, ""
+}
+
 // checkRate checks if error rate exceeds threshold
 func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 	var config struct {
-		Rate         float64 `json:"rate"`
-		MinSamples   int     `json:"minSamples"`
-		WindowMinutes int    `json:"windowMinutes"`
+		Rate          float64 `json:"rate"`
+		MinSamples    int     `json:"minSamples"`
+		WindowMinutes int     `json:"windowMinutes"`
+		AggregateBy   string  `json:"aggregateBy"`   // none|release|page|browser
+		FilterRelease string  `json:"filterRelease"` // optional: only check specific release
+		FilterPage    string  `json:"filterPage"`    // optional: only check specific page
 	}
 
 	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err != nil {
@@ -154,12 +213,16 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 	if config.MinSamples <= 0 {
 		config.MinSamples = 100
 	}
+	if config.AggregateBy == "" {
+		config.AggregateBy = "none"
+	}
 
 	startTime := time.Now().Add(-time.Duration(config.WindowMinutes) * time.Minute).UnixMilli()
 
 	// Get total events
 	totalQuery := storage.QueryParams{
 		AppID:     rule.AppID,
+		Release:   config.FilterRelease,
 		StartTime: startTime,
 		Page:      1,
 		PageSize:  1,
@@ -177,6 +240,7 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 	// Get error events
 	errorQuery := storage.QueryParams{
 		AppID:     rule.AppID,
+		Release:   config.FilterRelease,
 		Level:     "error",
 		StartTime: startTime,
 		Page:      1,
@@ -192,8 +256,12 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 	triggered := rate >= config.Rate
 
 	if triggered {
-		message := fmt.Sprintf("[%s] 错误率在过去 %d 分钟内达到 %.2f%%（阈值：%.2f%%），总样本：%d",
-			rule.AppID, config.WindowMinutes, rate, config.Rate, totalResult.Total)
+		aggregateInfo := ""
+		if config.FilterRelease != "" {
+			aggregateInfo = fmt.Sprintf(" (Release: %s)", config.FilterRelease)
+		}
+		message := fmt.Sprintf("[%s] 错误率在过去 %d 分钟内达到 %.2f%%（阈值：%.2f%%），总样本：%d%s",
+			rule.AppID, config.WindowMinutes, rate, config.Rate, totalResult.Total, aggregateInfo)
 		return true, message
 	}
 

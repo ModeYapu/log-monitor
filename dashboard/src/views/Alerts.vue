@@ -117,6 +117,20 @@
             <el-input-number v-model="alertForm.condition_config.windowMinutes" :min="1" :max="1440" />
             <span class="ml-2 text-secondary">分钟</span>
           </el-form-item>
+          <el-form-item label="聚合维度" prop="condition_config.aggregateBy">
+            <el-select v-model="alertForm.condition_config.aggregateBy" placeholder="全局统计">
+              <el-option label="全局统计" value="none" />
+              <el-option label="按 Release" value="release" />
+              <el-option label="按页面" value="page" />
+              <el-option label="按浏览器" value="browser" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="alertForm.condition_config.aggregateBy === 'release'" label="Release 过滤" prop="condition_config.filterRelease">
+            <el-input v-model="alertForm.condition_config.filterRelease" placeholder="留空监控所有 Release" />
+          </el-form-item>
+          <el-form-item v-if="alertForm.condition_config.aggregateBy === 'page'" label="页面过滤" prop="condition_config.filterPage">
+            <el-input v-model="alertForm.condition_config.filterPage" placeholder="留空监控所有页面" />
+          </el-form-item>
         </template>
 
         <template v-if="alertForm.condition_type === 'rate'">
@@ -130,6 +144,20 @@
           <el-form-item label="时间窗口" prop="condition_config.windowMinutes">
             <el-input-number v-model="alertForm.condition_config.windowMinutes" :min="1" :max="1440" />
             <span class="ml-2 text-secondary">分钟</span>
+          </el-form-item>
+          <el-form-item label="聚合维度" prop="condition_config.aggregateBy">
+            <el-select v-model="alertForm.condition_config.aggregateBy" placeholder="全局统计">
+              <el-option label="全局统计" value="none" />
+              <el-option label="按 Release" value="release" />
+              <el-option label="按页面" value="page" />
+              <el-option label="按浏览器" value="browser" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="alertForm.condition_config.aggregateBy === 'release'" label="Release 过滤" prop="condition_config.filterRelease">
+            <el-input v-model="alertForm.condition_config.filterRelease" placeholder="留空监控所有 Release" />
+          </el-form-item>
+          <el-form-item v-if="alertForm.condition_config.aggregateBy === 'page'" label="页面过滤" prop="condition_config.filterPage">
+            <el-input v-model="alertForm.condition_config.filterPage" placeholder="留空监控所有页面" />
           </el-form-item>
         </template>
 
@@ -224,7 +252,10 @@ const alertForm = reactive<AlertRule>({
     count: 10,
     windowMinutes: 5,
     rate: 5,
-    minSamples: 100
+    minSamples: 100,
+    aggregateBy: 'none',
+    filterRelease: '',
+    filterPage: ''
   },
   notify_type: 'feishu',
   notify_config: {
