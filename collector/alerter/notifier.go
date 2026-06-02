@@ -18,9 +18,21 @@ import (
 	"time"
 )
 
+// EmailConfig holds SMTP configuration
+type EmailConfig struct {
+	Enabled  bool
+	SMTPHost string
+	SMTPPort string
+	SMTPUser string
+	SMTPPass string
+	FromEmail string
+	FromName string
+}
+
 // Notifier sends alert notifications
 type Notifier struct {
-	client *http.Client
+	client      *http.Client
+	emailConfig EmailConfig
 }
 
 // NotificationContext holds context for template rendering
@@ -49,7 +61,13 @@ func NewNotifier() *Notifier {
 				},
 			},
 		},
+		emailConfig: EmailConfig{},
 	}
+}
+
+// SetEmailConfig sets the email configuration
+func (n *Notifier) SetEmailConfig(cfg EmailConfig) {
+	n.emailConfig = cfg
 }
 
 // SendFeishu sends a card notification to Feishu with optional signature
@@ -269,21 +287,26 @@ func (n *Notifier) SendEmail(to, title, message string) error {
 	}
 
 	// Build email message
-	from := "LogMonitor <noreply@logmonitor.local>"
-	subject := fmt.Sprintf("[LogMonitor] %s", title)
+	fromName := n.emailConfig.FromName
+	if fromName == "" {
+		fromName = "LogMonitor"
+	}
+	fromEmail := n.emailConfig.FromEmail
+	if fromEmail == "" {
+		fromEmail = "noreply@logmonitor.local"
+	}
 
+	subject := fmt.Sprintf("[LogMonitor] %s", title)
 	body := fmt.Sprintf("LogMonitor Alert Notification\n\n%s\n\nTime: %s\n\n---\nThis is an automated message from LogMonitor",
 		message, time.Now().Format("2006-01-02 15:04:05"))
 
-	// For now, just log the email (SMTP configuration required for actual sending)
-	log.Printf("[Email] To: %s | Subject: %s | Body: %s", addr.Address, subject, body)
+	// If email is enabled and SMTP config is available, send the email
+	if n.emailConfig.Enabled && n.emailConfig.SMTPHost != "" && n.emailConfig.SMTPUser != "" {
+		return n.SendEmailWithSMTP(to, title, message, n.emailConfig.SMTPHost, n.emailConfig.SMTPPort, n.emailConfig.SMTPUser, n.emailConfig.SMTPPass)
+	}
 
-	// TODO: Implement actual SMTP sending
-	// This requires SMTP server configuration
-	// Example implementation:
-	// auth := smtp.PlainAuth("", "username", "password", "smtp.example.com")
-	// err := smtp.SendMail("smtp.example.com:587", auth, from, []string{to}, []byte(msg))
-
+	// Otherwise, just log the email (for testing/debugging)
+	log.Printf("[Email] To: %s | Subject: %s | Body (first 200 chars): %.200s", addr.Address, subject, body)
 	return nil
 }
 
@@ -296,7 +319,16 @@ func (n *Notifier) SendEmailWithSMTP(to, title, message, smtpHost, smtpPort, smt
 		return fmt.Errorf("empty SMTP host")
 	}
 
-	from := mail.Address{Name: "LogMonitor", Address: smtpUser}
+	fromName := n.emailConfig.FromName
+	if fromName == "" {
+		fromName = "LogMonitor"
+	}
+	fromEmail := n.emailConfig.FromEmail
+	if fromEmail == "" {
+		fromEmail = smtpUser
+	}
+
+	from := mail.Address{Name: fromName, Address: fromEmail}
 	toAddr := mail.Address{Name: "", Address: to}
 
 	subject := fmt.Sprintf("[LogMonitor] %s", title)

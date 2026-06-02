@@ -39,7 +39,19 @@ type BufferConfig struct {
 
 // AlertConfig holds alert configuration
 type AlertConfig struct {
-	CheckInterval int `yaml:"check_interval_ms"`
+	CheckInterval int            `yaml:"check_interval_ms"`
+	Email         EmailConfig    `yaml:"email"`
+}
+
+// EmailConfig holds email notification configuration
+type EmailConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	SMTPHost string `yaml:"smtp_host"`
+	SMTPPort string `yaml:"smtp_port"`
+	SMTPUser string `yaml:"smtp_user"`
+	SMTPPass string `yaml:"smtp_pass"`
+	FromEmail string `yaml:"from_email"`
+	FromName string `yaml:"from_name"`
 }
 
 // AuthConfig holds authentication configuration
@@ -107,6 +119,12 @@ func Default() *Config {
 		},
 		Alert: AlertConfig{
 			CheckInterval: 60000,
+			Email: EmailConfig{
+				Enabled:  false,
+				SMTPHost: "smtp.gmail.com",
+				SMTPPort: "587",
+				FromName: "LogMonitor",
+			},
 		},
 		Auth: AuthConfig{
 			Enabled:          true,

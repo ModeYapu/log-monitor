@@ -48,6 +48,11 @@ func (c *Checker) Stop() {
 	close(c.stopCh)
 }
 
+// SetEmailConfig sets the email configuration for notifications
+func (c *Checker) SetEmailConfig(cfg EmailConfig) {
+	c.notifier.SetEmailConfig(cfg)
+}
+
 // checkRules checks all enabled alert rules
 func (c *Checker) checkRules() {
 	rules, err := c.db.GetAllAlertRules()

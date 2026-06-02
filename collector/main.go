@@ -191,10 +191,19 @@ func main() {
 
 	// Initialize alert checker
 	alertChecker := alerter.NewChecker(db)
+	alertChecker.SetEmailConfig(alerter.EmailConfig{
+		Enabled:   cfg.Alert.Email.Enabled,
+		SMTPHost:  cfg.Alert.Email.SMTPHost,
+		SMTPPort:  cfg.Alert.Email.SMTPPort,
+		SMTPUser:  cfg.Alert.Email.SMTPUser,
+		SMTPPass:  cfg.Alert.Email.SMTPPass,
+		FromEmail: cfg.Alert.Email.FromEmail,
+		FromName:  cfg.Alert.Email.FromName,
+	})
 	go alertChecker.Start(time.Duration(cfg.Alert.CheckInterval) * time.Millisecond)
 	defer alertChecker.Stop()
 
-	log.Printf("Alert checker started: interval=%dms", cfg.Alert.CheckInterval)
+	log.Printf("Alert checker started: interval=%dms, email_enabled=%v", cfg.Alert.CheckInterval, cfg.Alert.Email.Enabled)
 
 	// Initialize cobrowse hub
 	cobrowseHub := handler.NewCoBrowseHub(db)
