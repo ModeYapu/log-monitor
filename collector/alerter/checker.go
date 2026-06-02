@@ -59,6 +59,11 @@ func (c *Checker) checkRules() {
 	now := time.Now().UnixMilli()
 
 	for _, rule := range rules {
+		// Check if silenced
+		if rule.SilencedUntil > 0 && now < rule.SilencedUntil {
+			continue
+		}
+
 		// Check cooldown
 		if rule.LastTriggeredAt > 0 {
 			cooldownEnd := rule.LastTriggeredAt + int64(rule.CooldownMinutes)*60*1000

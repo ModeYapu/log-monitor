@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -27,6 +28,8 @@ func (h *AlertsHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/query/alerts", h.CreateAlert)
 	mux.HandleFunc("DELETE /api/query/alerts/", h.DeleteAlert)
 	mux.HandleFunc("POST /api/alerts/test", h.TestAlert)
+	mux.HandleFunc("POST /api/alerts/silence", h.SilenceAlert)
+	mux.HandleFunc("POST /api/alerts/unsilence", h.UnsilenceAlert)
 }
 
 // GetAlerts returns alert rules and logs for an app
@@ -258,4 +261,88 @@ func (h *AlertsHandler) TestAlert(w http.ResponseWriter, r *http.Request) {
 			"message": "Test notification sent successfully",
 		})
 	}
+}
+
+// SilenceAlertRequest represents the request to silence an alert
+type SilenceAlertRequest struct {
+	ID             int64  `json:"id"`
+	DurationMinutes int    `json:"durationMinutes"`
+}
+
+// SilenceAlert silences an alert for a specified duration
+func (h *AlertsHandler) SilenceAlert(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req SilenceAlertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.ID <= 0 {
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
+	// Default to 1 hour if not specified
+	duration := req.DurationMinutes
+	if duration <= 0 {
+		duration = 60
+	}
+
+	silencedUntil := time.Now().Add(time.Duration(duration) * time.Minute).UnixMilli()
+
+	if err := h.db.SilenceAlertRule(req.ID, silencedUntil); err != nil {
+		log.Printf("Failed to silence alert: %v", err)
+		http.Error(w, "Failed to silence alert", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       true,
+		"silencedUntil":  silencedUntil,
+		"message":       fmt.Sprintf("Alert silenced for %d minutes", duration),
+	})
+}
+
+// UnsilenceAlertRequest represents the request to unsilence an alert
+type UnsilenceAlertRequest struct {
+	ID int64 `json:"id"`
+}
+
+// UnsilenceAlert unsilences an alert
+func (h *AlertsHandler) UnsilenceAlert(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req UnsilenceAlertRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.ID <= 0 {
+		http.Error(w, "Invalid alert ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.db.UnsilenceAlertRule(req.ID); err != nil {
+		log.Printf("Failed to unsilence alert: %v", err)
+		http.Error(w, "Failed to unsilence alert", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Alert unsilenced successfully",
+	})
 }
