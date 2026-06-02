@@ -1580,17 +1580,6 @@ func (db *DB) GetTopBrowsers(params TopListParams) ([]TopBrowser, error) {
 	return results, nil
 }
 
-type ErrorCluster struct {
-	ClusterID     string        `json:"clusterId"`
-	Message       string        `json:"message"`
-	Count         int64         `json:"count"`
-	FirstSeen     int64         `json:"firstSeen"`
-	LastSeen      int64         `json:"lastSeen"`
-	AffectedUsers int64         `json:"affectedUsers"`
-	SampleEvents  []EventRecord `json:"sampleEvents"`
-	Pattern       string        `json:"pattern"`
-}
-
 func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, limit int) ([]ErrorCluster, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()

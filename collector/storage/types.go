@@ -19,14 +19,18 @@ type TopNResult struct {
 
 // ErrorCluster represents a cluster of similar errors
 type ErrorCluster struct {
+	ClusterID     string        `json:"clusterId"`
+	Message       string        `json:"message"`
+	Count         int64         `json:"count"`
+	FirstSeen     int64         `json:"firstSeen"`
+	LastSeen      int64         `json:"lastSeen"`
+	AffectedUsers int64         `json:"affectedUsers"`
+	SampleEvents  []EventRecord `json:"sampleEvents"`
+	Pattern       string        `json:"pattern"`
+	// Additional fields for new API
 	ID           string
-	Message      string
-	Stack        string
-	Count        int64
 	Users        int64
-	FirstSeen    int64
-	LastSeen     int64
+	Stack        string
 	AffectedURLs []string
 	Releases     []string
-	Pattern      string
 }

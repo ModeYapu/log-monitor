@@ -32,19 +32,43 @@
       <el-col :span="8">
         <el-card class="chart-card">
           <template #header>
-            <span>Top 错误</span>
+            <span>Top 统计</span>
           </template>
-          <div class="top-errors">
-            <div
-              v-for="(error, index) in topErrors"
-              :key="index"
-              class="error-item"
-            >
-              <span class="error-rank">{{ index + 1 }}</span>
-              <span class="error-message">{{ truncateMessage(error.message, 50) }}</span>
-              <span class="error-count">{{ error.count }}</span>
+          <el-tabs v-model="topTab" @tab-change="handleTopTabChange">
+            <el-tab-pane label="错误" name="errors"></el-tab-pane>
+            <el-tab-pane label="页面" name="pages"></el-tab-pane>
+            <el-tab-pane label="版本" name="releases"></el-tab-pane>
+            <el-tab-pane label="浏览器" name="browsers"></el-tab-pane>
+          </el-tabs>
+          <div class="top-content">
+            <div class="top-controls">
+              <el-select v-model="topOrderBy" size="small" @change="fetchTopData" style="width: 120px">
+                <el-option label="按频次" value="count" />
+                <el-option label="按影响面" value="users" />
+                <el-option label="按影响值" value="impact" />
+                <el-option label="按最近" value="recent" />
+                <el-option label="按回归" value="regression" />
+              </el-select>
             </div>
-            <el-empty v-if="topErrors.length === 0" description="暂无错误数据" :image-size="80" />
+            <div v-loading="loadingTop" class="top-list">
+              <div
+                v-for="(item, index) in topData"
+                :key="index"
+                class="top-item"
+                :class="{ 'top-item-new': item.isNew }"
+              >
+              <span class="top-rank" :class="`rank-${index + 1}`">{{ index + 1 }}</span>
+              <div class="top-info">
+                <div class="top-key">{{ truncateTopKey(item.key, topTab) }}</div>
+                <div class="top-meta">
+                  <span>{{ item.count }} 次</span>
+                  <span>{{ item.users }} 用户</span>
+                  <span v-if="item.isNew" class="new-badge">新</span>
+                </div>
+              </div>
+              <span class="top-score">{{ item.impactScore }}</span>
+            </div>
+            <el-empty v-if="topData.length === 0" description="暂无数据" :image-size="60" />
           </div>
         </el-card>
       </el-col>
@@ -100,6 +124,10 @@ const router = useRouter()
 const trendChartRef = ref<HTMLElement>()
 const apps = ref<any[]>([])
 const stats = ref<any>(null)
+const topTab = ref('errors')
+const topOrderBy = ref('count')
+const topData = ref<any[]>([])
+const loadingTop = ref(false)
 let trendChart: echarts.ECharts | null = null
 
 const statsCards = computed(() => [
@@ -134,6 +162,46 @@ const statsCards = computed(() => [
 ])
 
 const topErrors = computed(() => stats.value?.topErrors || [])
+
+const currentAppId = computed(() => apps.value.length > 0 ? apps.value[0].app_id : '')
+
+// Fetch Top N data
+const fetchTopData = async () => {
+	if (!currentAppId.value) return
+
+	loadingTop.value = true
+	try {
+		const { data } = await logApi.getTop({
+			appId: currentAppId.value,
+			type: topTab.value,
+			orderBy: topOrderBy.value,
+			limit: 10
+		})
+		topData.value = data.data || []
+	} catch (error) {
+		console.error('Failed to fetch top data:', error)
+		topData.value = []
+	} finally {
+		loadingTop.value = false
+	}
+}
+
+const handleTopTabChange = () => {
+	fetchTopData()
+}
+
+const truncateTopKey = (key: string, type: string) => {
+	if (type === 'pages') {
+		// For URLs, show the path part
+		try {
+			const url = new URL(key)
+			return url.pathname + url.search
+		} catch {
+			return key
+		}
+	}
+	return truncateMessage(key, 40)
+}
 
 const fetchData = async () => {
   try {

@@ -74,7 +74,16 @@ export const logApi = {
     api.post('/alerts/unsilence', data),
 
   health: () =>
-    api.get<{ status: string; time: number }>('/health')
+    api.get<{ status: string; time: number }>('/health'),
+
+  getTop: (params: { appId: string; type?: string; orderBy?: string; level?: string; limit?: number; startTime?: number; endTime?: number }) =>
+    api.get<{ type: string; data: Array<{ key: string; count: number; users: number; lastSeen: number; firstSeen: number; isNew: boolean; impactScore: number }> }>('/query/top', { params }),
+
+  getSimilar: (params: { appId: string; message: string; threshold?: number; limit?: number }) =>
+    api.get<{ query: string; clusters: any[] }>('/query/similar', { params }),
+
+  exportData: (params: { appId: string; type?: string; level?: string; release?: string; env?: string; keyword?: string; format?: string }) =>
+    api.get('/query/export', { params, responseType: params.format === 'csv' ? 'blob' : 'json' })
 }
 
 export const cobrowseApi = {

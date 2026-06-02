@@ -163,7 +163,7 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	appID := r.URL.Query().Get("appId")
 	topType := r.URL.Query().Get("type") // errors|pages|releases|browsers
-	orderBy := r.URL.Query().Get("orderBy")
+	orderBy := r.URL.Query().Get("orderBy") // count|users|impact|recent|regression
 	limit := parseIntParam(r.URL.Query().Get("limit"), 20)
 
 	// Validate required params
@@ -175,23 +175,41 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 		topType = "errors"
 	}
 
-	// Build filters
+	// Map topType to groupBy field
+	// Parse time range
+	var startTime, endTime int64
+	if startTimeStr := r.URL.Query().Get("startTime"); startTimeStr != "" {
+		if ts, err := strconv.ParseInt(startTimeStr, 10, 64); err == nil {
+			startTime = ts
+		}
+	}
+	if endTimeStr := r.URL.Query().Get("endTime"); endTimeStr != "" {
+		if ts, err := strconv.ParseInt(endTimeStr, 10, 64); err == nil {
+			endTime = ts
+		}
+	}
+
+	// Build query params
+	env := r.URL.Query().Get("env")
+	release := r.URL.Query().Get("release")
+
+	if orderBy == "" {
+		orderBy = "count"
+	}
+
+	// Build filters map
 	filters := make(map[string]interface{})
-	if env := r.URL.Query().Get("env"); env != "" {
+	if env != "" {
 		filters["env"] = env
 	}
-	if release := r.URL.Query().Get("release"); release != "" {
+	if release != "" {
 		filters["release"] = release
 	}
-	if startTime := r.URL.Query().Get("startTime"); startTime != "" {
-		if ts, err := strconv.ParseInt(startTime, 10, 64); err == nil {
-			filters["startTime"] = ts
-		}
+	if startTime > 0 {
+		filters["startTime"] = startTime
 	}
-	if endTime := r.URL.Query().Get("endTime"); endTime != "" {
-		if ts, err := strconv.ParseInt(endTime, 10, 64); err == nil {
-			filters["endTime"] = ts
-		}
+	if endTime > 0 {
+		filters["endTime"] = endTime
 	}
 
 	// Query database
@@ -217,7 +235,7 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 
 	// Parse query parameters
 	appID := r.URL.Query().Get("appId")
-	errorMessage := r.URL.Query().Get("message")
+	message := r.URL.Query().Get("message")
 	threshold := parseFloatParam(r.URL.Query().Get("threshold"), 0.7)
 	limit := parseIntParam(r.URL.Query().Get("limit"), 10)
 
@@ -226,13 +244,13 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing appId parameter", http.StatusBadRequest)
 		return
 	}
-	if errorMessage == "" {
+	if message == "" {
 		http.Error(w, "Missing message parameter", http.StatusBadRequest)
 		return
 	}
 
 	// Query database for error clustering
-	clusters, err := h.db.GetSimilarErrors(appID, errorMessage, threshold, limit)
+	clusters, err := h.db.GetSimilarErrors(appID, message, threshold, limit)
 	if err != nil {
 		log.Printf("Failed to query similar errors: %v", err)
 		http.Error(w, "Failed to query similar errors", http.StatusInternalServerError)
@@ -240,7 +258,7 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"query":    errorMessage,
+		"query":    message,
 		"clusters": clusters,
 	}
 
