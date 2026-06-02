@@ -334,8 +334,13 @@ ${log.extra || '(none)'}`
 
 const getScreenshotUrl = (url: string) => {
   if (!url) return ''
+  const token = localStorage.getItem('logmon_token')
   if (url.startsWith('/api/')) {
-    return window.location.protocol + '//' + window.location.hostname + ':9200' + url
+    const screenshotUrl = new URL(window.location.protocol + '//' + window.location.hostname + ':9200' + url)
+    if (token) {
+      screenshotUrl.searchParams.set('token', token)
+    }
+    return screenshotUrl.toString()
   }
   return url
 }

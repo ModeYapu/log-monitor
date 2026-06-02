@@ -106,7 +106,7 @@ func main() {
 	mux.Handle("/api/report", reportHandler)
 	mux.Handle("/api/events", reportHandler)
 	mux.Handle("/api/report/screenshot", handler.NewScreenshotHandler("./data/screenshots"))
-	mux.Handle("/api/screenshots/", http.StripPrefix("/api/screenshots/", http.FileServer(http.Dir("./data/screenshots"))))
+	mux.Handle("/api/screenshots/", corsMiddleware.Handler(jwtMiddleware.Handler(handler.NewScreenshotFileHandler("./data/screenshots"))))
 	mux.Handle("/api/auth/login", corsMiddleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler.NewAuthHandler(userStorage, jwtMiddleware).Login(w, r)
 	})))
@@ -183,14 +183,20 @@ func main() {
 		for _, t := range cfg.Server.AdminTokens {
 			auth.AddAdminToken(t)
 		}
+		auth.SetJWTValidator(jwtMiddleware)
 		cobrowseHub.SetAuthConfig(auth)
 		log.Printf("Legacy cobrowse auth enabled with %d admin token(s)", len(cfg.Server.AdminTokens))
 	} else {
-		// No tokens configured = auth disabled for cobrowse
-		auth := &middleware.AuthConfig{Enabled: false}
+		auth := &middleware.AuthConfig{
+			AdminTokens: make(map[string]bool),
+			UserTokens:  make(map[string]bool),
+			Enabled:     true,
+		}
+		auth.SetJWTValidator(jwtMiddleware)
 		cobrowseHub.SetAuthConfig(auth)
-		log.Println("Legacy cobrowse auth disabled (no admin_tokens configured)")
+		log.Println("Cobrowse admin access requires JWT login (no legacy admin_tokens configured)")
 	}
+	cobrowseHub.SetAllowedOrigins(cfg.Server.AllowedOrigins)
 	defer cobrowseHub.Close()
 
 	// Register cobrowse WebSocket routes (with JWT auth support)

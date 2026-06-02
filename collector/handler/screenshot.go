@@ -3,12 +3,15 @@ package handler
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // ScreenshotHandler handles screenshot upload requests
@@ -36,11 +39,6 @@ func NewScreenshotHandler(screenshotDir string) *ScreenshotHandler {
 
 // ServeHTTP handles HTTP requests
 func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	// Set CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
@@ -53,9 +51,14 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-		// Limit request body size to prevent DoS attacks
-		const maxRequestSize = 10 * 1024 * 1024 // 10MB
-		r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Limit request body size to prevent DoS attacks
+	const maxRequestSize = 10 * 1024 * 1024 // 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
 	// Read request body
 	body, err := io.ReadAll(r.Body)
@@ -83,6 +86,10 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing appId", http.StatusBadRequest)
 		return
 	}
+	if !safePathSegment(req.AppID) {
+		http.Error(w, "Invalid appId format", http.StatusBadRequest)
+		return
+	}
 	if req.EventID == "" {
 		http.Error(w, "Missing eventId", http.StatusBadRequest)
 		return
@@ -106,7 +113,11 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create app-specific directory
-	appDir := filepath.Join(h.screenshotDir, req.AppID)
+	appDir, err := safeJoinUnderBase(h.screenshotDir, req.AppID)
+	if err != nil {
+		http.Error(w, "Invalid appId format", http.StatusBadRequest)
+		return
+	}
 	if err := os.MkdirAll(appDir, 0755); err != nil {
 		log.Printf("Failed to create app directory: %v", err)
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
@@ -114,7 +125,11 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save screenshot to file
-	filename := filepath.Join(appDir, req.EventID+".png")
+	filename, err := safeJoinUnderBase(appDir, req.EventID+".png")
+	if err != nil {
+		http.Error(w, "Invalid eventId format", http.StatusBadRequest)
+		return
+	}
 	if err := os.WriteFile(filename, imageData, 0644); err != nil {
 		log.Printf("Failed to save screenshot: %v", err)
 		http.Error(w, "Failed to save screenshot", http.StatusInternalServerError)
@@ -127,8 +142,57 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"path":    filename,
+		"path":    "/api/screenshots/" + req.AppID + "/" + req.EventID + ".png",
 	})
+}
+
+// ScreenshotFileHandler serves stored screenshots to authenticated users.
+type ScreenshotFileHandler struct {
+	screenshotDir string
+}
+
+func NewScreenshotFileHandler(screenshotDir string) *ScreenshotFileHandler {
+	return &ScreenshotFileHandler{ screenshotDir: screenshotDir }
+}
+
+func (h *ScreenshotFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/screenshots/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	appID := parts[0]
+	filename := parts[1]
+	if !safePathSegment(appID) || !safeScreenshotFilename(filename) {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	fullPath, err := safeJoinUnderBase(h.screenshotDir, appID, filename)
+	if err != nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	info, err := os.Stat(fullPath)
+	if err != nil || info.IsDir() {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+
+	contentType := mime.TypeByExtension(filepath.Ext(fullPath))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
+	http.ServeFile(w, r, fullPath)
 }
 
 // safeEventID validates that eventId contains only safe characters
@@ -139,4 +203,33 @@ func safeEventID(id string) bool {
 	// Only allow alphanumeric, hyphen, underscore, and dot
 	matched, _ := regexp.MatchString(`^[a-zA-Z0-9\-_.]+$`, id)
 	return matched
+}
+
+func safePathSegment(id string) bool {
+	if id == "" || len(id) > 100 {
+		return false
+	}
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9\-_.]+$`, id)
+	return matched
+}
+
+func safeScreenshotFilename(name string) bool {
+	return safeEventID(strings.TrimSuffix(name, filepath.Ext(name))) && strings.EqualFold(filepath.Ext(name), ".png")
+}
+
+func safeJoinUnderBase(base string, parts ...string) (string, error) {
+	cleanBase := filepath.Clean(base)
+	allParts := append([]string{cleanBase}, parts...)
+	joined := filepath.Join(allParts...)
+	rel, err := filepath.Rel(cleanBase, joined)
+	if err != nil {
+		return "", err
+	}
+	if rel == "." {
+		return joined, nil
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes base directory")
+	}
+	return joined, nil
 }

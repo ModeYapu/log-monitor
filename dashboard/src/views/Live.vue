@@ -174,7 +174,12 @@ function connectToSession(sessionId: string) {
   connecting.value = true
 
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  ws = new WebSocket(`${proto}//${location.host}/ws/cobrowse/${sessionId}/view`)
+  const token = localStorage.getItem('logmon_token')
+  const wsUrl = new URL(`${proto}//${location.host}/ws/cobrowse/${sessionId}/view`)
+  if (token) {
+    wsUrl.searchParams.set('token', token)
+  }
+  ws = new WebSocket(wsUrl.toString())
 
   ws.onopen = () => {
     wsConnected.value = true

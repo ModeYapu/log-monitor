@@ -232,12 +232,23 @@ func (h *QueryHandler) eventToMap(event storage.EventRecord) map[string]interfac
 	}
 
 	// Check for screenshot files
-	screenshotPath := filepath.Join(h.screenshotDir, event.AppID)
+	if !safePathSegment(event.AppID) {
+		return result
+	}
+
+	screenshotPath, err := safeJoinUnderBase(h.screenshotDir, event.AppID)
+	if err != nil {
+		return result
+	}
+
 	if entries, err := os.ReadDir(screenshotPath); err == nil {
 		// Look for screenshot files that match the event timestamp
 		// Screenshots are named {eventId}.png where eventId contains timestamp
 		for _, entry := range entries {
 			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".png" {
+				if len(entry.Name()) < 10 {
+					continue
+				}
 				// Extract timestamp from filename to match with event
 				eventTime := event.CreatedAt
 				fileTimeStr := entry.Name()[:10]

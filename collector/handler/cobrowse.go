@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,7 +23,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for cobrowsing
+		return true
 	},
 }
 
@@ -47,11 +48,12 @@ type SessionHub struct {
 
 // CoBrowseHub manages all cobrowsing sessions
 type CoBrowseHub struct {
-	sessions   map[string]*SessionHub
-	mu         sync.RWMutex
-	db         CoBrowseDB
-	auth       *middleware.AuthConfig
-	maxSessions int // Maximum sessions to prevent resource exhaustion
+	sessions       map[string]*SessionHub
+	mu             sync.RWMutex
+	db             CoBrowseDB
+	auth           *middleware.AuthConfig
+	allowedOrigins []string
+	maxSessions    int // Maximum sessions to prevent resource exhaustion
 }
 
 // CoBrowseDB defines the database interface for cobrowsing
@@ -87,6 +89,11 @@ func (h *CoBrowseHub) removeSession(sessionID string) {
 // SetAuthConfig sets the authentication configuration
 func (h *CoBrowseHub) SetAuthConfig(auth *middleware.AuthConfig) {
 	h.auth = auth
+}
+
+// SetAllowedOrigins configures allowed browser origins for admin viewer connections.
+func (h *CoBrowseHub) SetAllowedOrigins(origins []string) {
+	h.allowedOrigins = append([]string(nil), origins...)
 }
 
 // Close closes all active sessions
@@ -210,7 +217,14 @@ func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	viewerUpgrader := websocket.Upgrader{
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			return h.isAllowedViewerOrigin(r)
+		},
+	}
+	conn, err := viewerUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[CoBrowse] Failed to upgrade viewer connection: %v", err)
 		return
@@ -588,6 +602,26 @@ func (h *CoBrowseHub) RegisterRoutes(mux *http.ServeMux) {
 		r = r.WithContext(context.WithValue(r.Context(), "sessionId", sessionID))
 		h.HandleUserConnection(w, r)
 	})
+}
+
+func (h *CoBrowseHub) isAllowedViewerOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+
+	if len(h.allowedOrigins) == 0 {
+		parsed, err := url.Parse(origin)
+		return err == nil && strings.EqualFold(parsed.Host, r.Host)
+	}
+
+	for _, allowedOrigin := range h.allowedOrigins {
+		if allowedOrigin == "*" || allowedOrigin == origin {
+			return true
+		}
+	}
+
+	return false
 }
 
 // getSessionIDFromRequest extracts session ID from request
