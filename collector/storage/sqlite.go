@@ -71,6 +71,10 @@ func (db *DB) initSchema() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		app_id TEXT NOT NULL,
 		release TEXT DEFAULT '',
+		env TEXT DEFAULT '',
+		build_id TEXT DEFAULT '',
+		user_id TEXT DEFAULT '',
+		session_id TEXT DEFAULT '',
 		type TEXT NOT NULL,
 		level TEXT NOT NULL,
 		message TEXT NOT NULL,
@@ -94,6 +98,10 @@ func (db *DB) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_events_appid ON events(app_id);
 	CREATE INDEX IF NOT EXISTS idx_events_level_only ON events(level);
 	CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(created_at);
+	CREATE INDEX IF NOT EXISTS idx_events_release ON events(app_id, release);
+	CREATE INDEX IF NOT EXISTS idx_events_env ON events(app_id, env);
+	CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id);
+	CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
 
 	CREATE TABLE IF NOT EXISTS alert_rules (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,9 +161,10 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO events (
-			app_id, release, type, level, message, stack, url, line, col,
+			app_id, release, env, build_id, user_id, session_id,
+			type, level, message, stack, url, line, col,
 			tags, extra, ua, screen, viewport, performance, ip, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -165,7 +174,8 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 
 	for _, e := range events {
 		_, err := stmt.Exec(
-			e.AppID, e.Release, e.Type, e.Level, e.Message, e.Stack,
+			e.AppID, e.Release, e.Env, e.BuildID, e.UserID, e.SessionID,
+			e.Type, e.Level, e.Message, e.Stack,
 			e.URL, e.Line, e.Col, e.Tags, e.Extra, e.UA, e.Screen,
 			e.Viewport, e.Performance, e.IP, e.CreatedAt,
 		)
@@ -202,6 +212,14 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 		whereClause += " AND level = ?"
 		args = append(args, query.Level)
 	}
+	if query.Release != "" {
+		whereClause += " AND release = ?"
+		args = append(args, query.Release)
+	}
+	if query.Env != "" {
+		whereClause += " AND env = ?"
+		args = append(args, query.Env)
+	}
 	if query.StartTime > 0 {
 		whereClause += " AND created_at >= ?"
 		args = append(args, query.StartTime)
@@ -226,7 +244,8 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 	// Query with pagination
 	offset := (query.Page - 1) * query.PageSize
 	dataQuery := `
-		SELECT id, app_id, release, type, level, message, stack, url, line, col,
+		SELECT id, app_id, release, env, build_id, user_id, session_id,
+		       type, level, message, stack, url, line, col,
 		       tags, extra, ua, screen, viewport, performance, ip, created_at
 		FROM events ` + whereClause + `
 		ORDER BY created_at DESC
@@ -245,7 +264,8 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 		var e EventRecord
 		var id int64
 		err := rows.Scan(
-			&id, &e.AppID, &e.Release, &e.Type, &e.Level, &e.Message, &e.Stack,
+			&id, &e.AppID, &e.Release, &e.Env, &e.BuildID, &e.UserID, &e.SessionID,
+			&e.Type, &e.Level, &e.Message, &e.Stack,
 			&e.URL, &e.Line, &e.Col, &e.Tags, &e.Extra, &e.UA, &e.Screen,
 			&e.Viewport, &e.Performance, &e.IP, &e.CreatedAt,
 		)
@@ -452,6 +472,10 @@ func (db *DB) cleanupOldData(retentionDays int) {
 type EventRecord struct {
 	AppID       string
 	Release     string
+	Env         string
+	BuildID     string
+	UserID      string
+	SessionID   string
 	Type        string
 	Level       string
 	Message     string
@@ -472,6 +496,8 @@ type EventRecord struct {
 // QueryParams represents query parameters
 type QueryParams struct {
 	AppID     string
+	Release   string
+	Env       string
 	Type      string
 	Level     string
 	StartTime int64
@@ -521,6 +547,10 @@ func (e EventRecord) MarshalJSON() ([]byte, error) {
 		"id":          0, // placeholder
 		"appId":       e.AppID,
 		"release":     e.Release,
+		"env":         e.Env,
+		"buildId":     e.BuildID,
+		"userId":      e.UserID,
+		"sessionId":   e.SessionID,
 		"type":        e.Type,
 		"level":       e.Level,
 		"message":     e.Message,

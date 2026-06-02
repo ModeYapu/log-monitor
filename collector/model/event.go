@@ -10,7 +10,11 @@ type Event struct {
 	ID          int64                  `json:"id"`
 	AppID       string                 `json:"appId"`
 	Release     string                 `json:"release"`
-	Type        string                 `json:"type"`        // error|performance|info|warn|track
+	Env         string                 `json:"env"`          // production, staging, etc.
+	BuildID     string                 `json:"buildId"`      // build identifier for source map lookup
+	UserID      string                 `json:"userId"`       // user identifier
+	SessionID   string                 `json:"sessionId"`    // session identifier for recording association
+	Type        string                 `json:"type"`         // error|performance|info|warn|track
 	Level       string                 `json:"level"`
 	Message     string                 `json:"message"`
 	Stack       string                 `json:"stack"`
@@ -92,6 +96,10 @@ func (e *Event) ToDBRecord() map[string]interface{} {
 	return map[string]interface{}{
 		"app_id":      e.AppID,
 		"release":     e.Release,
+		"env":         e.Env,
+		"build_id":    e.BuildID,
+		"user_id":     e.UserID,
+		"session_id":  e.SessionID,
 		"type":        e.Type,
 		"level":       e.Level,
 		"message":     e.Message,
@@ -134,6 +142,10 @@ func (e *Event) ScanFromDB(rows map[string]interface{}) {
 
 	// Use safe conversion for optional fields
 	e.Release = toString(rows["release"])
+	e.Env = toString(rows["env"])
+	e.BuildID = toString(rows["build_id"])
+	e.UserID = toString(rows["user_id"])
+	e.SessionID = toString(rows["session_id"])
 	e.Stack = toString(rows["stack"])
 	e.URL = toString(rows["url"])
 	e.Line = toInt(rows["line"])

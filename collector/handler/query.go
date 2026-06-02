@@ -42,6 +42,8 @@ func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	query := storage.QueryParams{
 		AppID:    r.URL.Query().Get("appId"),
+		Release:  r.URL.Query().Get("release"),
+		Env:      r.URL.Query().Get("env"),
 		Type:     r.URL.Query().Get("type"),
 		Level:    r.URL.Query().Get("level"),
 		Keyword:  r.URL.Query().Get("keyword"),
@@ -214,6 +216,10 @@ func (h *QueryHandler) eventToMap(event storage.EventRecord) map[string]interfac
 		"id":          0, // placeholder
 		"app_id":      event.AppID,
 		"release":     event.Release,
+		"env":         event.Env,
+		"build_id":    event.BuildID,
+		"user_id":     event.UserID,
+		"session_id":  event.SessionID,
 		"type":        event.Type,
 		"level":       event.Level,
 		"message":     event.Message,
