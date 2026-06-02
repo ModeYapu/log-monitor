@@ -470,6 +470,7 @@ func (db *DB) cleanupOldData(retentionDays int) {
 
 // EventRecord represents a database event record
 type EventRecord struct {
+	ID          int64
 	AppID       string
 	Release     string
 	Env         string
@@ -1099,6 +1100,74 @@ func (db *DB) EnsureCobrowseTables() error {
 
 	_, err := db.conn.Exec(schema)
 	return err
+}
+
+// GetSessionEvents retrieves events associated with a session
+func (db *DB) GetSessionEvents(sessionID string, limit int) ([]EventRecord, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+
+	rows, err := db.conn.Query(`
+		SELECT id, app_id, release, env, build_id, user_id, session_id,
+		       type, level, message, stack, url, line, col,
+		       tags, extra, ua, screen, viewport, performance, ip, created_at
+		FROM events
+		WHERE session_id = ?
+		ORDER BY created_at ASC
+		LIMIT ?
+	`, sessionID, limit)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []EventRecord
+	for rows.Next() {
+		var e EventRecord
+		err := rows.Scan(
+			&e.ID, &e.AppID, &e.Release, &e.Env, &e.BuildID, &e.UserID, &e.SessionID,
+			&e.Type, &e.Level, &e.Message, &e.Stack,
+			&e.URL, &e.Line, &e.Col, &e.Tags, &e.Extra, &e.UA, &e.Screen,
+			&e.Viewport, &e.Performance, &e.IP, &e.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan event: %w", err)
+		}
+		events = append(events, e)
+	}
+
+	return events, nil
+}
+
+// GetSessionErrorCount returns the count of errors for a session
+func (db *DB) GetSessionErrorCount(sessionID string) (int64, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return 0, fmt.Errorf("database is closed")
+	}
+
+	var count int64
+	err := db.conn.QueryRow(`
+		SELECT COUNT(*) FROM events
+		WHERE session_id = ? AND level = 'error'
+	`, sessionID).Scan(&count)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to get session error count: %w", err)
+	}
+
+	return count, nil
 }
 
 // GetRecordingStats returns statistics for a recording session

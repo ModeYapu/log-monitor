@@ -90,7 +90,10 @@ export const cobrowseApi = {
     api.get<any>(`/query/recordings/${sessionId}/stats`),
 
   deleteRecording: (sessionId: string) =>
-    api.delete<{ success: boolean }>(`/query/recordings/${sessionId}`)
+    api.delete<{ success: boolean }>(`/query/recordings/${sessionId}`),
+
+  getSessionEvents: (sessionId: string, params?: { limit?: number }) =>
+    api.get<{ sessionId: string; events: Event[]; errorCount: number; totalEvents: number }>(`/query/sessions/${sessionId}`, { params })
 }
 
 export const authApi = {

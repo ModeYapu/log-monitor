@@ -66,6 +66,8 @@ type CoBrowseDB interface {
 	GetRecordingStats(sessionID string) (interface{}, error)
 	DeleteRecording(sessionID string) error
 	UpdateRecording(sessionID string, endTime int64, durationMs int64, eventCount int, status string) error
+	GetSessionEvents(sessionID string, limit int) ([]storage.EventRecord, error)
+	GetSessionErrorCount(sessionID string) (int64, error)
 }
 
 // NewCoBrowseHub creates a new cobrowse hub
@@ -660,6 +662,7 @@ func (h *RecordingHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/query/recordings/", h.getRecordingWithRouting)
 	mux.HandleFunc("DELETE /api/query/recordings/", h.deleteRecording)
 	mux.HandleFunc("GET /api/query/live-sessions", h.getLiveSessions)
+	mux.HandleFunc("GET /api/query/sessions/", h.getSessionEvents)
 }
 
 // listRecordings returns a list of recordings
@@ -869,5 +872,50 @@ func (h *RecordingHandler) getLiveSessions(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"data": sessions,
+	})
+}
+
+// getSessionEvents returns events associated with a session
+func (h *RecordingHandler) getSessionEvents(w http.ResponseWriter, r *http.Request) {
+	// Authenticate admin request
+	if !h.hub.auth.AuthenticateAdmin(r) {
+		middleware.WriteAuthError(w, "Invalid or missing admin token")
+		return
+	}
+
+	path := r.URL.Path
+	sessionID := strings.TrimPrefix(path, "/api/query/sessions/")
+	if sessionID == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Get limit from query param
+	limit := 100
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
+			limit = l
+		}
+	}
+
+	// Get events for this session
+	events, err := h.db.GetSessionEvents(sessionID, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get error count
+	errorCount, err := h.db.GetSessionErrorCount(sessionID)
+	if err != nil {
+		errorCount = 0
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"sessionId":   sessionID,
+		"events":      events,
+		"errorCount":  errorCount,
+		"totalEvents": len(events),
 	})
 }
