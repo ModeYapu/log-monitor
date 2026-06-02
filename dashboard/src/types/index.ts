@@ -79,6 +79,7 @@ export interface AlertRule {
   cooldown_minutes: number
   last_triggered_at?: number
   silenced_until?: number
+  message_template?: string
   created_at?: number
   _toggling?: boolean
 }

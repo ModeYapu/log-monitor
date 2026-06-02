@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/logmonitor/collector/storage"
@@ -155,6 +154,97 @@ func (h *QueryHandler) QueryApps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(apps)
+}
+
+// QueryTop handles top N queries for errors/pages/releases/browsers
+func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse query parameters
+	appID := r.URL.Query().Get("appId")
+	topType := r.URL.Query().Get("type") // errors|pages|releases|browsers
+	orderBy := r.URL.Query().Get("orderBy")
+	limit := parseIntParam(r.URL.Query().Get("limit"), 20)
+
+	// Validate required params
+	if appID == "" {
+		http.Error(w, "Missing appId parameter", http.StatusBadRequest)
+		return
+	}
+	if topType == "" {
+		topType = "errors"
+	}
+
+	// Build filters
+	filters := make(map[string]interface{})
+	if env := r.URL.Query().Get("env"); env != "" {
+		filters["env"] = env
+	}
+	if release := r.URL.Query().Get("release"); release != "" {
+		filters["release"] = release
+	}
+	if startTime := r.URL.Query().Get("startTime"); startTime != "" {
+		if ts, err := strconv.ParseInt(startTime, 10, 64); err == nil {
+			filters["startTime"] = ts
+		}
+	}
+	if endTime := r.URL.Query().Get("endTime"); endTime != "" {
+		if ts, err := strconv.ParseInt(endTime, 10, 64); err == nil {
+			filters["endTime"] = ts
+		}
+	}
+
+	// Query database
+	result, err := h.db.GetTopN(appID, topType, orderBy, limit, filters)
+	if err != nil {
+		log.Printf("Failed to query top N: %v", err)
+		http.Error(w, "Failed to query top N", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response format
+	response := map[string]interface{}{
+		"type": result.Type,
+		"data": result.Data,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QuerySimilar handles similar error queries
+func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse query parameters
+	appID := r.URL.Query().Get("appId")
+	errorMessage := r.URL.Query().Get("message")
+	threshold := parseFloatParam(r.URL.Query().Get("threshold"), 0.7)
+	limit := parseIntParam(r.URL.Query().Get("limit"), 10)
+
+	// Validate required params
+	if appID == "" {
+		http.Error(w, "Missing appId parameter", http.StatusBadRequest)
+		return
+	}
+	if errorMessage == "" {
+		http.Error(w, "Missing message parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Query database for error clustering
+	clusters, err := h.db.GetSimilarErrors(appID, errorMessage, threshold, limit)
+	if err != nil {
+		log.Printf("Failed to query similar errors: %v", err)
+		http.Error(w, "Failed to query similar errors", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"query":    errorMessage,
+		"clusters": clusters,
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 // QueryExport handles event export requests

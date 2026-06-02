@@ -122,7 +122,19 @@
         </el-form-item>
 
         <el-form-item label="规则名称" prop="name">
-          <el-input v-model="alertForm.name" placeholder="输入规则名称" />
+          <el-input v-model="alertForm.name" placeholder="输入规则名称（支持变量：{{appId}}, {{release}} 等）" />
+        </el-form-item>
+
+        <el-form-item label="消息模板">
+          <el-input
+            v-model="alertForm.message_template"
+            type="textarea"
+            :rows="3"
+            placeholder="留空使用默认消息格式。可用变量：{{appId}}, {{release}}, {{page}}, {{device}}, {{userCount}}, {{errorCount}}, {{rate}}, {{timeRange}}, {{timestamp}}"
+          />
+          <div class="text-secondary mt-1" style="font-size: 12px;">
+            可用变量：{{appId}} 应用ID, {{release}} 版本, {{page}} 页面, {{device}} 设备, {{userCount}} 影响用户数, {{errorCount}} 错误次数, {{rate}} 错误率, {{timeRange}} 时间范围, {{timestamp}} 触发时间
+          </div>
         </el-form-item>
 
         <el-form-item label="条件类型" prop="condition_type">
@@ -296,7 +308,8 @@ const alertForm = reactive<AlertRule>({
     chat_id: ''
   },
   enabled: true,
-  cooldown_minutes: 30
+  cooldown_minutes: 30,
+  message_template: ''
 })
 
 const alertFormRules: FormRules = {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/logmonitor/collector/storage"
@@ -14,6 +15,20 @@ type Checker struct {
 	db       *storage.DB
 	notifier *Notifier
 	stopCh   chan struct{}
+}
+
+// AlertContext holds context information for alert notifications
+type AlertContext struct {
+	AppID      string
+	Release    string
+	Env        string
+	Page       string
+	Device     string
+	UserAgent  string
+	UserCount  int
+	ErrorCount int
+	Rate       float64
+	TimeRange  string
 }
 
 // NewChecker creates a new alert checker
@@ -327,6 +342,9 @@ func (c *Checker) triggerAlert(rule storage.AlertRule, message string) {
 		log.Printf("Failed to create alert log: %v", err)
 	}
 
+	// Gather context for template rendering
+	ctx := c.gatherContext(rule)
+
 	// Send notification
 	var notifyConfig map[string]interface{}
 	if err := json.Unmarshal([]byte(rule.NotifyConfig), &notifyConfig); err != nil {
@@ -334,26 +352,159 @@ func (c *Checker) triggerAlert(rule storage.AlertRule, message string) {
 		return
 	}
 
+	// Use custom message template if provided, otherwise use the default message
+	messageTemplate := message
+	if rule.MessageTemplate != "" {
+		messageTemplate = rule.MessageTemplate
+	}
+
+	// Render message with context
+	renderedMessage := c.notifier.RenderTemplate(messageTemplate, c.toNotificationContext(ctx))
+	renderedTitle := c.notifier.RenderTemplate(rule.Name, c.toNotificationContext(ctx))
+
 	switch rule.NotifyType {
 	case "feishu":
 		webhookURL, _ := notifyConfig["url"].(string)
-		c.notifier.SendFeishu(webhookURL, rule.Name, message)
+		c.notifier.SendFeishu(webhookURL, renderedTitle, renderedMessage)
 	case "wecom":
 		webhookURL, _ := notifyConfig["url"].(string)
-		c.notifier.SendWeCom(webhookURL, rule.Name, message)
+		c.notifier.SendWeCom(webhookURL, renderedTitle, renderedMessage)
 	case "dingtalk":
 		webhookURL, _ := notifyConfig["url"].(string)
-		c.notifier.SendDingTalk(webhookURL, rule.Name, message)
+		c.notifier.SendDingTalk(webhookURL, renderedTitle, renderedMessage)
 	case "telegram":
 		botToken, _ := notifyConfig["bot_token"].(string)
 		chatID, _ := notifyConfig["chat_id"].(string)
-		c.notifier.SendTelegram(botToken, chatID, fmt.Sprintf("%s\n%s", rule.Name, message))
+		c.notifier.SendTelegram(botToken, chatID, fmt.Sprintf("%s\n%s", renderedTitle, renderedMessage))
 	case "webhook":
 		webhookURL, _ := notifyConfig["url"].(string)
-		c.notifier.SendWebhook(webhookURL, rule.Name, message)
+		c.notifier.SendWebhookWithContext(webhookURL, renderedTitle, renderedMessage, c.toNotificationContext(ctx))
 	case "email":
 		email, _ := notifyConfig["email"].(string)
-		c.notifier.SendEmail(email, rule.Name, message)
+		c.notifier.SendEmail(email, renderedTitle, renderedMessage)
+	}
+}
+
+// gatherContext gathers context information from the database for template rendering
+func (c *Checker) gatherContext(rule storage.AlertRule) AlertContext {
+	ctx := AlertContext{
+		AppID:     rule.AppID,
+		TimeRange: "最近5分钟",
+	}
+
+	// Parse condition config to get window minutes
+	var config struct {
+		WindowMinutes  int    `json:"windowMinutes"`
+		AggregateBy    string `json:"aggregateBy"`
+		FilterRelease  string `json:"filterRelease"`
+		FilterPage     string `json:"filterPage"`
+	}
+	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err == nil {
+		if config.WindowMinutes > 0 {
+			ctx.TimeRange = fmt.Sprintf("最近%d分钟", config.WindowMinutes)
+		}
+		if config.FilterRelease != "" {
+			ctx.Release = config.FilterRelease
+		}
+		if config.FilterPage != "" {
+			ctx.Page = config.FilterPage
+		}
+	}
+
+	// Get recent events to gather more context
+	startTime := time.Now().Add(-5 * time.Minute).UnixMilli()
+	query := storage.QueryParams{
+		AppID:     rule.AppID,
+		Level:     "error",
+		StartTime: startTime,
+		Page:      1,
+		PageSize:  100,
+	}
+	if ctx.Release != "" {
+		query.Release = ctx.Release
+	}
+
+	result, err := c.db.QueryEvents(query)
+	if err == nil && len(result.Data) > 0 {
+		ctx.ErrorCount = int(result.Total)
+
+		// Get unique user count
+		userSet := make(map[string]bool)
+		pageSet := make(map[string]bool)
+		deviceSet := make(map[string]bool)
+
+		for _, event := range result.Data {
+			if event.UserID != "" {
+				userSet[event.UserID] = true
+			}
+			if event.URL != "" {
+				pageSet[event.URL] = true
+			}
+			// Parse user agent for device info
+			if event.UA != "" {
+				ua := event.UA
+				device := "unknown"
+				if strings.Contains(ua, "Mobile") {
+					device = "mobile"
+				} else if strings.Contains(ua, "Tablet") {
+					device = "tablet"
+				} else {
+					device = "desktop"
+				}
+				deviceSet[device] = true
+				if ctx.UserAgent == "" {
+					ctx.UserAgent = ua
+				}
+			}
+		}
+
+		ctx.UserCount = len(userSet)
+		if ctx.Page == "" && len(pageSet) > 0 {
+			// Get most common page
+			for page := range pageSet {
+				ctx.Page = page
+				break
+			}
+		}
+		if len(deviceSet) > 0 {
+			for device := range deviceSet {
+				ctx.Device = device
+				break
+			}
+		}
+	}
+
+	// Calculate rate
+	totalQuery := storage.QueryParams{
+		AppID:     rule.AppID,
+		StartTime: startTime,
+		Page:      1,
+		PageSize:  1,
+	}
+	if ctx.Release != "" {
+		totalQuery.Release = ctx.Release
+	}
+	totalResult, err := c.db.QueryEvents(totalQuery)
+	if err == nil && totalResult.Total > 0 {
+		ctx.Rate = float64(ctx.ErrorCount) / float64(totalResult.Total) * 100
+	}
+
+	return ctx
+}
+
+// toNotificationContext converts AlertContext to NotificationContext
+func (c *Checker) toNotificationContext(ctx AlertContext) NotificationContext {
+	return NotificationContext{
+		AppID:       ctx.AppID,
+		Release:     ctx.Release,
+		Page:        ctx.Page,
+		Device:      ctx.Device,
+		UserAgent:   ctx.UserAgent,
+		UserCount:   ctx.UserCount,
+		ErrorCount:  ctx.ErrorCount,
+		Rate:        ctx.Rate,
+		TimeRange:   ctx.TimeRange,
+		TriggerTime: time.Now(),
 	}
 }
 

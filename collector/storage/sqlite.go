@@ -1303,3 +1303,434 @@ func (db *DB) GetRecordingStats(sessionID string) (interface{}, error) {
 		},
 	}, nil
 }
+
+// TopListParams represents parameters for top lists queries
+type TopListParams struct {
+	AppID     string
+	StartTime int64
+	EndTime   int64
+	Limit     int
+	SortBy    string
+}
+
+// TopError represents an error in the top errors list
+type TopError struct {
+	Message       string `json:"message"`
+	Count         int64  `json:"count"`
+	FirstSeen     int64  `json:"firstSeen"`
+	LastSeen      int64  `json:"lastSeen"`
+	AffectedUsers int64  `json:"affectedUsers"`
+	SampleStack   string `json:"sampleStack,omitempty"`
+}
+
+// TopPage represents a page in the top pages list
+type TopPage struct {
+	URL         string  `json:"url"`
+	ErrorCount  int64   `json:"errorCount"`
+	TotalEvents int64   `json:"totalEvents"`
+	ErrorRate   float64 `json:"errorRate"`
+	FirstSeen   int64   `json:"firstSeen"`
+	LastSeen    int64   `json:"lastSeen"`
+}
+
+// TopRelease represents a release in the top releases list
+type TopRelease struct {
+	Release     string  `json:"release"`
+	Env         string  `json:"env"`
+	ErrorCount  int64   `json:"errorCount"`
+	TotalEvents int64   `json:"totalEvents"`
+	ErrorRate   float64 `json:"errorRate"`
+	FirstSeen   int64   `json:"firstSeen"`
+	LastSeen    int64   `json:"lastSeen"`
+	NewErrors   int64   `json:"newErrors"`
+	IsLatest    bool    `json:"isLatest"`
+}
+
+// TopBrowser represents a browser in the top browsers list
+type TopBrowser struct {
+	Browser     string  `json:"browser"`
+	Version     string  `json:"version"`
+	ErrorCount  int64   `json:"errorCount"`
+	TotalEvents int64   `json:"totalEvents"`
+	ErrorRate   float64 `json:"errorRate"`
+}
+
+func (db *DB) GetTopErrors(params TopListParams) ([]TopError, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+	limit := params.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	whereClause := "WHERE app_id = ? AND level = 'error'"
+	args := []interface{}{params.AppID}
+	if params.StartTime > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, params.StartTime)
+	}
+	if params.EndTime > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, params.EndTime)
+	}
+	orderBy := "count DESC"
+	switch params.SortBy {
+	case "recent":
+		orderBy = "last_seen DESC"
+	case "impact":
+		orderBy = "affected_users DESC"
+	case "regression":
+		orderBy = "first_seen DESC"
+	}
+	query := fmt.Sprintf(`
+		SELECT message, COUNT(*) as count, MIN(created_at) as first_seen,
+		MAX(created_at) as last_seen, COUNT(DISTINCT user_id) as affected_users,
+		SUBSTR(GROUP_CONCAT(stack), 1, 500) as sample_stack
+		FROM events %s GROUP BY message ORDER BY %s LIMIT ?`, whereClause, orderBy)
+	args = append(args, limit)
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query top errors: %w", err)
+	}
+	defer rows.Close()
+	var results []TopError
+	for rows.Next() {
+		var e TopError
+		var sampleStack sql.NullString
+		err := rows.Scan(&e.Message, &e.Count, &e.FirstSeen, &e.LastSeen, &e.AffectedUsers, &sampleStack)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan top error: %w", err)
+		}
+		if sampleStack.Valid {
+			e.SampleStack = sampleStack.String
+		}
+		results = append(results, e)
+	}
+	return results, nil
+}
+
+func (db *DB) GetTopPages(params TopListParams) ([]TopPage, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+	limit := params.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	whereClause := "WHERE app_id = ? AND url != ''"
+	args := []interface{}{params.AppID}
+	if params.StartTime > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, params.StartTime)
+	}
+	if params.EndTime > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, params.EndTime)
+	}
+	orderBy := "error_count DESC"
+	if params.SortBy == "recent" {
+		orderBy = "last_seen DESC"
+	}
+	query := fmt.Sprintf(`
+		SELECT url, SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
+		COUNT(*) as total_events, CAST(SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as error_rate,
+		MIN(created_at) as first_seen, MAX(created_at) as last_seen
+		FROM events %s GROUP BY url ORDER BY %s LIMIT ?`, whereClause, orderBy)
+	args = append(args, limit)
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query top pages: %w", err)
+	}
+	defer rows.Close()
+	var results []TopPage
+	for rows.Next() {
+		var p TopPage
+		err := rows.Scan(&p.URL, &p.ErrorCount, &p.TotalEvents, &p.ErrorRate, &p.FirstSeen, &p.LastSeen)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan top page: %w", err)
+		}
+		results = append(results, p)
+	}
+	return results, nil
+}
+
+func (db *DB) GetTopReleases(params TopListParams) ([]TopRelease, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+	limit := params.Limit
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	whereClause := "WHERE app_id = ? AND release != ''"
+	args := []interface{}{params.AppID}
+	if params.StartTime > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, params.StartTime)
+	}
+	if params.EndTime > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, params.EndTime)
+	}
+	orderBy := "error_count DESC"
+	switch params.SortBy {
+	case "regression":
+		orderBy = "new_errors DESC"
+	case "recent":
+		orderBy = "first_seen DESC"
+	case "error_rate":
+		orderBy = "error_rate DESC"
+	}
+	var latestRelease sql.NullString
+	db.conn.QueryRow("SELECT release FROM events WHERE app_id = ? AND release != '' ORDER BY created_at DESC LIMIT 1", params.AppID).Scan(&latestRelease)
+	query := fmt.Sprintf(`
+		SELECT release, COALESCE(MAX(env), '') as env,
+		SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
+		COUNT(*) as total_events, CAST(SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as error_rate,
+		MIN(created_at) as first_seen, MAX(created_at) as last_seen, 0 as new_errors
+		FROM events %s GROUP BY release ORDER BY %s LIMIT ?`, whereClause, orderBy)
+	args = append(args, limit)
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query top releases: %w", err)
+	}
+	defer rows.Close()
+	var results []TopRelease
+	for rows.Next() {
+		var r TopRelease
+		var env sql.NullString
+		err := rows.Scan(&r.Release, &env, &r.ErrorCount, &r.TotalEvents, &r.ErrorRate, &r.FirstSeen, &r.LastSeen, &r.NewErrors)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan top release: %w", err)
+		}
+		if env.Valid {
+			r.Env = env.String
+		}
+		if latestRelease.Valid && r.Release == latestRelease.String {
+			r.IsLatest = true
+		}
+		if r.NewErrors == 0 && params.SortBy == "regression" {
+			var existingErrors, totalErrors int64
+			db.conn.QueryRow(`SELECT COUNT(DISTINCT e1.message) FROM events e1
+				INNER JOIN events e2 ON e1.message = e2.message
+				WHERE e1.app_id = ? AND e1.release = ? AND e1.level = 'error'
+				AND e2.app_id = ? AND e2.release < ? AND e2.level = 'error'`, params.AppID, r.Release, params.AppID, r.Release).Scan(&existingErrors)
+			db.conn.QueryRow(`SELECT COUNT(DISTINCT message) FROM events WHERE app_id = ? AND release = ? AND level = 'error'`, params.AppID, r.Release).Scan(&totalErrors)
+			r.NewErrors = totalErrors - existingErrors
+			if r.NewErrors < 0 {
+				r.NewErrors = 0
+			}
+		}
+		results = append(results, r)
+	}
+	return results, nil
+}
+
+func (db *DB) GetTopBrowsers(params TopListParams) ([]TopBrowser, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+	limit := params.Limit
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	whereClause := "WHERE app_id = ? AND ua != ''"
+	args := []interface{}{params.AppID}
+	if params.StartTime > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, params.StartTime)
+	}
+	if params.EndTime > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, params.EndTime)
+	}
+	query := fmt.Sprintf(`
+		SELECT CASE WHEN ua LIKE '%%Chrome%%' AND ua LIKE '%%Safari%%' THEN 'Chrome'
+		WHEN ua LIKE '%%Safari%%' AND ua NOT LIKE '%%Chrome%%' THEN 'Safari'
+		WHEN ua LIKE '%%Firefox%%' THEN 'Firefox'
+		WHEN ua LIKE '%%Edge%%' THEN 'Edge'
+		WHEN ua LIKE '%%MSIE%%' OR ua LIKE '%%Trident%%' THEN 'Internet Explorer'
+		ELSE 'Other' END as browser, 'unknown' as version,
+		SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
+		COUNT(*) as total_events, CAST(SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) as error_rate
+		FROM events %s GROUP BY browser ORDER BY error_count DESC LIMIT ?`, whereClause)
+	args = append(args, limit)
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query top browsers: %w", err)
+	}
+	defer rows.Close()
+	var results []TopBrowser
+	for rows.Next() {
+		var b TopBrowser
+		err := rows.Scan(&b.Browser, &b.Version, &b.ErrorCount, &b.TotalEvents, &b.ErrorRate)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan top browser: %w", err)
+		}
+		results = append(results, b)
+	}
+	return results, nil
+}
+
+type ErrorCluster struct {
+	ClusterID     string        `json:"clusterId"`
+	Message       string        `json:"message"`
+	Count         int64         `json:"count"`
+	FirstSeen     int64         `json:"firstSeen"`
+	LastSeen      int64         `json:"lastSeen"`
+	AffectedUsers int64         `json:"affectedUsers"`
+	SampleEvents  []EventRecord `json:"sampleEvents"`
+	Pattern       string        `json:"pattern"`
+}
+
+func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, limit int) ([]ErrorCluster, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	var targetStack sql.NullString
+	err := db.conn.QueryRow(`SELECT stack FROM events WHERE app_id = ? AND message = ? AND level = 'error' ORDER BY created_at DESC LIMIT 1`, appID, errorMessage).Scan(&targetStack)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find target error: %w", err)
+	}
+	var targetPattern string
+	if targetStack.Valid && targetStack.String != "" {
+		targetPattern = extractFilePattern(targetStack.String)
+	}
+	query := `SELECT SUBSTR(message, 1, 100) as pattern, COUNT(*) as count, MIN(created_at) as first_seen,
+		MAX(created_at) as last_seen, COUNT(DISTINCT user_id) as affected_users,
+		GROUP_CONCAT(DISTINCT message, '|||') as messages, SUBSTR(GROUP_CONCAT(stack), 1, 1000) as sample_stack
+		FROM events WHERE app_id = ? AND level = 'error' GROUP BY SUBSTR(message, 1, 100) HAVING count > 0 ORDER BY count DESC LIMIT ?`
+	rows, err := db.conn.Query(query, appID, limit*2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query error clusters: %w", err)
+	}
+	defer rows.Close()
+	var clusters []ErrorCluster
+	clusterID := 0
+	for rows.Next() {
+		var c ErrorCluster
+		var messages, sampleStack sql.NullString
+		err := rows.Scan(&c.Pattern, &c.Count, &c.FirstSeen, &c.LastSeen, &c.AffectedUsers, &messages, &sampleStack)
+		if err != nil {
+			continue
+		}
+		similarity := 1.0
+		if targetPattern != "" && sampleStack.Valid && sampleStack.String != "" {
+			similarity = calculateSimilarity(targetPattern, extractFilePattern(sampleStack.String))
+		}
+		if similarity >= threshold {
+			clusterID++
+			c.ClusterID = fmt.Sprintf("cluster-%d", clusterID)
+			if messages.Valid {
+				c.Message = getMostCommonMessage(messages.String)
+			} else {
+				c.Message = c.Pattern + "..."
+			}
+			sampleQuery := `SELECT id, app_id, release, env, build_id, user_id, session_id, type, level, message, stack, url, line, col,
+				tags, extra, ua, screen, viewport, performance, ip, created_at FROM events WHERE app_id = ? AND level = 'error'
+				AND SUBSTR(message, 1, 100) = ? ORDER BY created_at DESC LIMIT 3`
+			sampleRows, err := db.conn.Query(sampleQuery, appID, c.Pattern)
+			if err == nil {
+				for sampleRows.Next() {
+					var e EventRecord
+					err := sampleRows.Scan(&e.ID, &e.AppID, &e.Release, &e.Env, &e.BuildID, &e.UserID, &e.SessionID,
+						&e.Type, &e.Level, &e.Message, &e.Stack, &e.URL, &e.Line, &e.Col, &e.Tags, &e.Extra, &e.UA, &e.Screen,
+						&e.Viewport, &e.Performance, &e.IP, &e.CreatedAt)
+					if err == nil {
+						c.SampleEvents = append(c.SampleEvents, e)
+					}
+				}
+				sampleRows.Close()
+			}
+			clusters = append(clusters, c)
+		}
+		if len(clusters) >= limit {
+			break
+		}
+	}
+	return clusters, nil
+}
+
+func extractFilePattern(stack string) string {
+	if stack == "" {
+		return ""
+	}
+	parts := strings.Split(stack, "\n")
+	if len(parts) == 0 {
+		return ""
+	}
+	for _, part := range parts {
+		if strings.Contains(part, ".js:") || strings.Contains(part, ".ts:") {
+			idx := strings.LastIndex(part, "/")
+			if idx >= 0 && idx < len(part)-1 {
+				return part[idx+1:]
+			}
+			return part
+		}
+	}
+	return parts[0]
+}
+
+func calculateSimilarity(a, b string) float64 {
+	if a == b {
+		return 1.0
+	}
+	if a == "" || b == "" {
+		return 0.0
+	}
+	setA := make(map[rune]bool)
+	setB := make(map[rune]bool)
+	for _, r := range a {
+		setA[r] = true
+	}
+	for _, r := range b {
+		setB[r] = true
+	}
+	intersection := 0
+	union := len(setA) + len(setB)
+	for r := range setA {
+		if setB[r] {
+			intersection++
+		}
+	}
+	if union == 0 {
+		return 0.0
+	}
+	return float64(2*intersection) / float64(union)
+}
+
+func getMostCommonMessage(messages string) string {
+	if messages == "" {
+		return ""
+	}
+	parts := strings.Split(messages, "|||")
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	counts := make(map[string]int)
+	for _, msg := range parts {
+		counts[msg]++
+	}
+	maxCount := 0
+	var result string
+	for msg, count := range counts {
+		if count > maxCount {
+			maxCount = count
+			result = msg
+		}
+	}
+	return result
+}

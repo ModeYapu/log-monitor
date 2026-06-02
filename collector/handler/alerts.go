@@ -64,14 +64,15 @@ func (h *AlertsHandler) GetAlerts(w http.ResponseWriter, r *http.Request) {
 
 // CreateAlertRequest represents the request to create/update an alert rule
 type CreateAlertRequest struct {
-	AppID           string          `json:"app_id"`
-	Name            string          `json:"name"`
-	ConditionType   string          `json:"condition_type"`   // threshold|rate|new_error
-	ConditionConfig json.RawMessage `json:"condition_config"` // JSON string
-	NotifyType      string          `json:"notify_type"`      // webhook|feishu|email
-	NotifyConfig    json.RawMessage `json:"notify_config"`    // JSON string
-	Enabled         bool            `json:"enabled"`
-	CooldownMinutes int             `json:"cooldown_minutes"`
+	AppID            string          `json:"app_id"`
+	Name             string          `json:"name"`
+	ConditionType    string          `json:"condition_type"`   // threshold|rate|new_error
+	ConditionConfig  json.RawMessage `json:"condition_config"` // JSON string
+	NotifyType       string          `json:"notify_type"`      // webhook|feishu|email
+	NotifyConfig     json.RawMessage `json:"notify_config"`    // JSON string
+	Enabled          bool            `json:"enabled"`
+	CooldownMinutes  int             `json:"cooldown_minutes"`
+	MessageTemplate  string          `json:"message_template"`  // Optional message template
 }
 
 // CreateAlert creates a new alert rule
@@ -102,15 +103,16 @@ func (h *AlertsHandler) CreateAlert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rule := storage.AlertRule{
-		AppID:           req.AppID,
-		Name:            req.Name,
-		ConditionType:   req.ConditionType,
-		ConditionConfig: conditionConfig,
-		NotifyType:      req.NotifyType,
-		NotifyConfig:    notifyConfig,
-		Enabled:         boolToInt(req.Enabled),
-		CooldownMinutes: req.CooldownMinutes,
-		CreatedAt:       time.Now().UnixMilli(),
+		AppID:            req.AppID,
+		Name:             req.Name,
+		ConditionType:    req.ConditionType,
+		ConditionConfig:  conditionConfig,
+		NotifyType:       req.NotifyType,
+		NotifyConfig:     notifyConfig,
+		Enabled:          boolToInt(req.Enabled),
+		CooldownMinutes:  req.CooldownMinutes,
+		MessageTemplate:  req.MessageTemplate,
+		CreatedAt:        time.Now().UnixMilli(),
 	}
 
 	id, err := h.db.CreateAlertRule(rule)

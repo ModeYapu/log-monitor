@@ -77,12 +77,8 @@ func (n *Notifier) SendFeishu(webhookURL, title, message string) error {
 	}
 
 	// Parse webhook URL to extract sign key if present
-	signKey := ""
-	if u, err := url.Parse(webhookURL); err == nil {
-		// Check if timestamp and sign parameters exist (signed webhook)
-		// For signed webhooks, we need to extract the key
-		// The base URL without params should have the key embedded
-	}
+	// For signed webhooks, we need to extract the key
+	_, _ = url.Parse(webhookURL)
 
 	payload := map[string]interface{}{
 		"msg_type": "interactive",
@@ -180,8 +176,8 @@ func (n *Notifier) SendWebhookWithContext(webhookURL, title, message string, ctx
 		return fmt.Errorf("empty webhook URL")
 	}
 
-	renderedMsg := n.renderTemplate(message, ctx)
-	renderedTitle := n.renderTemplate(title, ctx)
+	renderedMsg := n.RenderTemplate(message, ctx)
+	renderedTitle := n.RenderTemplate(title, ctx)
 
 	payload := map[string]interface{}{
 		"title":       renderedTitle,
@@ -194,8 +190,8 @@ func (n *Notifier) SendWebhookWithContext(webhookURL, title, message string, ctx
 	return n.sendWebhookWithRetry(webhookURL, payload, 3)
 }
 
-// renderTemplate renders a message template with context variables
-func (n *Notifier) renderTemplate(template string, ctx NotificationContext) string {
+// RenderTemplate renders a message template with context variables
+func (n *Notifier) RenderTemplate(template string, ctx NotificationContext) string {
 	result := template
 	result = strings.ReplaceAll(result, "{{appId}}", ctx.AppID)
 	result = strings.ReplaceAll(result, "{{release}}", ctx.Release)
