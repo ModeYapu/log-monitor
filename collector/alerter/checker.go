@@ -119,14 +119,7 @@ func (c *Checker) checkRule(rule storage.AlertRule) (bool, string) {
 
 // checkThreshold checks if error count exceeds threshold
 func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
-	var config struct {
-		Level          string `json:"level"`
-		Count          int    `json:"count"`
-		WindowMinutes  int    `json:"windowMinutes"`
-		AggregateBy    string `json:"aggregateBy"`    // none|release|page|browser
-		FilterRelease  string `json:"filterRelease"`  // optional: only check specific release
-		FilterPage     string `json:"filterPage"`     // optional: only check specific page
-	}
+	var config thresholdConfig
 
 	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err != nil {
 		log.Printf("Failed to parse threshold config: %v", err)
@@ -173,18 +166,18 @@ func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
 	return false, ""
 }
 
+// thresholdConfig holds parsed threshold condition configuration
+type thresholdConfig struct {
+	Level         string `json:"level"`
+	Count         int    `json:"count"`
+	WindowMinutes int    `json:"windowMinutes"`
+	AggregateBy   string `json:"aggregateBy"`
+	FilterRelease string `json:"filterRelease"`
+	FilterPage    string `json:"filterPage"`
+}
+
 // checkAggregatedThreshold checks threshold with aggregation
-func (c *Checker) checkAggregatedThreshold(rule storage.AlertRule, config interface{}, startTime int64) (bool, string) {
-	// For now, implement simple aggregation
-	// TODO: Implement proper aggregation queries
-	cfg := config.(struct {
-		Level         string `json:"level"`
-		Count         int    `json:"count"`
-		WindowMinutes int    `json:"windowMinutes"`
-		AggregateBy   string `json:"aggregateBy"`
-		FilterRelease string `json:"filterRelease"`
-		FilterPage    string `json:"filterPage"`
-	})
+func (c *Checker) checkAggregatedThreshold(rule storage.AlertRule, cfg thresholdConfig, startTime int64) (bool, string) {
 
 	// Query events
 	query := storage.QueryParams{
@@ -217,15 +210,18 @@ func (c *Checker) checkAggregatedThreshold(rule storage.AlertRule, config interf
 }
 
 // checkRate checks if error rate exceeds threshold
+// rateConfig holds parsed rate condition configuration
+type rateConfig struct {
+	Rate          float64 `json:"rate"`
+	MinSamples    int     `json:"minSamples"`
+	WindowMinutes int     `json:"windowMinutes"`
+	AggregateBy   string  `json:"aggregateBy"`
+	FilterRelease string  `json:"filterRelease"`
+	FilterPage    string  `json:"filterPage"`
+}
+
 func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
-	var config struct {
-		Rate          float64 `json:"rate"`
-		MinSamples    int     `json:"minSamples"`
-		WindowMinutes int     `json:"windowMinutes"`
-		AggregateBy   string  `json:"aggregateBy"`   // none|release|page|browser
-		FilterRelease string  `json:"filterRelease"` // optional: only check specific release
-		FilterPage    string  `json:"filterPage"`    // optional: only check specific page
-	}
+	var config rateConfig
 
 	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err != nil {
 		log.Printf("Failed to parse rate config: %v", err)
@@ -412,7 +408,11 @@ func (c *Checker) gatherContext(rule storage.AlertRule) AlertContext {
 	}
 
 	// Get recent events to gather more context
-	startTime := time.Now().Add(-5 * time.Minute).UnixMilli()
+	windowMinutes := 5
+	if config.WindowMinutes > 0 {
+		windowMinutes = config.WindowMinutes
+	}
+	startTime := time.Now().Add(-time.Duration(windowMinutes) * time.Minute).UnixMilli()
 	query := storage.QueryParams{
 		AppID:     rule.AppID,
 		Level:     "error",

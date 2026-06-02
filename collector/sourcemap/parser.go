@@ -118,10 +118,9 @@ func (p *Parser) FindOriginal(genLine, genCol int) (*OriginalPosition, error) {
 				return result, nil
 			}
 		} else {
-			// Reset source mapping values for next segment
-			sourceIndex = 0
-			origLine = 0
-			origCol = 0
+			// Segment with only genCol has no mapping for this position
+			// Per Source Map spec: do NOT reset accumulated offsets
+			continue
 		}
 	}
 

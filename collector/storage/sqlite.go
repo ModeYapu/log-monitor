@@ -141,6 +141,36 @@ func (db *DB) initSchema() error {
 		log.Printf("Migration notice: %v", err)
 	}
 
+	// Migration: Add new event fields for P0 release/session tracking
+	migrations := []string{
+		`ALTER TABLE events ADD COLUMN release TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN env TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN build_id TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN user_id TEXT DEFAULT ''`,
+		`ALTER TABLE events ADD COLUMN session_id TEXT DEFAULT ''`,
+		`ALTER TABLE alert_rules ADD COLUMN silenced_until INTEGER DEFAULT 0`,
+		`ALTER TABLE alert_rules ADD COLUMN fingerprint TEXT DEFAULT ''`,
+	}
+	for _, m := range migrations {
+		_, mErr := db.conn.Exec(m)
+		if mErr != nil && !strings.Contains(mErr.Error(), "duplicate column") {
+			log.Printf("Migration notice: %v", mErr)
+		}
+	}
+
+	// Migration: Create indexes for new columns
+	indexMigrations := []string{
+		`CREATE INDEX IF NOT EXISTS idx_events_release ON events(app_id, release)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_env ON events(app_id, env)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id)`,
+	}
+	for _, m := range indexMigrations {
+		if _, mErr := db.conn.Exec(m); mErr != nil {
+			log.Printf("Migration notice: %v", mErr)
+		}
+	}
+
 	return nil
 }
 

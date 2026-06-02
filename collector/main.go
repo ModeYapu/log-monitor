@@ -184,14 +184,6 @@ func main() {
 		})
 	}
 
-	for _, route := range adminRoutes {
-		pattern := route.pattern
-		handler := corsMiddleware.Handler(jwtMiddleware.Handler(middleware.RequireAdmin(http.HandlerFunc(route.handler))))
-		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-			handler.ServeHTTP(w, r)
-		})
-	}
-
 	// Initialize alert checker
 	alertChecker := alerter.NewChecker(db)
 	alertChecker.SetEmailConfig(alerter.EmailConfig{
