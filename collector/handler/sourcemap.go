@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/logmonitor/collector/sourcemap"
 	"github.com/logmonitor/collector/storage"
 )
 
@@ -255,6 +256,12 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 		Env     string `json:"env"`
 		BuildID string `json:"buildId"`
 		Stack   string `json:"stack"`
+		Frames  []struct {
+			Filename     string `json:"filename"`
+			Line         int    `json:"line"`
+			Column       int    `json:"column"`
+			FunctionName string `json:"functionName,omitempty"`
+		} `json:"frames"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -262,8 +269,8 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.AppID == "" || req.Stack == "" {
-		http.Error(w, "Missing required fields: appId, stack", http.StatusBadRequest)
+	if req.AppID == "" {
+		http.Error(w, "Missing required field: appId", http.StatusBadRequest)
 		return
 	}
 
@@ -279,8 +286,8 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Try to find by app_id and release only (most recent)
-		records, err := h.db.ListSourceMaps(req.AppID, 1)
-		if err == nil && len(records) > 0 {
+		records, listErr := h.db.ListSourceMaps(req.AppID, 1)
+		if listErr == nil && len(records) > 0 {
 			record = &records[0]
 		}
 	}
@@ -289,23 +296,59 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to get source map: %v", err)
 	}
 
-	// For now, return the stack as-is if no source map is found
-	// The actual deobfuscation will be implemented in the next task
-	result := map[string]interface{}{
-		"originalStack": req.Stack,
-		"deobfuscated":  false,
-		"reason":        "Source map deobfuscation not yet implemented",
+	if record == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"deobfuscated": false,
+			"reason":       "Source map not found",
+			"frames":       req.Frames,
+		})
+		return
 	}
 
-	if record != nil {
-		result["sourceMapFound"] = true
-		result["buildId"] = record.BuildID
-		result["release"] = record.Release
-	} else {
-		result["sourceMapFound"] = false
+	// Read source map file
+	smContent, err := h.smStorage.GetByPath(record.FilePath)
+	if err != nil {
+		log.Printf("Failed to read source map file: %v", err)
+		http.Error(w, "Failed to read source map", http.StatusInternalServerError)
+		return
 	}
 
-	json.NewEncoder(w).Encode(result)
+	// Parse source map
+	parser, err := sourcemap.NewParser(smContent)
+	if err != nil {
+		log.Printf("Failed to parse source map: %v", err)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"deobfuscated": false,
+			"reason":       "Failed to parse source map",
+			"error":        err.Error(),
+		})
+		return
+	}
+
+	// Convert frames to StackFrame format
+	frames := make([]sourcemap.StackFrame, len(req.Frames))
+	for i, f := range req.Frames {
+		frames[i] = sourcemap.StackFrame{
+			Filename:     f.Filename,
+			Line:         f.Line,
+			Column:       f.Column,
+			FunctionName: f.FunctionName,
+		}
+	}
+
+	// Deobfuscate
+	results := parser.DeobfuscateStackTrace(frames)
+
+	// Convert results to response format
+	response := map[string]interface{}{
+		"deobfuscated": true,
+		"buildId":     record.BuildID,
+		"release":     record.Release,
+		"env":         record.Env,
+		"frames":      results,
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 // isValidSourceMap checks if the content is a valid source map
