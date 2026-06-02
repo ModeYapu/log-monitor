@@ -10,11 +10,11 @@ type Event struct {
 	ID          int64                  `json:"id"`
 	AppID       string                 `json:"appId"`
 	Release     string                 `json:"release"`
-	Env         string                 `json:"env"`          // production, staging, etc.
-	BuildID     string                 `json:"buildId"`      // build identifier for source map lookup
-	UserID      string                 `json:"userId"`       // user identifier
-	SessionID   string                 `json:"sessionId"`    // session identifier for recording association
-	Type        string                 `json:"type"`         // error|performance|info|warn|track
+	Env         string                 `json:"env"`       // production, staging, etc.
+	BuildID     string                 `json:"buildId"`   // build identifier for source map lookup
+	UserID      string                 `json:"userId"`    // user identifier
+	SessionID   string                 `json:"sessionId"` // session identifier for recording association
+	Type        string                 `json:"type"`      // error|performance|info|warn|track
 	Level       string                 `json:"level"`
 	Message     string                 `json:"message"`
 	Stack       string                 `json:"stack"`
@@ -33,39 +33,39 @@ type Event struct {
 
 // ReportRequest is the batch report request from SDK
 type ReportRequest struct {
-	AppID   string   `json:"appId"`
-	Release string   `json:"release"`
-	Events  []Event  `json:"events"`
+	AppID   string  `json:"appId"`
+	Release string  `json:"release"`
+	Events  []Event `json:"events"`
 }
 
 // LogsQuery is the query parameters for /api/query/logs
 type LogsQuery struct {
-	AppID      string `json:"appId"`
-	Type       string `json:"type"`       // optional filter
-	Level      string `json:"level"`      // optional filter
-	StartTime  int64  `json:"startTime"`  // unix ms, optional
-	EndTime    int64  `json:"endTime"`    // unix ms, optional
-	Keyword    string `json:"keyword"`    // optional search in message
-	Page       int    `json:"page"`       // page number, 1-indexed
-	PageSize   int    `json:"pageSize"`   // items per page
+	AppID     string `json:"appId"`
+	Type      string `json:"type"`      // optional filter
+	Level     string `json:"level"`     // optional filter
+	StartTime int64  `json:"startTime"` // unix ms, optional
+	EndTime   int64  `json:"endTime"`   // unix ms, optional
+	Keyword   string `json:"keyword"`   // optional search in message
+	Page      int    `json:"page"`      // page number, 1-indexed
+	PageSize  int    `json:"pageSize"`  // items per page
 }
 
 // LogsResponse is the response for /api/query/logs
 type LogsResponse struct {
-	Total int64    `json:"total"`
-	Page  int      `json:"page"`
-	Size  int      `json:"size"`
-	Data  []Event  `json:"data"`
+	Total int64   `json:"total"`
+	Page  int     `json:"page"`
+	Size  int     `json:"size"`
+	Data  []Event `json:"data"`
 }
 
 // StatsResponse is the response for /api/query/stats
 type StatsResponse struct {
-	TotalEvents    int64            `json:"totalEvents"`
-	ErrorCount     int64            `json:"errorCount"`
-	WarnCount      int64            `json:"warnCount"`
-	InfoCount      int64            `json:"infoCount"`
-	TopErrors      []ErrorStat      `json:"topErrors"`
-	ErrorTrend     []TrendPoint     `json:"errorTrend"`
+	TotalEvents int64        `json:"totalEvents"`
+	ErrorCount  int64        `json:"errorCount"`
+	WarnCount   int64        `json:"warnCount"`
+	InfoCount   int64        `json:"infoCount"`
+	TopErrors   []ErrorStat  `json:"topErrors"`
+	ErrorTrend  []TrendPoint `json:"errorTrend"`
 }
 
 // ErrorStat represents a single error type statistic
@@ -83,12 +83,12 @@ type TrendPoint struct {
 
 // AppInfo represents basic app information
 type AppInfo struct {
-	AppID         string `json:"appId"`
-	Release       string `json:"release"`
-	FirstSeen     int64  `json:"firstSeen"`
-	LastSeen      int64  `json:"lastSeen"`
-	ErrorCount    int64  `json:"errorCount"`
-	TotalEvents   int64  `json:"totalEvents"`
+	AppID       string `json:"appId"`
+	Release     string `json:"release"`
+	FirstSeen   int64  `json:"firstSeen"`
+	LastSeen    int64  `json:"lastSeen"`
+	ErrorCount  int64  `json:"errorCount"`
+	TotalEvents int64  `json:"totalEvents"`
 }
 
 // ToDBRecord converts Event to database record fields
@@ -207,4 +207,73 @@ func parseJSON(s string) map[string]interface{} {
 		return make(map[string]interface{})
 	}
 	return result
+}
+
+// TopNQuery is the query parameters for /api/query/top
+type TopNQuery struct {
+	AppID     string `json:"appId"`
+	Type      string `json:"type"`      // errors|pages|releases|browsers
+	OrderBy   string `json:"orderBy"`   // count|impact|regression|lastSeen
+	Limit     int    `json:"limit"`     // default 20
+	Env       string `json:"env"`       // optional env filter
+	Release   string `json:"release"`   // optional release filter
+	StartTime int64  `json:"startTime"` // unix ms, optional
+	EndTime   int64  `json:"endTime"`   // unix ms, optional
+}
+
+// TopNResponse is the response for /api/query/top
+type TopNResponse struct {
+	Type string     `json:"type"`
+	Data []TopNItem `json:"data"`
+}
+
+// TopNItem represents a single item in top N results
+type TopNItem struct {
+	Key         string `json:"key"` // error message, page URL, release, browser
+	Count       int64  `json:"count"`
+	Users       int64  `json:"users"`       // unique users affected
+	LastSeen    int64  `json:"lastSeen"`    // unix ms
+	FirstSeen   int64  `json:"firstSeen"`   // unix ms
+	IsNew       bool   `json:"isNew"`       // first seen in last 24h (for regression)
+	ImpactScore int64  `json:"impactScore"` // count * users (for impact)
+}
+
+// ExportQuery is the query parameters for /api/query/export
+type ExportQuery struct {
+	AppID     string `json:"appId"`
+	Type      string `json:"type"`      // optional filter
+	Level     string `json:"level"`     // optional filter
+	Release   string `json:"release"`   // optional filter
+	Env       string `json:"env"`       // optional filter
+	StartTime int64  `json:"startTime"` // unix ms, optional
+	EndTime   int64  `json:"endTime"`   // unix ms, optional
+	Keyword   string `json:"keyword"`   // optional search
+	Format    string `json:"format"`    // json|csv
+}
+
+// ErrorCluster represents a cluster of similar errors
+type ErrorCluster struct {
+	ID           string   `json:"id"`      // cluster fingerprint
+	Message      string   `json:"message"` // representative error message
+	Stack        string   `json:"stack"`   // representative stack snippet
+	Count        int64    `json:"count"`
+	Users        int64    `json:"users"`     // unique users affected
+	FirstSeen    int64    `json:"firstSeen"` // unix ms
+	LastSeen     int64    `json:"lastSeen"`  // unix ms
+	AffectedURLs []string `json:"affectedUrls"`
+	Releases     []string `json:"releases"` // affected releases
+	Pattern      string   `json:"pattern"`  // clustering pattern used
+}
+
+// SimilarErrorsQuery is the query for finding similar errors
+type SimilarErrorsQuery struct {
+	AppID     string  `json:"appId"`
+	Message   string  `json:"message"`   // the error message to find similar errors for
+	Threshold float64 `json:"threshold"` // similarity threshold 0-1, default 0.7
+	Limit     int     `json:"limit"`     // default 10
+}
+
+// SimilarErrorsResponse is the response for similar errors
+type SimilarErrorsResponse struct {
+	Clusters []ErrorCluster `json:"clusters"`
 }

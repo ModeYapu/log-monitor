@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,6 +117,7 @@ func (db *DB) initSchema() error {
 		cooldown_minutes INTEGER DEFAULT 30,
 		silenced_until INTEGER DEFAULT 0,
 		fingerprint TEXT DEFAULT '',
+		message_template TEXT DEFAULT '',
 		created_at INTEGER NOT NULL
 	);
 
@@ -129,7 +131,17 @@ func (db *DB) initSchema() error {
 	`
 
 	_, err := db.conn.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migration: Add message_template column if it doesn't exist
+	_, err = db.conn.Exec(`ALTER TABLE alert_rules ADD COLUMN message_template TEXT DEFAULT ''`)
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		log.Printf("Migration notice: %v", err)
+	}
+
+	return nil
 }
 
 // escapeLike escapes special characters in LIKE queries to prevent SQL injection
@@ -585,19 +597,20 @@ func parseJSON(s string) map[string]interface{} {
 
 // AlertRule represents an alert rule
 type AlertRule struct {
-	ID               int64
-	AppID            string
-	Name             string
-	ConditionType    string
-	ConditionConfig  string
-	NotifyType       string
-	NotifyConfig     string
-	Enabled          int
-	LastTriggeredAt  int64
-	CooldownMinutes  int
-	SilencedUntil    int64
-	Fingerprint      string
-	CreatedAt        int64
+	ID              int64
+	AppID           string
+	Name            string
+	ConditionType   string
+	ConditionConfig string
+	NotifyType      string
+	NotifyConfig    string
+	Enabled         int
+	LastTriggeredAt int64
+	CooldownMinutes int
+	SilencedUntil   int64
+	Fingerprint     string
+	MessageTemplate string
+	CreatedAt       int64
 }
 
 // AlertLog represents an alert log entry
@@ -1268,10 +1281,10 @@ func (db *DB) GetRecordingStats(sessionID string) (interface{}, error) {
 	}
 
 	return &struct {
-		SessionID   string            `json:"sessionId"`
-		TotalEvents int64             `json:"totalEvents"`
-		TotalSize   int64             `json:"totalSize"`
-		EventTypes  map[string]int64  `json:"eventTypes"`
+		SessionID   string           `json:"sessionId"`
+		TotalEvents int64            `json:"totalEvents"`
+		TotalSize   int64            `json:"totalSize"`
+		EventTypes  map[string]int64 `json:"eventTypes"`
 		TimeRange   struct {
 			StartTime int64 `json:"startTime"`
 			EndTime   int64 `json:"endTime"`

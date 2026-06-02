@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/logmonitor/collector/storage"
@@ -15,8 +17,8 @@ import (
 
 // QueryHandler handles log query requests
 type QueryHandler struct {
-	db             *storage.DB
-	screenshotDir  string
+	db            *storage.DB
+	screenshotDir string
 }
 
 // NewQueryHandler creates a new query handler
@@ -32,6 +34,9 @@ func (h *QueryHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/query/logs", h.QueryLogs)
 	mux.HandleFunc("GET /api/query/stats", h.QueryStats)
 	mux.HandleFunc("GET /api/query/apps", h.QueryApps)
+	mux.HandleFunc("GET /api/query/top", h.QueryTop)
+	mux.HandleFunc("GET /api/query/similar", h.QuerySimilar)
+	mux.HandleFunc("GET /api/query/export", h.QueryExport)
 	mux.HandleFunc("GET /api/health", h.Health)
 }
 
@@ -152,6 +157,144 @@ func (h *QueryHandler) QueryApps(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(apps)
 }
 
+// QueryExport handles event export requests
+func (h *QueryHandler) QueryExport(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	appID := r.URL.Query().Get("appId")
+	exportType := r.URL.Query().Get("type")
+	level := r.URL.Query().Get("level")
+	release := r.URL.Query().Get("release")
+	env := r.URL.Query().Get("env")
+	keyword := r.URL.Query().Get("keyword")
+	format := r.URL.Query().Get("format") // json|csv
+
+	// Validate required params
+	if appID == "" {
+		http.Error(w, "Missing appId parameter", http.StatusBadRequest)
+		return
+	}
+	if format == "" {
+		format = "json"
+	}
+
+	// Build query params
+	query := storage.QueryParams{
+		AppID:    appID,
+		Type:     exportType,
+		Level:    level,
+		Release:  release,
+		Env:      env,
+		Keyword:  keyword,
+		Page:     1,
+		PageSize: 10000, // Large limit for export
+	}
+
+	// Parse time range
+	if startTime := r.URL.Query().Get("startTime"); startTime != "" {
+		if ts, err := strconv.ParseInt(startTime, 10, 64); err == nil {
+			query.StartTime = ts
+		}
+	}
+	if endTime := r.URL.Query().Get("endTime"); endTime != "" {
+		if ts, err := strconv.ParseInt(endTime, 10, 64); err == nil {
+			query.EndTime = ts
+		}
+	}
+
+	// Query database
+	result, err := h.db.QueryEvents(query)
+	if err != nil {
+		log.Printf("Failed to query events for export: %v", err)
+		http.Error(w, "Failed to query events", http.StatusInternalServerError)
+		return
+	}
+
+	// Export based on format
+	if format == "csv" {
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=events_%s.csv", appID))
+		h.exportCSV(w, result.Data)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=events_%s.json", appID))
+		h.exportJSON(w, result.Data)
+	}
+}
+
+// exportCSV exports events as CSV
+func (h *QueryHandler) exportCSV(w http.ResponseWriter, events []storage.EventRecord) {
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	// Write CSV header
+	headers := []string{"ID", "AppID", "Release", "Env", "BuildID", "UserID", "SessionID",
+		"Type", "Level", "Message", "Stack", "URL", "Line", "Col",
+		"UA", "Screen", "Viewport", "IP", "CreatedAt"}
+	if err := writer.Write(headers); err != nil {
+		log.Printf("Failed to write CSV header: %v", err)
+		return
+	}
+
+	for _, event := range events {
+		row := []string{
+			strconv.FormatInt(event.ID, 10),
+			event.AppID,
+			event.Release,
+			event.Env,
+			event.BuildID,
+			event.UserID,
+			event.SessionID,
+			event.Type,
+			event.Level,
+			event.Message,
+			event.Stack,
+			event.URL,
+			strconv.Itoa(event.Line),
+			strconv.Itoa(event.Col),
+			event.UA,
+			event.Screen,
+			event.Viewport,
+			event.IP,
+			strconv.FormatInt(event.CreatedAt, 10),
+		}
+		if err := writer.Write(row); err != nil {
+			log.Printf("Failed to write CSV row: %v", err)
+		}
+	}
+}
+
+// exportJSON exports events as JSON
+func (h *QueryHandler) exportJSON(w http.ResponseWriter, events []storage.EventRecord) {
+	data := make([]map[string]interface{}, 0, len(events))
+	for _, event := range events {
+		data = append(data, map[string]interface{}{
+			"id":          event.ID,
+			"appId":       event.AppID,
+			"release":     event.Release,
+			"env":         event.Env,
+			"buildId":     event.BuildID,
+			"userId":      event.UserID,
+			"sessionId":   event.SessionID,
+			"type":        event.Type,
+			"level":       event.Level,
+			"message":     event.Message,
+			"stack":       event.Stack,
+			"url":         event.URL,
+			"line":        event.Line,
+			"col":         event.Col,
+			"tags":        parseJSONString(event.Tags),
+			"extra":       parseJSONString(event.Extra),
+			"ua":          event.UA,
+			"screen":      event.Screen,
+			"viewport":    event.Viewport,
+			"performance": parseJSONString(event.Performance),
+			"ip":          event.IP,
+			"timestamp":   event.CreatedAt,
+		})
+	}
+	json.NewEncoder(w).Encode(data)
+}
+
 // Health returns health status
 func (h *QueryHandler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -204,6 +347,18 @@ func parseIntParam(s string, defaultValue int) int {
 		return defaultValue
 	}
 	val, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultValue
+	}
+	return val
+}
+
+// parseFloatParam parses a float parameter with a default value
+func parseFloatParam(s string, defaultValue float64) float64 {
+	if s == "" {
+		return defaultValue
+	}
+	val, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return defaultValue
 	}
