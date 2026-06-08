@@ -49,10 +49,12 @@
             clearable
             style="width: 120px"
           >
+            <el-option label="全部" value="" />
             <el-option label="录制中" value="recording" />
             <el-option label="已完成" value="completed" />
             <el-option label="错误" value="error" />
           </el-select>
+          <el-button @click="resetFilters" :icon="Delete" circle title="重置筛选" />
         </div>
         <div class="header-right">
           <el-button :icon="Refresh" @click="loadRecordings" :loading="loading">刷新</el-button>
@@ -536,6 +538,14 @@ function getStatusText(status: string): string {
     case 'error': return '错误'
     default: return status
   }
+}
+
+function resetFilters() {
+  filterSearch.value = ''
+  filterAppId.value = ''
+  filterStatus.value = ''
+  filterDateRange.value = null
+  page.value = 1
 }
 </script>
 
