@@ -139,9 +139,9 @@ func main() {
 	mux.Handle("/api/events", reportHandler)
 	mux.Handle("/api/report/screenshot", handler.NewScreenshotHandler("./data/screenshots"))
 	mux.Handle("/api/screenshots/", corsMiddleware.Handler(jwtMiddleware.Handler(handler.NewScreenshotFileHandler("./data/screenshots"))))
-	mux.Handle("/api/auth/login", corsMiddleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/auth/login", corsMiddleware.Handler(middleware.NewRateLimiter(5, time.Minute).Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler.NewAuthHandler(userStorage, jwtMiddleware).Login(w, r)
-	})))
+	}))))
 	mux.Handle("/api/health", corsMiddleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler.NewQueryHandler(db).Health(w, r)
 	})))
