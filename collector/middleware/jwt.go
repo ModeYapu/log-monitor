@@ -5,8 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -35,10 +36,11 @@ func NewJWT(secret string, tokenExpireHours int) *JWT {
 		// Generate a random secret if not provided
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-			log.Fatalf("Failed to generate JWT secret: %v", err)
+					slog.Error("Failed to generate JWT secret", "error", err)
+			os.Exit(1)
 		}
 		secret = base64.StdEncoding.EncodeToString(b)
-		log.Printf("Generated JWT secret (set auth.jwt_secret in config to persist)")
+				slog.Info("Generated JWT secret (set auth.jwt_secret in config to persist)")
 	}
 	return &JWT{
 		secret:          []byte(secret),
@@ -114,7 +116,7 @@ func (j *JWT) Handler(next http.Handler) http.Handler {
 
 		claims, err := j.ValidateToken(tokenString)
 		if err != nil {
-			log.Printf("Token validation failed: %v", err)
+					slog.Warn("Token validation failed", "error", err)
 			j.unauthorized(w)
 			return
 		}

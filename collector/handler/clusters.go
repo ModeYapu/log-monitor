@@ -2,7 +2,7 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,7 +55,7 @@ func (h *ClustersHandler) GetClusters(w http.ResponseWriter, r *http.Request) {
 	// Query error clusters
 	clusters, err := h.db.GetErrorClustersByTime(appID, startTime, endTime, limit)
 	if err != nil {
-		log.Printf("Failed to get error clusters: %v", err)
+		slog.Error("Failed to get error clusters: %v", err)
 		http.Error(w, "Failed to get error clusters", http.StatusInternalServerError)
 		return
 	}
@@ -101,7 +101,7 @@ func (h *ClustersHandler) GetClusterEvents(w http.ResponseWriter, r *http.Reques
 	// Query cluster events
 	events, total, err := h.db.GetClusterEvents(appID, fingerprint, page, pageSize)
 	if err != nil {
-		log.Printf("Failed to get cluster events: %v", err)
+		slog.Error("Failed to get cluster events: %v", err)
 		http.Error(w, "Failed to get cluster events", http.StatusInternalServerError)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *ClustersHandler) GetClusterStats(w http.ResponseWriter, r *http.Request
 
 	stats, err := h.db.GetClusterStats(appID, fingerprint)
 	if err != nil {
-		log.Printf("Failed to get cluster stats: %v", err)
+		slog.Error("Failed to get cluster stats: %v", err)
 		http.Error(w, "Failed to get cluster stats", http.StatusInternalServerError)
 		return
 	}

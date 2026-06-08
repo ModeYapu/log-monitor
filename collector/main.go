@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +15,7 @@ import (
 	"github.com/logmonitor/collector/buffer"
 	"github.com/logmonitor/collector/config"
 	"github.com/logmonitor/collector/handler"
+	"github.com/logmonitor/collector/internal/logger"
 	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/storage"
 	"golang.org/x/crypto/bcrypt"
@@ -31,13 +32,19 @@ func main() {
 	// Load configuration
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Printf("Failed to load config from %s, using defaults: %v", *configPath, err)
+		slog.Warn("Failed to load config, using defaults", "path", *configPath, "error", err)
 		cfg = config.Default()
 	}
 
-	log.Printf("LogMonitor Collector v%s starting...", version)
-	log.Printf("Config: port=%d, db=%s, retention=%d days",
-		cfg.Server.Port, cfg.Database.Path, cfg.Database.RetentionDays)
+	// Initialize logger
+	logger.Init(logger.Config{
+		Level:  logger.LevelInfo,
+		Format: "text",
+		Output: os.Stdout,
+	})
+
+	slog.Info("LogMonitor Collector starting", "version", version)
+	slog.Info("Configuration", "port", cfg.Server.Port, "db", cfg.Database.Path, "retentionDays", cfg.Database.RetentionDays)
 
 	// Initialize database store
 	store, err := storage.NewSQLiteStore(storage.Config{
@@ -45,15 +52,16 @@ func main() {
 		RetentionDays: cfg.Database.RetentionDays,
 	})
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
 	}
 	defer func() {
 		if err := store.Close(); err != nil {
-			log.Printf("Failed to close database: %v", err)
+			slog.Error("Failed to close database", "error", err)
 		}
 	}()
 
-	log.Println("Database initialized successfully")
+	slog.Info("Database initialized successfully")
 
 	// Get underlying DB for legacy handlers that still need direct access
 	// This will be gradually removed as we migrate all handlers to use repositories
@@ -62,7 +70,8 @@ func main() {
 		RetentionDays: cfg.Database.RetentionDays,
 	})
 	if err != nil {
-		log.Fatalf("Failed to initialize legacy DB: %v", err)
+		slog.Error("Failed to initialize legacy DB", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -75,27 +84,30 @@ func main() {
 	// Initialize source map storage
 	smStorage, err := storage.NewSourceMapStorage("./data")
 	if err != nil {
-		log.Fatalf("Failed to initialize source map storage: %v", err)
+		slog.Error("Failed to initialize source map storage", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Source map storage initialized")
+	slog.Info("Source map storage initialized")
 
 	// Initialize user storage and create users table
 	userStorage := storage.NewUserStorage(db)
 	if err := userStorage.EnsureUsersTable(); err != nil {
-		log.Fatalf("Failed to create users table: %v", err)
+		slog.Error("Failed to create users table", "error", err)
+		os.Exit(1)
 	}
 
 	// Seed admin user if no users exist
 	if err := seedAdminUser(userStorage, &cfg.Auth); err != nil {
-		log.Fatalf("Failed to seed admin user: %v", err)
+		slog.Error("Failed to seed admin user", "error", err)
+		os.Exit(1)
 	}
 
 	// Initialize JWT middleware
 	jwtMiddleware := middleware.NewJWT(cfg.Auth.JWTSecret, cfg.Auth.TokenExpireHours)
 	if cfg.Auth.JWTSecret == "" {
-		log.Printf("JWT secret: auto-generated (set auth.jwt_secret in config to persist)")
+		slog.Info("JWT secret: auto-generated (set auth.jwt_secret in config to persist)")
 	} else {
-		log.Printf("JWT secret: loaded from config")
+		slog.Info("JWT secret: loaded from config")
 	}
 
 	// Initialize CORS middleware
@@ -112,12 +124,11 @@ func main() {
 	})
 	defer func() {
 		if err := writer.Close(); err != nil {
-			log.Printf("Failed to close writer: %v", err)
+			slog.Error("Failed to close writer", "error", err)
 		}
 	}()
 
-	log.Printf("Buffer writer initialized: size=%d, interval=%dms, batch=%d",
-		cfg.Buffer.Size, cfg.Buffer.FlushInterval, cfg.Buffer.FlushBatchSize)
+	slog.Info("Buffer writer initialized", "size", cfg.Buffer.Size, "intervalMs", cfg.Buffer.FlushInterval, "batch", cfg.Buffer.FlushBatchSize)
 
 	// Setup HTTP handlers with route groups
 	mux := http.NewServeMux()
@@ -214,7 +225,7 @@ func main() {
 	go alertChecker.Start(time.Duration(cfg.Alert.CheckInterval) * time.Millisecond)
 	defer alertChecker.Stop()
 
-	log.Printf("Alert checker started: interval=%dms, email_enabled=%v", cfg.Alert.CheckInterval, cfg.Alert.Email.Enabled)
+	slog.Info("Alert checker started", "intervalMs", cfg.Alert.CheckInterval, "emailEnabled", cfg.Alert.Email.Enabled)
 
 	// Initialize cobrowse hub
 	cobrowseHub := handler.NewCoBrowseHub(db)
@@ -231,7 +242,7 @@ func main() {
 		}
 		auth.SetJWTValidator(jwtMiddleware)
 		cobrowseHub.SetAuthConfig(auth)
-		log.Printf("Legacy cobrowse auth enabled with %d admin token(s)", len(cfg.Server.AdminTokens))
+		slog.Info("Legacy cobrowse auth enabled", "adminTokens", len(cfg.Server.AdminTokens))
 	} else {
 		auth := &middleware.AuthConfig{
 			AdminTokens: make(map[string]bool),
@@ -240,7 +251,7 @@ func main() {
 		}
 		auth.SetJWTValidator(jwtMiddleware)
 		cobrowseHub.SetAuthConfig(auth)
-		log.Println("Cobrowse admin access requires JWT login (no legacy admin_tokens configured)")
+		slog.Info("Cobrowse admin access requires JWT login (no legacy admin_tokens configured)")
 	}
 	cobrowseHub.SetAllowedOrigins(cfg.Server.AllowedOrigins)
 	defer cobrowseHub.Close()
@@ -252,7 +263,7 @@ func main() {
 	recordingHandler := handler.NewRecordingHandler(cobrowseHub, db)
 	recordingHandler.RegisterRoutes(mux)
 
-	log.Println("Cobrowse hub initialized")
+	slog.Info("Cobrowse hub initialized")
 
 	// Apply CORS middleware to all routes
 	handlerWithCORS := corsMiddleware.Handler(mux)
@@ -268,9 +279,10 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("HTTP server listening on :%d", cfg.Server.Port)
+		slog.Info("HTTP server listening", "port", cfg.Server.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			slog.Error("Server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -279,17 +291,17 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	slog.Info("Shutting down server...")
 
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("Server shutdown error: %v", err)
+		slog.Error("Server shutdown error", "error", err)
 	}
 
-	log.Println("Server stopped")
+	slog.Info("Server stopped")
 }
 
 // seedAdminUser creates the default admin user if no users exist
@@ -300,7 +312,7 @@ func seedAdminUser(userStorage *storage.UserStorage, authCfg *config.AuthConfig)
 	}
 
 	if count > 0 {
-		log.Printf("Found %d existing user(s), skipping admin seed", count)
+		slog.Info("Existing users found, skipping admin seed", "count", count)
 		return nil
 	}
 
@@ -310,7 +322,7 @@ func seedAdminUser(userStorage *storage.UserStorage, authCfg *config.AuthConfig)
 		password = "admin123"
 	}
 
-	log.Printf("Creating default admin user (username: admin, password: %s)", password)
+	slog.Info("Creating default admin user", "username", "admin", "password", password)
 
 	// Hash password
 	hashedPassword, err := hashPassword(password)
@@ -324,8 +336,8 @@ func seedAdminUser(userStorage *storage.UserStorage, authCfg *config.AuthConfig)
 		return fmt.Errorf("failed to create admin user: %w", err)
 	}
 
-	log.Printf("Admin user created successfully (ID: %d)", userID)
-	log.Println("IMPORTANT: Please change the default admin password after first login!")
+	slog.Info("Admin user created successfully", "userID", userID)
+	slog.Info("IMPORTANT: Please change the default admin password after first login!")
 
 	return nil
 }

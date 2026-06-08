@@ -2,7 +2,7 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -115,8 +115,8 @@ func (h *SystemHandler) TriggerCleanup(w http.ResponseWriter, r *http.Request) {
 	// Perform cleanup
 	cleanupResult := h.db.CleanupOldDataWithDays(days)
 
-	log.Printf("[cleanup] Manual cleanup triggered: %d days retention", days)
-	log.Printf("[cleanup] Deleted: %d events, %d recording_events, %d alert_logs",
+	slog.Error("[cleanup] Manual cleanup triggered: %d days retention", days)
+	slog.Error("[cleanup] Deleted: %d events, %d recording_events, %d alert_logs",
 		cleanupResult.EventsDeleted, cleanupResult.RecordingEventsDeleted, cleanupResult.AlertLogsDeleted)
 
 	json.NewEncoder(w).Encode(cleanupResult)

@@ -2,7 +2,7 @@ package buffer
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,7 +94,7 @@ func (w *Writer) flushLoop() {
 		}
 
 		if err := w.db.InsertEvents(batch); err != nil {
-			log.Printf("Failed to insert batch: %v", err)
+					slog.Error("Failed to insert batch", "error", err)
 			// Re-queue events on failure (simplified: just log)
 		} else {
 			w.flushCount.Add(int64(len(batch)))

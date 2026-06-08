@@ -3,7 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/logmonitor/collector/model"
@@ -53,7 +53,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Get user from database
 	user, passwordHash, err := h.userStorage.GetUserByUsername(req.Username)
 	if err != nil {
-		log.Printf("Login failed: %v", err)
+			slog.Warn("Login failed", "error", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "用户名或密码错误",
@@ -90,7 +90,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Generate JWT token
 	token, err := h.jwt.GenerateToken(user)
 	if err != nil {
-		log.Printf("Failed to generate token: %v", err)
+			slog.Error("Failed to generate token", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "登录失败",
@@ -127,7 +127,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userStorage.GetUserByID(userID)
 	if err != nil {
-		log.Printf("Failed to get user: %v", err)
+			slog.Error("Failed to get user", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "Failed to get user info",
@@ -195,7 +195,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	// Hash new password
 	newPasswordHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Failed to hash password: %v", err)
+			slog.Error("Failed to hash password", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "密码修改失败",
@@ -205,7 +205,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	// Update password
 	if err := h.userStorage.UpdatePassword(userID, string(newPasswordHash)); err != nil {
-		log.Printf("Failed to update password: %v", err)
+			slog.Error("Failed to update password", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "密码修改失败",
@@ -224,7 +224,7 @@ func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := h.userStorage.ListUsers()
 	if err != nil {
-		log.Printf("Failed to list users: %v", err)
+			slog.Error("Failed to list users", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "Failed to list users",
@@ -280,7 +280,7 @@ func (h *AuthHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// Hash password
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Failed to hash password: %v", err)
+			slog.Error("Failed to hash password", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "创建用户失败",
@@ -291,7 +291,7 @@ func (h *AuthHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// Create user
 	userID, err := h.userStorage.CreateUser(req.Username, string(passwordHash), req.DisplayName, req.Role)
 	if err != nil {
-		log.Printf("Failed to create user: %v", err)
+			slog.Error("Failed to create user", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "创建用户失败",
@@ -393,7 +393,7 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Update user
 	if err := h.userStorage.UpdateUser(id, req.DisplayName, req.Role, req.Enabled); err != nil {
-		log.Printf("Failed to update user: %v", err)
+			slog.Error("Failed to update user", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "更新用户失败",
@@ -461,7 +461,7 @@ func (h *AuthHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	// Delete user
 	if err := h.userStorage.DeleteUser(id); err != nil {
-		log.Printf("Failed to delete user: %v", err)
+			slog.Error("Failed to delete user", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "删除用户失败",
@@ -509,7 +509,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	// Hash new password
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Failed to hash password: %v", err)
+			slog.Error("Failed to hash password", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "密码重置失败",
@@ -519,7 +519,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Update password
 	if err := h.userStorage.UpdatePassword(id, string(passwordHash)); err != nil {
-		log.Printf("Failed to update password: %v", err)
+			slog.Error("Failed to update password", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": "密码重置失败",

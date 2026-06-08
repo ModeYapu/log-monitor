@@ -3,7 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -55,7 +55,7 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req model.ReportRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		log.Printf("Failed to parse request: %v", err)
+		slog.Error("Failed to parse request: %v", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -125,7 +125,7 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Write to buffer
 	for _, r := range records {
 		if err := h.writer.Write(r); err != nil {
-			log.Printf("Failed to write event to buffer: %v", err)
+			slog.Error("Failed to write event to buffer: %v", err)
 		}
 	}
 

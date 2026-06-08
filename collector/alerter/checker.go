@@ -3,7 +3,7 @@ package alerter
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -74,7 +74,7 @@ func (c *Checker) SetEmailConfig(cfg EmailConfig) {
 func (c *Checker) checkRules() {
 	rules, err := c.db.GetAllAlertRules()
 	if err != nil {
-		log.Printf("Failed to get alert rules: %v", err)
+		slog.Error("Failed to get alert rules: %v", err)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (c *Checker) checkRule(rule storage.AlertRule) (bool, string) {
 	case "new_error":
 		return c.checkNewError(rule)
 	default:
-		log.Printf("Unknown condition type: %s", rule.ConditionType)
+		slog.Error("Unknown condition type: %s", rule.ConditionType)
 		return false, ""
 	}
 }
@@ -124,7 +124,7 @@ func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
 	var config thresholdConfig
 
 	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err != nil {
-		log.Printf("Failed to parse threshold config: %v", err)
+		slog.Error("Failed to parse threshold config: %v", err)
 		return false, ""
 	}
 
@@ -154,7 +154,7 @@ func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
 
 	result, err := c.events.QueryEvents(query)
 	if err != nil {
-		log.Printf("Failed to query events: %v", err)
+		slog.Error("Failed to query events: %v", err)
 		return false, ""
 	}
 
@@ -193,7 +193,7 @@ func (c *Checker) checkAggregatedThreshold(rule storage.AlertRule, cfg threshold
 
 	result, err := c.events.QueryEvents(query)
 	if err != nil {
-		log.Printf("Failed to query events: %v", err)
+		slog.Error("Failed to query events: %v", err)
 		return false, ""
 	}
 
@@ -226,7 +226,7 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 	var config rateConfig
 
 	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err != nil {
-		log.Printf("Failed to parse rate config: %v", err)
+		slog.Error("Failed to parse rate config: %v", err)
 		return false, ""
 	}
 
@@ -252,7 +252,7 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 	}
 	totalResult, err := c.events.QueryEvents(totalQuery)
 	if err != nil {
-		log.Printf("Failed to query total events: %v", err)
+		slog.Error("Failed to query total events: %v", err)
 		return false, ""
 	}
 
@@ -271,7 +271,7 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 	}
 	errorResult, err := c.events.QueryEvents(errorQuery)
 	if err != nil {
-		log.Printf("Failed to query error events: %v", err)
+		slog.Error("Failed to query error events: %v", err)
 		return false, ""
 	}
 
@@ -306,7 +306,7 @@ func (c *Checker) checkNewError(rule storage.AlertRule) (bool, string) {
 
 	result, err := c.events.QueryEvents(query)
 	if err != nil {
-		log.Printf("Failed to query events: %v", err)
+		slog.Error("Failed to query events: %v", err)
 		return false, ""
 	}
 
@@ -326,7 +326,7 @@ func (c *Checker) checkNewError(rule storage.AlertRule) (bool, string) {
 
 // triggerAlert sends a notification for a triggered alert
 func (c *Checker) triggerAlert(rule storage.AlertRule, message string) {
-	log.Printf("Alert triggered: %s - %s", rule.Name, message)
+	slog.Error("Alert triggered: %s - %s", rule.Name, message)
 
 	// Create alert log
 	alertLog := storage.AlertLog{
@@ -337,7 +337,7 @@ func (c *Checker) triggerAlert(rule storage.AlertRule, message string) {
 	}
 
 	if err := c.db.CreateAlertLog(alertLog); err != nil {
-		log.Printf("Failed to create alert log: %v", err)
+		slog.Error("Failed to create alert log: %v", err)
 	}
 
 	// Gather context for template rendering
@@ -346,7 +346,7 @@ func (c *Checker) triggerAlert(rule storage.AlertRule, message string) {
 	// Send notification
 	var notifyConfig map[string]interface{}
 	if err := json.Unmarshal([]byte(rule.NotifyConfig), &notifyConfig); err != nil {
-		log.Printf("Failed to parse notify config: %v", err)
+		slog.Error("Failed to parse notify config: %v", err)
 		return
 	}
 

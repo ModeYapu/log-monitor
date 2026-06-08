@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -87,7 +87,7 @@ func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	// Query database
 	result, err := h.db.QueryEvents(query)
 	if err != nil {
-		log.Printf("Failed to query logs: %v", err)
+			slog.Error("Failed to query logs", "error", err)
 		http.Error(w, "Failed to query logs", http.StatusInternalServerError)
 		return
 	}
@@ -122,7 +122,7 @@ func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.db.GetStats(appID)
 	if err != nil {
-		log.Printf("Failed to get stats: %v", err)
+			slog.Error("Failed to get stats", "error", err)
 		http.Error(w, "Failed to get stats", http.StatusInternalServerError)
 		return
 	}
@@ -148,7 +148,7 @@ func (h *QueryHandler) QueryApps(w http.ResponseWriter, r *http.Request) {
 
 	apps, err := h.db.GetApps()
 	if err != nil {
-		log.Printf("Failed to get apps: %v", err)
+			slog.Error("Failed to get apps", "error", err)
 		http.Error(w, "Failed to get apps", http.StatusInternalServerError)
 		return
 	}
@@ -215,7 +215,7 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 	// Query database
 	result, err := h.db.GetTopN(appID, topType, orderBy, limit, filters)
 	if err != nil {
-		log.Printf("Failed to query top N: %v", err)
+			slog.Error("Failed to query top N", "error", err)
 		http.Error(w, "Failed to query top N", http.StatusInternalServerError)
 		return
 	}
@@ -252,7 +252,7 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 	// Query database for error clustering
 	clusters, err := h.db.GetSimilarErrors(appID, message, threshold, limit)
 	if err != nil {
-		log.Printf("Failed to query similar errors: %v", err)
+			slog.Error("Failed to query similar errors", "error", err)
 		http.Error(w, "Failed to query similar errors", http.StatusInternalServerError)
 		return
 	}
@@ -312,7 +312,7 @@ func (h *QueryHandler) QueryExport(w http.ResponseWriter, r *http.Request) {
 	// Query database
 	result, err := h.db.QueryEvents(query)
 	if err != nil {
-		log.Printf("Failed to query events for export: %v", err)
+			slog.Error("Failed to query events for export", "error", err)
 		http.Error(w, "Failed to query events", http.StatusInternalServerError)
 		return
 	}
@@ -339,7 +339,7 @@ func (h *QueryHandler) exportCSV(w http.ResponseWriter, events []storage.EventRe
 		"Type", "Level", "Message", "Stack", "URL", "Line", "Col",
 		"UA", "Screen", "Viewport", "IP", "CreatedAt"}
 	if err := writer.Write(headers); err != nil {
-		log.Printf("Failed to write CSV header: %v", err)
+			slog.Error("Failed to write CSV header", "error", err)
 		return
 	}
 
@@ -366,7 +366,7 @@ func (h *QueryHandler) exportCSV(w http.ResponseWriter, events []storage.EventRe
 			strconv.FormatInt(event.CreatedAt, 10),
 		}
 		if err := writer.Write(row); err != nil {
-			log.Printf("Failed to write CSV row: %v", err)
+				slog.Error("Failed to write CSV row", "error", err)
 		}
 	}
 }

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -47,7 +47,7 @@ func (h *HealthHandler) GetReleaseHealth(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.db.GetReleaseHealth(appID, startTime, endTime)
 	if err != nil {
-		log.Printf("Failed to get release health: %v", err)
+		slog.Error("Failed to get release health: %v", err)
 		http.Error(w, "Failed to get release health", http.StatusInternalServerError)
 		return
 	}
@@ -81,7 +81,7 @@ func (h *HealthHandler) GetSessionStats(w http.ResponseWriter, r *http.Request) 
 
 	result, err := h.db.GetSessionStats(appID, startTime, endTime)
 	if err != nil {
-		log.Printf("Failed to get session stats: %v", err)
+		slog.Error("Failed to get session stats: %v", err)
 		http.Error(w, "Failed to get session stats", http.StatusInternalServerError)
 		return
 	}

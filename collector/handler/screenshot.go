@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -30,7 +30,7 @@ type ScreenshotRequest struct {
 func NewScreenshotHandler(screenshotDir string) *ScreenshotHandler {
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(screenshotDir, 0755); err != nil {
-		log.Printf("Failed to create screenshot directory: %v", err)
+		slog.Error("Failed to create screenshot directory: %v", err)
 	}
 	return &ScreenshotHandler{
 		screenshotDir: screenshotDir,
@@ -76,7 +76,7 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req ScreenshotRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		log.Printf("Failed to parse screenshot request: %v", err)
+		slog.Error("Failed to parse screenshot request: %v", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -107,7 +107,7 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Decode base64
 	imageData, err := base64.StdEncoding.DecodeString(req.Image)
 	if err != nil {
-		log.Printf("Failed to decode base64 image: %v", err)
+		slog.Error("Failed to decode base64 image: %v", err)
 		http.Error(w, "Invalid base64 image data", http.StatusBadRequest)
 		return
 	}
@@ -119,7 +119,7 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := os.MkdirAll(appDir, 0755); err != nil {
-		log.Printf("Failed to create app directory: %v", err)
+		slog.Error("Failed to create app directory: %v", err)
 		http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 		return
 	}
@@ -131,12 +131,12 @@ func (h *ScreenshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := os.WriteFile(filename, imageData, 0644); err != nil {
-		log.Printf("Failed to save screenshot: %v", err)
+		slog.Error("Failed to save screenshot: %v", err)
 		http.Error(w, "Failed to save screenshot", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("Screenshot saved: %s", filename)
+	slog.Error("Screenshot saved: %s", filename)
 
 	// Respond with success
 	w.WriteHeader(http.StatusOK)

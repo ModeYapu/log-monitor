@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"log/slog"
 	"database/sql"
 	"fmt"
 	"os"
@@ -204,7 +205,7 @@ func (db *DB) DeleteSourceMap(id int64) error {
 	if filePath != "" {
 		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
 			// Log but don't fail if file deletion fails
-			fmt.Printf("[sourcemap] Failed to delete file %s: %v\n", filePath, err)
+			slog.Info("[sourcemap] Failed to delete file %s: %v\n", filePath, err)
 		}
 	}
 
@@ -293,7 +294,7 @@ func (s *SourceMapStorage) CleanupOld(days int) error {
 		}
 		if !info.IsDir() && info.ModTime().Before(cutoff) {
 			if err := os.Remove(path); err != nil {
-				fmt.Printf("[sourcemap] Failed to delete old file %s: %v\n", path, err)
+				slog.Info("[sourcemap] Failed to delete old file %s: %v\n", path, err)
 			}
 		}
 		return nil
