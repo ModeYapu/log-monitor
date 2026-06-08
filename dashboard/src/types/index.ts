@@ -22,6 +22,8 @@ export interface Event {
   ip: string
   created_at: number
   screenshot_url?: string
+  fingerprint?: string
+  breadcrumbs?: string
 }
 
 export interface QueryParams {
