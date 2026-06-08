@@ -477,23 +477,35 @@ func (db *DB) Conn() *sql.DB {
 	return db.conn
 }
 
-// retentionCleanup periodically deletes old events
+// retentionCleanup periodically deletes old events (runs daily at midnight)
 func (db *DB) retentionCleanup(retentionDays int) {
 	if retentionDays <= 0 {
 		return
 	}
 
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-
 	// Run once on startup
 	db.cleanupOldData(retentionDays)
 
+	// Calculate time until next midnight
+	nextMidnight := time.Now().AddDate(1, 0, 0) // Tomorrow
+	nextMidnight = time.Date(nextMidnight.Year(), nextMidnight.Month(), nextMidnight.Day(), 0, 0, 0, 0, nextMidnight.Location())
+	initialDelay := nextMidnight.Sub(time.Now())
+
+	// Create a timer for the first midnight
+	timer := time.NewTimer(initialDelay)
+	defer timer.Stop()
+
+	log.Printf("[cleanup] Scheduled daily cleanup at midnight (first run in %v)", initialDelay)
+
 	for {
 		select {
-		case <-ticker.C:
+		case <-timer.C:
+			// Run cleanup
 			db.cleanupOldData(retentionDays)
+			// Reset timer for next day
+			timer.Reset(24 * time.Hour)
 		case <-db.stopCh:
+			timer.Stop()
 			return
 		}
 	}
