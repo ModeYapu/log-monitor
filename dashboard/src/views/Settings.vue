@@ -145,6 +145,10 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
               </el-tag>
             </div>
             <div class="info-item">
+              <span class="info-label">版本号</span>
+              <span class="info-value">v{{ systemInfo.version || '-' }}</span>
+            </div>
+            <div class="info-item">
               <span class="info-label">数据库大小</span>
               <span class="info-value">{{ formatBytes(systemInfo.dbSize) }}</span>
             </div>
@@ -163,6 +167,10 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
             <div class="info-item">
               <span class="info-label">数据保留天数</span>
               <span class="info-value">{{ systemInfo.retentionDays }} 天</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">上次清理时间</span>
+              <span class="info-value">{{ systemInfo.lastCleanupTime ? formatTime(systemInfo.lastCleanupTime) : '从未清理' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">系统运行时间</span>
@@ -249,12 +257,14 @@ const collectorUrl = window.location.protocol + '//' + window.location.hostname 
 
 const systemInfo = ref({
   status: 'unknown',
+  version: '',
   dbSize: 0,
   totalEvents: 0,
   totalRecordings: 0,
   retentionDays: 30,
   uptime: 0,
-  serverTime: Date.now()
+  serverTime: Date.now(),
+  lastCleanupTime: 0
 })
 
 const fetchApps = async () => {
@@ -302,7 +312,7 @@ const triggerCleanup = async () => {
   cleaningUp.value = true
   try {
     const { data } = await systemApi.triggerCleanup()
-    ElMessage.success(`清理完成: 删除了 ${data.eventsDeleted} 条事件和 ${data.recordingEventsDeleted} 条录制事件`)
+    ElMessage.success(`清理完成: 删除了 ${data.eventsDeleted} 条事件、${data.recordingEventsDeleted} 条录制事件和 ${data.alertLogsDeleted} 条告警日志`)
     await refreshSystemInfo()
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || '清理失败')

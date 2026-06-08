@@ -128,6 +128,14 @@ func (db *DB) initSchema() error {
 		message TEXT NOT NULL,
 		created_at INTEGER NOT NULL
 	);
+
+	CREATE TABLE IF NOT EXISTS system_meta (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at INTEGER NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_alert_logs_created ON alert_logs(created_at);
 	`
 
 	_, err := db.conn.Exec(schema)
@@ -491,35 +499,121 @@ func (db *DB) retentionCleanup(retentionDays int) {
 	}
 }
 
-// cleanupOldData deletes events older than retention days and cleans orphaned recording_events
-func (db *DB) cleanupOldData(retentionDays int) {
+// CleanupResult represents the result of a cleanup operation
+type CleanupResult struct {
+	EventsDeleted           int64
+	RecordingEventsDeleted  int64
+	AlertLogsDeleted        int64
+	LastCleanupTime         int64
+}
+
+// cleanupOldData deletes events older than retention days and cleans orphaned recording_events and alert_logs
+func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if db.closed {
-		return
+		return CleanupResult{}
+	}
+
+	result := CleanupResult{
+		LastCleanupTime: time.Now().UnixMilli(),
 	}
 
 	// Delete old events
-	result, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
+	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
 	if err != nil {
 		fmt.Printf("[cleanup] Failed to delete old events: %v\n", err)
-	} else if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.EventsDeleted = rowsAffected
 		fmt.Printf("[cleanup] Deleted %d old events (older than %d days)\n", rowsAffected, retentionDays)
 	}
 
+	// Delete old recording_events
+	rows, err = db.conn.Exec("DELETE FROM recording_events WHERE created_at < ?", cutoff)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to delete old recording_events: %v\n", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.RecordingEventsDeleted = rowsAffected
+		fmt.Printf("[cleanup] Deleted %d old recording_events (older than %d days)\n", rowsAffected, retentionDays)
+	}
+
+	// Delete old alert_logs
+	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", cutoff)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to delete old alert_logs: %v\n", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.AlertLogsDeleted = rowsAffected
+		fmt.Printf("[cleanup] Deleted %d old alert_logs (older than %d days)\n", rowsAffected, retentionDays)
+	}
+
 	// Clean orphaned recording_events (events without a corresponding recording)
-	result, err = db.conn.Exec(`
+	rows, err = db.conn.Exec(`
 		DELETE FROM recording_events
 		WHERE session_id NOT IN (SELECT session_id FROM recordings)
 	`)
 	if err != nil {
 		fmt.Printf("[cleanup] Failed to delete orphaned recording_events: %v\n", err)
-	} else if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
-		fmt.Printf("[cleanup] Deleted %d orphaned recording_events\n", rowsAffected)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		orphanDeleted := rowsAffected
+		result.RecordingEventsDeleted += orphanDeleted
+		fmt.Printf("[cleanup] Deleted %d orphaned recording_events\n", orphanDeleted)
 	}
+
+	// Update last cleanup time in system_meta
+	_, err = db.conn.Exec(`
+		INSERT OR REPLACE INTO system_meta (key, value, updated_at)
+		VALUES ('last_cleanup_time', ?, ?)
+	`, result.LastCleanupTime, result.LastCleanupTime)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to update last_cleanup_time: %v\n", err)
+	}
+
+	return result
+}
+
+// CleanupOldDataWithDays manually deletes old data with configurable retention days
+func (db *DB) CleanupOldDataWithDays(days int) CleanupResult {
+	if days <= 0 {
+		days = 30
+	}
+	return db.cleanupOldData(days)
+}
+
+// GetLastCleanupTime returns the last cleanup time from system_meta
+func (db *DB) GetLastCleanupTime() int64 {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return 0
+	}
+
+	var lastCleanup int64
+	err := db.conn.QueryRow("SELECT value FROM system_meta WHERE key = 'last_cleanup_time'").Scan(&lastCleanup)
+	if err != nil {
+		return 0
+	}
+	return lastCleanup
+}
+
+// SetLastCleanupTime sets the last cleanup time in system_meta
+func (db *DB) SetLastCleanupTime(timestamp int64) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return fmt.Errorf("database is closed")
+	}
+
+	_, err := db.conn.Exec(`
+		INSERT OR REPLACE INTO system_meta (key, value, updated_at)
+		VALUES ('last_cleanup_time', ?, ?)
+	`, timestamp, time.Now().UnixMilli())
+
+	return err
 }
 
 // EventRecord represents a database event record

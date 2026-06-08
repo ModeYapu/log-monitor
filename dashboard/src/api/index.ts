@@ -167,19 +167,23 @@ export const systemApi = {
   getSystemInfo: () =>
     api.get<{
       status: string
+      version: string
       dbSize: number
       totalEvents: number
       totalRecordings: number
       retentionDays: number
       uptime: number
       serverTime: number
+      lastCleanupTime: number
     }>('/system/info'),
 
-  triggerCleanup: () =>
+  triggerCleanup: (days?: number) =>
     api.post<{
       eventsDeleted: number
       recordingEventsDeleted: number
-    }>('/system/cleanup')
+      alertLogsDeleted: number
+      lastCleanupTime: number
+    }>('/system/cleanup', undefined, { params: days ? { days } : undefined })
 }
 
 export default api
