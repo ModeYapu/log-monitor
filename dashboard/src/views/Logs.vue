@@ -189,12 +189,12 @@
     <el-drawer
       v-model="drawerVisible"
       title="日志详情"
-      size="600px"
+      size="700px"
       direction="rtl"
     >
       <template #extra>
         <el-button type="primary" :icon="DocumentCopy" @click="copyErrorInfo">
-          复制
+          复制全部
         </el-button>
       </template>
       <div v-if="selectedLog" class="drawer-content">
@@ -203,9 +203,20 @@
           <pre class="mono">{{ selectedLog.message }}</pre>
         </div>
 
+        <div class="detail-section" v-if="selectedLog.fingerprint">
+          <h4>错误指纹</h4>
+          <div class="fingerprint-container">
+            <span class="mono-inline fingerprint-text">{{ selectedLog.fingerprint }}</span>
+            <el-button size="small" :icon="DocumentCopy" @click="copyText(selectedLog.fingerprint, '指纹')">复制</el-button>
+          </div>
+        </div>
+
         <div class="detail-section" v-if="selectedLog.stack">
           <h4>堆栈跟踪</h4>
-          <pre class="mono">{{ selectedLog.stack }}</pre>
+          <div class="stack-container">
+            <pre class="mono stack-trace">{{ formatStackTrace(selectedLog.stack) }}</pre>
+            <el-button size="small" :icon="DocumentCopy" @click="copyText(selectedLog.stack, '堆栈跟踪')">复制堆栈</el-button>
+          </div>
         </div>
 
         <div class="detail-section">
@@ -221,7 +232,10 @@
 
         <div class="detail-section">
           <h4>额外数据</h4>
-          <pre v-if="selectedLog.extra && selectedLog.extra !== '{}'" class="mono">{{ formatJson(selectedLog.extra) }}</pre>
+          <div v-if="selectedLog.extra && selectedLog.extra !== '{}'" class="extra-container">
+            <pre class="mono">{{ formatJson(selectedLog.extra) }}</pre>
+            <el-button size="small" :icon="DocumentCopy" @click="copyText(formatJson(selectedLog.extra), '额外数据')">复制</el-button>
+          </div>
           <p v-else class="empty">无额外数据</p>
         </div>
 
@@ -490,6 +504,20 @@ const parseUA = (ua: string) => {
   if (ua.includes('Safari')) return 'Safari'
   if (ua.includes('Edge')) return 'Edge'
   return 'Other'
+}
+
+const copyText = async (text: string, label: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(`${label}已复制到剪贴板`)
+  } catch {
+    ElMessage.error('复制失败')
+  }
+}
+
+const formatStackTrace = (stack: string) => {
+  if (!stack) return ''
+  return stack
 }
 
 const fetchLogs = async () => {
@@ -937,6 +965,45 @@ onMounted(() => {
   gap: 6px;
   max-height: 300px;
   overflow-y: auto;
+}
+
+.fingerprint-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: #131829;
+  border-radius: 6px;
+}
+
+.fingerprint-text {
+  flex: 1;
+  color: #a0aec0;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.stack-container,
+.extra-container {
+  position: relative;
+}
+
+.stack-container .el-button,
+.extra-container .el-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+
+.stack-trace {
+  position: relative;
+  line-height: 1.6;
+}
+
+.stack-trace::line-number {
+  color: #64748b;
+  user-select: none;
 }
 
 .breadcrumb-item {
