@@ -83,7 +83,19 @@ export const logApi = {
     api.get<{ query: string; clusters: any[] }>('/query/similar', { params }),
 
   exportData: (params: { appId: string; type?: string; level?: string; release?: string; env?: string; keyword?: string; format?: string }) =>
-    api.get('/query/export', { params, responseType: params.format === 'csv' ? 'blob' : 'json' })
+    api.get('/query/export', { params, responseType: params.format === 'csv' ? 'blob' : 'json' }),
+
+  getClusters: (params: { appId: string; startTime?: number; endTime?: number; limit?: number }) =>
+    api.get<{ total: number; data: Array<{ fingerprint: string; message: string; count: number; users: number; firstSeen: number; lastSeen: number; urls: string[]; releases: string[] }> }>('/query/clusters', { params }),
+
+  getClusterEvents: (params: { appId: string; fingerprint: string; page?: number; pageSize?: number }) =>
+    api.get<{ fingerprint: string; total: number; page: number; pageSize: number; data: Event[] }>(`/query/clusters/${params.fingerprint}/events`, { params: { appId: params.appId, page: params.page, pageSize: params.pageSize } }),
+
+  getReleaseHealth: (params: { appId: string; startTime?: number; endTime?: number }) =>
+    api.get<{ releases: Array<{ release: string; env: string; totalSessions: number; crashSessions: number; crashFreeRate: number; errorCount: number; firstSeen: number; lastSeen: number; adoptionRate: number }>; totalSessions: number }>('/query/release-health', { params }),
+
+  getSessionStats: (params: { appId: string; startTime?: number; endTime?: number }) =>
+    api.get<{ totalSessions: number; crashSessions: number; crashFreeRate: number; errorCount: number; avgSessionDuration: number; startTime: number; endTime: number }>('/query/session-stats', { params })
 }
 
 export const cobrowseApi = {

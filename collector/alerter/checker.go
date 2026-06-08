@@ -12,7 +12,8 @@ import (
 
 // Checker checks alert rules and triggers notifications
 type Checker struct {
-	db       *storage.DB
+	db       storage.AlertRepository
+	events   storage.EventRepository
 	notifier *Notifier
 	stopCh   chan struct{}
 }
@@ -32,9 +33,10 @@ type AlertContext struct {
 }
 
 // NewChecker creates a new alert checker
-func NewChecker(db *storage.DB) *Checker {
+func NewChecker(db storage.AlertRepository, events storage.EventRepository) *Checker {
 	return &Checker{
 		db:       db,
+		events:   events,
 		notifier: NewNotifier(),
 		stopCh:   make(chan struct{}),
 	}
@@ -150,7 +152,7 @@ func (c *Checker) checkThreshold(rule storage.AlertRule) (bool, string) {
 		PageSize:  1,
 	}
 
-	result, err := c.db.QueryEvents(query)
+	result, err := c.events.QueryEvents(query)
 	if err != nil {
 		log.Printf("Failed to query events: %v", err)
 		return false, ""
@@ -189,7 +191,7 @@ func (c *Checker) checkAggregatedThreshold(rule storage.AlertRule, cfg threshold
 		PageSize:  1,
 	}
 
-	result, err := c.db.QueryEvents(query)
+	result, err := c.events.QueryEvents(query)
 	if err != nil {
 		log.Printf("Failed to query events: %v", err)
 		return false, ""
@@ -248,7 +250,7 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 		Page:      1,
 		PageSize:  1,
 	}
-	totalResult, err := c.db.QueryEvents(totalQuery)
+	totalResult, err := c.events.QueryEvents(totalQuery)
 	if err != nil {
 		log.Printf("Failed to query total events: %v", err)
 		return false, ""
@@ -267,7 +269,7 @@ func (c *Checker) checkRate(rule storage.AlertRule) (bool, string) {
 		Page:      1,
 		PageSize:  1,
 	}
-	errorResult, err := c.db.QueryEvents(errorQuery)
+	errorResult, err := c.events.QueryEvents(errorQuery)
 	if err != nil {
 		log.Printf("Failed to query error events: %v", err)
 		return false, ""
@@ -302,7 +304,7 @@ func (c *Checker) checkNewError(rule storage.AlertRule) (bool, string) {
 		PageSize:  1000,
 	}
 
-	result, err := c.db.QueryEvents(query)
+	result, err := c.events.QueryEvents(query)
 	if err != nil {
 		log.Printf("Failed to query events: %v", err)
 		return false, ""
@@ -424,7 +426,7 @@ func (c *Checker) gatherContext(rule storage.AlertRule) AlertContext {
 		query.Release = ctx.Release
 	}
 
-	result, err := c.db.QueryEvents(query)
+	result, err := c.events.QueryEvents(query)
 	if err == nil && len(result.Data) > 0 {
 		ctx.ErrorCount = int(result.Total)
 
@@ -484,7 +486,7 @@ func (c *Checker) gatherContext(rule storage.AlertRule) AlertContext {
 	if ctx.Release != "" {
 		totalQuery.Release = ctx.Release
 	}
-	totalResult, err := c.db.QueryEvents(totalQuery)
+	totalResult, err := c.events.QueryEvents(totalQuery)
 	if err == nil && totalResult.Total > 0 {
 		ctx.Rate = float64(ctx.ErrorCount) / float64(totalResult.Total) * 100
 	}

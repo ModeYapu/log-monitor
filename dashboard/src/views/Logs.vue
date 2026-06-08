@@ -74,11 +74,19 @@
           <el-button @click="handleReset">重置</el-button>
           <el-button :icon="Download" @click="handleExport">导出</el-button>
         </el-form-item>
+        <el-form-item>
+          <el-radio-group v-model="viewMode" @change="handleViewModeChange">
+            <el-radio-button value="list">列表视图</el-radio-button>
+            <el-radio-button value="clusters">聚类视图</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
       </el-form>
     </el-card>
 
     <el-card class="table-card">
+      <!-- List View -->
       <el-table
+        v-if="viewMode === 'list'"
         :data="logs"
         v-loading="loading"
         stripe
@@ -117,6 +125,49 @@
         <el-table-column prop="ua" label="浏览器" width="120">
           <template #default="{ row }">
             {{ parseUA(row.ua) }}
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- Clusters View -->
+      <el-table
+        v-if="viewMode === 'clusters'"
+        :data="clusters"
+        v-loading="loading"
+        stripe
+        @row-click="handleClusterClick"
+        style="cursor: pointer"
+      >
+        <el-table-column prop="fingerprint" label="指纹" width="120">
+          <template #default="{ row }">
+            <span class="mono-inline">{{ row.fingerprint?.substring(0, 8) }}...</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="count" label="次数" width="80" sortable />
+        <el-table-column prop="users" label="用户数" width="80" sortable />
+        <el-table-column prop="message" label="错误消息" min-width="300">
+          <template #default="{ row }">
+            <span class="log-message">{{ truncateMessage(row.message, 80) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="urls" label="URL" width="150">
+          <template #default="{ row }">
+            <span v-if="row.urls?.length" class="text-secondary">{{ truncateUrl(row.urls[0]) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="releases" label="Release" width="100">
+          <template #default="{ row }">
+            <span v-if="row.releases?.length">{{ row.releases[0] }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="firstSeen" label="首次出现" width="170">
+          <template #default="{ row }">
+            {{ formatTime(row.firstSeen) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="lastSeen" label="最近出现" width="170">
+          <template #default="{ row }">
+            {{ formatTime(row.lastSeen) }}
           </template>
         </el-table-column>
       </el-table>
@@ -243,6 +294,80 @@
         </div>
       </div>
     </el-drawer>
+
+    <!-- Cluster Detail Drawer -->
+    <el-drawer
+      v-model="clusterDrawerVisible"
+      title="错误聚类详情"
+      size="70%"
+      direction="rtl"
+    >
+      <template #extra>
+        <el-button type="primary" :icon="DocumentCopy" @click="copyClusterInfo">
+          复制聚类信息
+        </el-button>
+      </template>
+      <div v-if="selectedCluster" class="drawer-content">
+        <div class="detail-section">
+          <h4>聚类信息</h4>
+          <div class="info-list">
+            <div class="info-item"><span class="label">指纹:</span> <span class="mono-inline">{{ selectedCluster.fingerprint }}</span></div>
+            <div class="info-item"><span class="label">错误次数:</span> <span>{{ selectedCluster.count }}</span></div>
+            <div class="info-item"><span class="label">影响用户:</span> <span>{{ selectedCluster.users }}</span></div>
+            <div class="info-item"><span class="label">首次出现:</span> <span>{{ formatTime(selectedCluster.firstSeen) }}</span></div>
+            <div class="info-item"><span class="label">最近出现:</span> <span>{{ formatTime(selectedCluster.lastSeen) }}</span></div>
+            <div class="info-item"><span class="label">URL:</span> <span>{{ selectedCluster.urls?.join(', ') || '-' }}</span></div>
+            <div class="info-item"><span class="label">Release:</span> <span>{{ selectedCluster.releases?.join(', ') || '-' }}</span></div>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <h4>错误消息</h4>
+          <pre class="mono">{{ selectedCluster.message }}</pre>
+        </div>
+
+        <div class="detail-section">
+          <h4>事件列表</h4>
+          <el-table
+            :data="clusterEvents"
+            v-loading="loading"
+            stripe
+            size="small"
+            @row-click="row => { selectedLog.value = row; drawerVisible.value = true; }"
+            style="cursor: pointer"
+          >
+            <el-table-column prop="created_at" label="时间" width="160">
+              <template #default="{ row }">
+                {{ formatTime(row.created_at) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="message" label="消息" min-width="300">
+              <template #default="{ row }">
+                <span class="log-message">{{ truncateMessage(row.message, 60) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="url" label="URL" width="150">
+              <template #default="{ row }">
+                <span class="text-secondary">{{ truncateUrl(row.url) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="user_id" label="用户" width="100" />
+          </el-table>
+
+          <div class="pagination">
+            <el-pagination
+              v-model:current-page="clusterPagination.page"
+              v-model:page-size="clusterPagination.pageSize"
+              :page-sizes="[20, 50, 100]"
+              :total="clusterPagination.total"
+              layout="total, sizes, prev, pager, next"
+              @size-change="size => { clusterPagination.pageSize = size; fetchClusterEvents(selectedCluster.fingerprint) }"
+              @current-change="page => { clusterPagination.page = page; fetchClusterEvents(selectedCluster.fingerprint) }"
+            />
+          </div>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -281,6 +406,12 @@ const releases = ref<string[]>([])
 const loading = ref(false)
 const drawerVisible = ref(false)
 const selectedLog = ref<Event | null>(null)
+const viewMode = ref<'list' | 'clusters'>('list')
+const clusters = ref<any[]>([])
+const clusterDrawerVisible = ref(false)
+const selectedCluster = ref<any | null>(null)
+const clusterEvents = ref<Event[]>([])
+const clusterPagination = ref({ page: 1, pageSize: 50, total: 0 })
 
 const parsedTags = (row: Event) => {
   try {
@@ -512,6 +643,19 @@ const copyErrorInfo = () => {
   })
 }
 
+const copyClusterInfo = () => {
+  if (!selectedCluster.value) return
+
+  const cluster = selectedCluster.value
+  let text = `Error Cluster:\nFingerprint: ${cluster.fingerprint}\nCount: ${cluster.count}\nUsers: ${cluster.users}\nMessage: ${cluster.message}\nFirst Seen: ${new Date(cluster.firstSeen).toISOString()}\nLast Seen: ${new Date(cluster.lastSeen).toISOString()}\nURLs: ${cluster.urls?.join(', ') || 'N/A'}\nReleases: ${cluster.releases?.join(', ') || 'N/A'}\n`
+
+  navigator.clipboard.writeText(text).then(() => {
+    ElMessage.success('已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
+}
+
 const getScreenshotUrl = (url: string) => {
   if (!url) return ''
   const token = localStorage.getItem('logmon_token')
@@ -523,6 +667,63 @@ const getScreenshotUrl = (url: string) => {
     return screenshotUrl.toString()
   }
   return url
+}
+
+const handleViewModeChange = (mode: 'list' | 'clusters') => {
+  if (mode === 'clusters') {
+    fetchClusters()
+  } else {
+    fetchLogs()
+  }
+}
+
+const fetchClusters = async () => {
+  if (!filters.value.appId) {
+    ElMessage.warning('请选择应用')
+    return
+  }
+
+  loading.value = true
+  try {
+    const params: any = {
+      appId: filters.value.appId,
+      limit: 50
+    }
+    if (filters.value.dateRange && filters.value.dateRange.length === 2) {
+      params.startTime = filters.value.dateRange[0]
+      params.endTime = filters.value.dateRange[1]
+    }
+    const { data } = await logApi.getClusters(params)
+    clusters.value = data.data
+  } catch (error) {
+    ElMessage.error('获取错误聚类失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleClusterClick = async (row: any) => {
+  selectedCluster.value = row
+  clusterDrawerVisible.value = true
+  await fetchClusterEvents(row.fingerprint)
+}
+
+const fetchClusterEvents = async (fingerprint: string) => {
+  if (!filters.value.appId) return
+
+  try {
+    const params: any = {
+      appId: filters.value.appId,
+      fingerprint: fingerprint,
+      page: clusterPagination.value.page,
+      pageSize: clusterPagination.value.pageSize
+    }
+    const { data } = await logApi.getClusterEvents(params)
+    clusterEvents.value = data.data
+    clusterPagination.value.total = data.total
+  } catch (error) {
+    ElMessage.error('获取聚类事件失败')
+  }
 }
 
 onMounted(() => {

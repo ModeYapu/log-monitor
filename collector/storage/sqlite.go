@@ -150,6 +150,10 @@ func (db *DB) initSchema() error {
 		`ALTER TABLE events ADD COLUMN session_id TEXT DEFAULT ''`,
 		`ALTER TABLE alert_rules ADD COLUMN silenced_until INTEGER DEFAULT 0`,
 		`ALTER TABLE alert_rules ADD COLUMN fingerprint TEXT DEFAULT ''`,
+		// Feature 1: Error fingerprinting
+		`ALTER TABLE events ADD COLUMN fingerprint TEXT DEFAULT ''`,
+		// Feature 2: Breadcrumbs
+		`ALTER TABLE events ADD COLUMN breadcrumbs TEXT DEFAULT '[]'`,
 	}
 	for _, m := range migrations {
 		_, mErr := db.conn.Exec(m)
@@ -164,6 +168,8 @@ func (db *DB) initSchema() error {
 		`CREATE INDEX IF NOT EXISTS idx_events_env ON events(app_id, env)`,
 		`CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id)`,
+		// Feature 1: Error fingerprinting index
+		`CREATE INDEX IF NOT EXISTS idx_events_fingerprint ON events(app_id, fingerprint)`,
 	}
 	for _, m := range indexMigrations {
 		if _, mErr := db.conn.Exec(m); mErr != nil {
@@ -207,8 +213,9 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 		INSERT INTO events (
 			app_id, release, env, build_id, user_id, session_id,
 			type, level, message, stack, url, line, col,
-			tags, extra, ua, screen, viewport, performance, ip, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			tags, extra, ua, screen, viewport, performance, ip, created_at,
+			fingerprint, breadcrumbs
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -222,6 +229,7 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 			e.Type, e.Level, e.Message, e.Stack,
 			e.URL, e.Line, e.Col, e.Tags, e.Extra, e.UA, e.Screen,
 			e.Viewport, e.Performance, e.IP, e.CreatedAt,
+			e.Fingerprint, e.Breadcrumbs,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert event: %w", err)
@@ -290,7 +298,8 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 	dataQuery := `
 		SELECT id, app_id, release, env, build_id, user_id, session_id,
 		       type, level, message, stack, url, line, col,
-		       tags, extra, ua, screen, viewport, performance, ip, created_at
+		       tags, extra, ua, screen, viewport, performance, ip, created_at,
+		       fingerprint, breadcrumbs
 		FROM events ` + whereClause + `
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -312,6 +321,7 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 			&e.Type, &e.Level, &e.Message, &e.Stack,
 			&e.URL, &e.Line, &e.Col, &e.Tags, &e.Extra, &e.UA, &e.Screen,
 			&e.Viewport, &e.Performance, &e.IP, &e.CreatedAt,
+			&e.Fingerprint, &e.Breadcrumbs,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan event: %w", err)
@@ -536,6 +546,8 @@ type EventRecord struct {
 	Performance string
 	IP          string
 	CreatedAt   int64
+	Fingerprint string // Feature 1: Error fingerprint
+	Breadcrumbs string // Feature 2: Breadcrumbs JSON
 }
 
 // QueryParams represents query parameters
@@ -1752,4 +1764,438 @@ func getMostCommonMessage(messages string) string {
 		}
 	}
 	return result
+}
+
+// ==================== Feature 1: Error Clustering/Fingerprint ====================
+
+// ErrorClusterResult represents an error cluster from the database
+type ErrorClusterResult struct {
+	Fingerprint    string   `json:"fingerprint"`
+	Message        string   `json:"message"`
+	Count          int64    `json:"count"`
+	Users          int64    `json:"users"`
+	FirstSeen      int64    `json:"firstSeen"`
+	LastSeen       int64    `json:"lastSeen"`
+	URLs           []string `json:"urls"`
+	Releases       []string `json:"releases"`
+}
+
+// GetErrorClustersByTime retrieves error clusters grouped by fingerprint within time range
+func (db *DB) GetErrorClustersByTime(appID string, startTime, endTime int64, limit int) ([]ErrorClusterResult, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	whereClause := "WHERE app_id = ? AND type = 'error' AND fingerprint != ''"
+	args := []interface{}{appID}
+
+	if startTime > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, startTime)
+	}
+	if endTime > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, endTime)
+	}
+
+	query := `
+		SELECT
+			fingerprint,
+			SUBSTR(GROUP_CONCAT(message), 1, 200) as messages,
+			COUNT(*) as count,
+			COUNT(DISTINCT user_id) as users,
+			MIN(created_at) as first_seen,
+			MAX(created_at) as last_seen,
+			GROUP_CONCAT(DISTINCT url) as urls,
+			GROUP_CONCAT(DISTINCT release) as releases
+		FROM events ` + whereClause + `
+		GROUP BY fingerprint
+		ORDER BY count DESC
+		LIMIT ?
+	`
+	args = append(args, limit)
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query error clusters: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ErrorClusterResult
+	for rows.Next() {
+		var c ErrorClusterResult
+		var messages, urls, releases sql.NullString
+
+		err := rows.Scan(&c.Fingerprint, &messages, &c.Count, &c.Users, &c.FirstSeen, &c.LastSeen, &urls, &releases)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan error cluster: %w", err)
+		}
+
+		// Extract first message as representative
+		if messages.Valid {
+			c.Message = extractFirstMessage(messages.String)
+		}
+
+		// Parse URLs
+		if urls.Valid && urls.String != "" {
+			c.URLs = splitAndDedup(urls.String, ",", 10)
+		}
+
+		// Parse releases
+		if releases.Valid && releases.String != "" {
+			c.Releases = splitAndDedup(releases.String, ",", 5)
+		}
+
+		results = append(results, c)
+	}
+
+	return results, nil
+}
+
+// GetClusterEvents retrieves events for a specific fingerprint
+func (db *DB) GetClusterEvents(appID, fingerprint string, page, pageSize int) ([]EventRecord, int64, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, 0, fmt.Errorf("database is closed")
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 1000 {
+		pageSize = 50
+	}
+
+	// Count total
+	var total int64
+	err := db.conn.QueryRow(`
+		SELECT COUNT(*) FROM events
+		WHERE app_id = ? AND fingerprint = ?
+	`, appID, fingerprint).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count cluster events: %w", err)
+	}
+
+	// Query with pagination
+	offset := (page - 1) * pageSize
+	query := `
+		SELECT id, app_id, release, env, build_id, user_id, session_id,
+		       type, level, message, stack, url, line, col,
+		       tags, extra, ua, screen, viewport, performance, ip, created_at,
+		       fingerprint, breadcrumbs
+		FROM events
+		WHERE app_id = ? AND fingerprint = ?
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := db.conn.Query(query, appID, fingerprint, pageSize, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query cluster events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []EventRecord
+	for rows.Next() {
+		var e EventRecord
+		err := rows.Scan(
+			&e.ID, &e.AppID, &e.Release, &e.Env, &e.BuildID, &e.UserID, &e.SessionID,
+			&e.Type, &e.Level, &e.Message, &e.Stack,
+			&e.URL, &e.Line, &e.Col, &e.Tags, &e.Extra, &e.UA, &e.Screen,
+			&e.Viewport, &e.Performance, &e.IP, &e.CreatedAt,
+			&e.Fingerprint, &e.Breadcrumbs,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan cluster event: %w", err)
+		}
+		events = append(events, e)
+	}
+
+	return events, total, nil
+}
+
+// ClusterStats represents detailed statistics for a cluster
+type ClusterStats struct {
+	Fingerprint         string                 `json:"fingerprint"`
+	TotalCount          int64                  `json:"totalCount"`
+	UniqueUsers         int64                  `json:"uniqueUsers"`
+	FirstSeen           int64                  `json:"firstSeen"`
+	LastSeen            int64                  `json:"lastSeen"`
+	ReleaseDistribution map[string]int64       `json:"releaseDistribution"`
+	EnvDistribution     map[string]int64       `json:"envDistribution"`
+	TimeSeries          []map[string]interface{} `json:"timeSeries"`
+}
+
+// GetClusterStats retrieves detailed statistics for a specific fingerprint
+func (db *DB) GetClusterStats(appID, fingerprint string) (ClusterStats, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return ClusterStats{}, fmt.Errorf("database is closed")
+	}
+
+	stats := ClusterStats{
+		Fingerprint:         fingerprint,
+		ReleaseDistribution: make(map[string]int64),
+		EnvDistribution:     make(map[string]int64),
+	}
+
+	// Get basic stats
+	err := db.conn.QueryRow(`
+		SELECT
+			COUNT(*) as count,
+			COUNT(DISTINCT user_id) as users,
+			MIN(created_at) as first_seen,
+			MAX(created_at) as last_seen
+		FROM events
+		WHERE app_id = ? AND fingerprint = ?
+	`, appID, fingerprint).Scan(&stats.TotalCount, &stats.UniqueUsers, &stats.FirstSeen, &stats.LastSeen)
+	if err != nil {
+		return ClusterStats{}, fmt.Errorf("failed to get cluster basic stats: %w", err)
+	}
+
+	// Get release distribution
+	rows, err := db.conn.Query(`
+		SELECT release, COUNT(*) as count
+		FROM events
+		WHERE app_id = ? AND fingerprint = ? AND release != ''
+		GROUP BY release
+		ORDER BY count DESC
+	`, appID, fingerprint)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var release string
+			var count int64
+			if rows.Scan(&release, &count) == nil {
+				stats.ReleaseDistribution[release] = count
+			}
+		}
+	}
+
+	// Get env distribution
+	rows, err = db.conn.Query(`
+		SELECT env, COUNT(*) as count
+		FROM events
+		WHERE app_id = ? AND fingerprint = ? AND env != ''
+		GROUP BY env
+	`, appID, fingerprint)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var env string
+			var count int64
+			if rows.Scan(&env, &count) == nil {
+				stats.EnvDistribution[env] = count
+			}
+		}
+	}
+
+	// Get time series (last 24 hours by hour)
+	now := time.Now().UnixMilli()
+	dayAgo := now - 24*60*60*1000
+
+	rows, err = db.conn.Query(`
+		SELECT
+			(created_at / 3600000) * 3600000 as hour,
+			COUNT(*) as count
+		FROM events
+		WHERE app_id = ? AND fingerprint = ? AND created_at >= ?
+		GROUP BY hour
+		ORDER BY hour ASC
+	`, appID, fingerprint, dayAgo)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var hour int64
+			var count int64
+			if rows.Scan(&hour, &count) == nil {
+				stats.TimeSeries = append(stats.TimeSeries, map[string]interface{}{
+					"timestamp": hour,
+					"count":     count,
+				})
+			}
+		}
+	}
+
+	return stats, nil
+}
+
+// Helper functions for error clustering
+
+func extractFirstMessage(messages string) string {
+	if messages == "" {
+		return ""
+	}
+	parts := strings.Split(messages, ",")
+	if len(parts) > 0 {
+		return strings.TrimSpace(parts[0])
+	}
+	return messages
+}
+
+func splitAndDedup(s, sep string, maxItems int) []string {
+	if s == "" {
+		return []string{}
+	}
+	parts := strings.Split(s, sep)
+	seen := make(map[string]bool)
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" && !seen[p] {
+			seen[p] = true
+			result = append(result, p)
+			if len(result) >= maxItems {
+				break
+			}
+		}
+	}
+	return result
+}
+
+// GetReleaseHealth retrieves crash-free rate and error count grouped by release
+func (db *DB) GetReleaseHealth(appID string, startTime, endTime int64) (map[string]interface{}, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	whereClause := "WHERE app_id = ? AND level = 'error'"
+	args := []interface{}{appID}
+
+	if startTime > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, startTime)
+	}
+	if endTime > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, endTime)
+	}
+
+	query := "SELECT release, COALESCE(env, '') as env, COUNT(DISTINCT session_id) as total_sessions, COUNT(DISTINCT CASE WHEN level = 'error' THEN session_id END) as crash_sessions, SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count, MIN(created_at) as first_seen, MAX(created_at) as last_seen FROM events " + whereClause + " GROUP BY release, env ORDER BY last_seen DESC"
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get release health: %w", err)
+	}
+	defer rows.Close()
+
+	type releaseStat struct {
+		Release       string
+		Env           string
+		TotalSessions int64
+		CrashSessions int64
+		ErrorCount    int64
+		FirstSeen     int64
+		LastSeen      int64
+	}
+
+	var stats []releaseStat
+	var totalSessionsAll int64
+
+	for rows.Next() {
+		var s releaseStat
+		err := rows.Scan(&s.Release, &s.Env, &s.TotalSessions, &s.CrashSessions, &s.ErrorCount, &s.FirstSeen, &s.LastSeen)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan release stat: %w", err)
+		}
+		stats = append(stats, s)
+		totalSessionsAll += s.TotalSessions
+	}
+
+	releases := make([]map[string]interface{}, 0)
+	for _, s := range stats {
+		crashFreeRate := 0.0
+		if s.TotalSessions > 0 {
+			crashFreeRate = float64(s.TotalSessions-s.CrashSessions) / float64(s.TotalSessions) * 100
+		}
+
+		adoptionRate := 0.0
+		if totalSessionsAll > 0 {
+			adoptionRate = float64(s.TotalSessions) / float64(totalSessionsAll) * 100
+		}
+
+		releases = append(releases, map[string]interface{}{
+			"release":        s.Release,
+			"env":            s.Env,
+			"totalSessions":  s.TotalSessions,
+			"crashSessions":  s.CrashSessions,
+			"crashFreeRate":  crashFreeRate,
+			"errorCount":     s.ErrorCount,
+			"firstSeen":      s.FirstSeen,
+			"lastSeen":       s.LastSeen,
+			"adoptionRate":   adoptionRate,
+		})
+	}
+
+	return map[string]interface{}{
+		"releases":      releases,
+		"totalSessions": totalSessionsAll,
+	}, nil
+}
+
+// GetSessionStats retrieves overall session statistics
+func (db *DB) GetSessionStats(appID string, startTime, endTime int64) (map[string]interface{}, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	whereClause := "WHERE app_id = ?"
+	args := []interface{}{appID}
+
+	if startTime > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, startTime)
+	}
+	if endTime > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, endTime)
+	}
+
+	query := "SELECT COUNT(DISTINCT session_id) as total_sessions, COUNT(DISTINCT CASE WHEN level = 'error' THEN session_id END) as crash_sessions, SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count, MIN(created_at) as first_seen, MAX(created_at) as last_seen FROM events " + whereClause
+
+	var totalSessions, crashSessions, errorCount, firstSeen, lastSeen int64
+	err := db.conn.QueryRow(query, args...).Scan(&totalSessions, &crashSessions, &errorCount, &firstSeen, &lastSeen)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session stats: %w", err)
+	}
+
+	crashFreeRate := 0.0
+	if totalSessions > 0 {
+		crashFreeRate = float64(totalSessions-crashSessions) / float64(totalSessions) * 100
+	}
+
+	durationQuery := "SELECT AVG(duration) as avg_duration FROM (SELECT session_id, MAX(created_at) - MIN(created_at) as duration FROM events " + whereClause + " GROUP BY session_id)"
+
+	var avgDuration float64
+	err = db.conn.QueryRow(durationQuery, args...).Scan(&avgDuration)
+	if err != nil {
+		avgDuration = 0
+	}
+
+	return map[string]interface{}{
+		"totalSessions":     totalSessions,
+		"crashSessions":     crashSessions,
+		"crashFreeRate":     crashFreeRate,
+		"errorCount":        errorCount,
+		"avgSessionDuration": avgDuration,
+		"startTime":         firstSeen,
+		"endTime":           lastSeen,
+	}, nil
 }

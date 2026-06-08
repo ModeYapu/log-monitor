@@ -39,8 +39,8 @@ func main() {
 	log.Printf("Config: port=%d, db=%s, retention=%d days",
 		cfg.Server.Port, cfg.Database.Path, cfg.Database.RetentionDays)
 
-	// Initialize database
-	db, err := storage.NewDB(storage.Config{
+	// Initialize database store
+	store, err := storage.NewSQLiteStore(storage.Config{
 		Path:          cfg.Database.Path,
 		RetentionDays: cfg.Database.RetentionDays,
 	})
@@ -48,12 +48,23 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
+		if err := store.Close(); err != nil {
 			log.Printf("Failed to close database: %v", err)
 		}
 	}()
 
 	log.Println("Database initialized successfully")
+
+	// Get underlying DB for legacy handlers that still need direct access
+	// This will be gradually removed as we migrate all handlers to use repositories
+	db, err := storage.NewDB(storage.Config{
+		Path:          cfg.Database.Path,
+		RetentionDays: cfg.Database.RetentionDays,
+	})
+	if err != nil {
+		log.Fatalf("Failed to initialize legacy DB: %v", err)
+	}
+	defer db.Close()
 
 	// Ensure cobrowsing tables exist
 	db.EnsureCobrowseTables()
@@ -94,7 +105,7 @@ func main() {
 	systemHandler := handler.NewSystemHandler(db, cfg.Database.Path, cfg.Database.RetentionDays)
 
 	// Initialize buffer writer
-	writer := buffer.NewWriter(db, buffer.Config{
+	writer := buffer.NewWriter(store.Events(), buffer.Config{
 		BufferSize:    cfg.Buffer.Size,
 		FlushInterval: time.Duration(cfg.Buffer.FlushInterval) * time.Millisecond,
 		BatchSize:     cfg.Buffer.FlushBatchSize,
@@ -127,7 +138,9 @@ func main() {
 	// Protected routes (require authentication)
 	queryHandler := handler.NewQueryHandler(db)
 	authHandler := handler.NewAuthHandler(userStorage, jwtMiddleware)
+	clustersHandler := handler.NewClustersHandler(store.Events())
 	sourceMapHandler := handler.NewSourceMapHandler(db, smStorage)
+	healthHandler := handler.NewHealthHandler(db)
 	sourceMapHandler.SetAllowedOrigins(cfg.Server.AllowedOrigins)
 
 	// API routes that require JWT authentication
@@ -143,6 +156,9 @@ func main() {
 			{"GET /api/query/top", queryHandler.QueryTop},
 			{"GET /api/query/similar", queryHandler.QuerySimilar},
 			{"GET /api/query/export", queryHandler.QueryExport},
+		{"GET /api/query/clusters", clustersHandler.GetClusters},
+		{"GET /api/query/release-health", healthHandler.GetReleaseHealth},
+		{"GET /api/query/session-stats", healthHandler.GetSessionStats},
 		{"GET /api/query/alerts", handler.NewAlertsHandler(db).GetAlerts},
 		{"POST /api/query/alerts", handler.NewAlertsHandler(db).CreateAlert},
 		{"DELETE /api/query/alerts/", handler.NewAlertsHandler(db).DeleteAlert},
@@ -185,7 +201,7 @@ func main() {
 	}
 
 	// Initialize alert checker
-	alertChecker := alerter.NewChecker(db)
+	alertChecker := alerter.NewChecker(store.Alerts(), store.Events())
 	alertChecker.SetEmailConfig(alerter.EmailConfig{
 		Enabled:   cfg.Alert.Email.Enabled,
 		SMTPHost:  cfg.Alert.Email.SMTPHost,

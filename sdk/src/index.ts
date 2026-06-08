@@ -1096,6 +1096,16 @@ function setupConsoleInterception(): void {
       if (consoleBuffer.length > 50) {
         consoleBuffer.splice(0, consoleBuffer.length - 50);
       }
+
+      // Add console event as breadcrumb
+      addBreadcrumb({
+        type: 'console',
+        category: 'console',
+        message: message.slice(0, 200),
+        data: { level },
+        timestamp: Date.now(),
+        level: level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info',
+      });
     };
   };
 
