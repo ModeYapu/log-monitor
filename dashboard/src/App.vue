@@ -3,14 +3,16 @@
     <router-view />
   </div>
   <el-container v-else class="app-container">
-    <el-aside width="220px" class="sidebar" :class="{ 'sidebar-light': isLight }">
-      <div class="logo">
-        <h2>LogMonitor</h2>
-        <span class="version">v1.0</span>
+    <el-aside :width="sidebarCollapsed ? '64px' : '220px'" class="sidebar" :class="{ 'sidebar-light': isLight, 'sidebar-collapsed': sidebarCollapsed }">
+      <div class="logo" :class="{ 'logo-collapsed': sidebarCollapsed }">
+        <h2 v-if="!sidebarCollapsed">LogMonitor</h2>
+        <h2 v-else class="logo-icon">LM</h2>
+        <span v-if="!sidebarCollapsed" class="version">v1.0</span>
       </div>
       <el-menu
         :default-active="activeMenu"
         router
+        :collapse="sidebarCollapsed"
         :background-color="isLight ? '#ffffff' : '#0a0e27'"
         :text-color="isLight ? '#606266' : '#94a3b8'"
         :active-text-color="'#6366f1'"
@@ -48,6 +50,12 @@
           <span>用户管理</span>
         </el-menu-item>
       </el-menu>
+      <div class="sidebar-toggle" @click="toggleSidebar">
+        <el-icon :size="16">
+          <ArrowLeft v-if="!sidebarCollapsed" />
+          <ArrowRight v-else />
+        </el-icon>
+      </div>
     </el-aside>
 
     <el-main class="main-content">
@@ -103,7 +111,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
+import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny, User, SwitchButton, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { logApi } from './api'
 import type { App, UserInfo } from './types'
 
@@ -122,6 +130,19 @@ const isAdmin = computed(() => currentUser.value?.role === 'admin')
 // Theme
 const isDark = ref(true)
 const isLight = computed(() => !isDark.value)
+
+// Sidebar collapse
+const sidebarCollapsed = ref(false)
+const initSidebar = () => {
+  const saved = localStorage.getItem('logmon-sidebar-collapsed')
+  if (saved === 'true') {
+    sidebarCollapsed.value = true
+  }
+}
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('logmon-sidebar-collapsed', String(sidebarCollapsed.value))
+}
 
 const initTheme = () => {
   const saved = localStorage.getItem('logmon-theme')
@@ -197,6 +218,7 @@ const handleLogout = () => {
 
 onMounted(() => {
   initTheme()
+  initSidebar()
   getCurrentUser()
   fetchApps()
 })
@@ -212,6 +234,12 @@ onMounted(() => {
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.sidebar-collapsed {
+  overflow: visible;
 }
 
 .sidebar-light {
@@ -219,11 +247,40 @@ onMounted(() => {
   border-right-color: var(--color-border);
 }
 
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border);
+  transition: background 0.2s, color 0.2s;
+}
+
+.sidebar-toggle:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+}
+
 .logo {
   padding: 20px;
   display: flex;
   align-items: baseline;
   gap: 10px;
+}
+
+.logo-collapsed {
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.logo-icon {
+  font-size: 18px;
+  text-align: center;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .logo h2 {

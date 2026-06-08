@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 import type { Event, QueryParams, QueryResult, Stats, App, AlertRule, AlertLog, LiveSession, Recording, RecordingEvent, UserInfo, User, LoginRequest, LoginResponse, CreateUserRequest, UpdateUserRequest, ChangePasswordRequest } from '../types'
 import router from '../router'
 
@@ -21,26 +22,33 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor: handle 401 and 500 errors
+// Response interceptor: unified error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    const path = router.currentRoute.value.path
+
+    if (status === 401) {
       localStorage.removeItem('logmon_token')
       localStorage.removeItem('logmon_user')
-      // Only redirect if not already on login page
-      if (router.currentRoute.value.path !== '/login') {
+      if (path !== '/login') {
+        ElMessage.error('登录已过期，请重新登录')
         router.push('/login')
       }
-    } else if (error.response?.status === 500) {
-      if (typeof window !== 'undefined' && (window as any).ElMessage) {
-        ;(window as any).ElMessage.error('服务器错误，请稍后重试')
-      }
+    } else if (status === 403) {
+      ElMessage.error('无权限访问该资源')
+    } else if (status === 500) {
+      ElMessage.error('服务器错误，请稍后重试')
+    } else if (status === 404) {
+      ElMessage.error('请求的资源不存在')
+    } else if (status === 429) {
+      ElMessage.warning('请求过于频繁，请稍后再试')
+    } else if (!error.response) {
+      // Network error
+      ElMessage.error('网络连接失败，请检查网络')
     }
-    // Only log non-401 errors to reduce noise
-    if (error.response?.status !== 401) {
-      console.error('API Error:', error.message)
-    }
+
     return Promise.reject(error)
   }
 )

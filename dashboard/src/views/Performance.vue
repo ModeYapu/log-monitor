@@ -27,9 +27,14 @@
       <el-col :span="6" v-for="metric in performanceMetrics" :key="metric.key">
         <el-card class="metric-card">
           <div class="metric-content">
+            <div class="metric-header">
+              <span class="metric-label">{{ metric.label }}</span>
+              <span class="metric-dot" :class="metric.dotClass"></span>
+            </div>
             <div class="metric-value">{{ metric.value }}</div>
-            <div class="metric-label">{{ metric.label }}</div>
-            <div class="metric-grade" :class="metric.gradeClass">{{ metric.grade }}</div>
+            <div class="metric-badge" :class="metric.gradeClass">
+              {{ metric.grade }}
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -86,19 +91,19 @@
                 {{ truncateUrl(row.url) }}
               </template>
             </el-table-column>
-            <el-table-column prop="fcp" label="FCP" width="100" align="right">
+            <el-table-column prop="fcp" label="FCP" width="120" align="right">
               <template #default="{ row }">
-                <span :class="{ 'text-error': row.fcp > 1800 }">{{ row.fcp }}ms</span>
+                <span class="metric-cell" :class="getPerformanceGradeClass('fcp', row.fcp)">{{ row.fcp }}ms</span>
               </template>
             </el-table-column>
-            <el-table-column prop="lcp" label="LCP" width="100" align="right">
+            <el-table-column prop="lcp" label="LCP" width="120" align="right">
               <template #default="{ row }">
-                <span :class="{ 'text-error': row.lcp > 2500 }">{{ row.lcp }}ms</span>
+                <span class="metric-cell" :class="getPerformanceGradeClass('lcp', row.lcp)">{{ row.lcp }}ms</span>
               </template>
             </el-table-column>
-            <el-table-column prop="cls" label="CLS" width="100" align="right">
+            <el-table-column prop="cls" label="CLS" width="120" align="right">
               <template #default="{ row }">
-                <span :class="{ 'text-error': row.cls > 0.1 }">{{ row.cls }}</span>
+                <span class="metric-cell" :class="getPerformanceGradeClass('cls', row.cls)">{{ row.cls }}</span>
               </template>
             </el-table-column>
             <el-table-column prop="samples" label="样本数" width="100" align="right" />
@@ -133,28 +138,32 @@ const performanceMetrics = computed(() => {
       label: 'FCP (P95)',
       value: `${metrics.fcp}ms`,
       grade: getPerformanceGrade('fcp', metrics.fcp),
-      gradeClass: getPerformanceGradeClass('fcp', metrics.fcp)
+      gradeClass: getPerformanceGradeClass('fcp', metrics.fcp),
+      dotClass: getPerformanceDotClass('fcp', metrics.fcp)
     },
     {
       key: 'lcp',
       label: 'LCP (P95)',
       value: `${metrics.lcp}ms`,
       grade: getPerformanceGrade('lcp', metrics.lcp),
-      gradeClass: getPerformanceGradeClass('lcp', metrics.lcp)
+      gradeClass: getPerformanceGradeClass('lcp', metrics.lcp),
+      dotClass: getPerformanceDotClass('lcp', metrics.lcp)
     },
     {
       key: 'cls',
       label: 'CLS (P95)',
       value: metrics.cls.toFixed(3),
       grade: getPerformanceGrade('cls', metrics.cls),
-      gradeClass: getPerformanceGradeClass('cls', metrics.cls)
+      gradeClass: getPerformanceGradeClass('cls', metrics.cls),
+      dotClass: getPerformanceDotClass('cls', metrics.cls)
     },
     {
       key: 'fid',
       label: 'FID (P95)',
       value: `${metrics.fid}ms`,
       grade: getPerformanceGrade('fid', metrics.fid),
-      gradeClass: getPerformanceGradeClass('fid', metrics.fid)
+      gradeClass: getPerformanceGradeClass('fid', metrics.fid),
+      dotClass: getPerformanceDotClass('fid', metrics.fid)
     }
   ]
 })
@@ -244,7 +253,7 @@ const getPerformanceGrade = (metric: string, value: number): string => {
   const t = thresholds[metric]
   if (!t) return '-'
 
-  if (value <= t.good) return '优秀'
+  if (value <= t.good) return '好'
   if (value <= t.needsImprovement) return '需改进'
   return '差'
 }
@@ -252,10 +261,19 @@ const getPerformanceGrade = (metric: string, value: number): string => {
 const getPerformanceGradeClass = (metric: string, value: number): string => {
   const grade = getPerformanceGrade(metric, value)
   return {
-    '优秀': 'grade-good',
-    '需改进': 'grade-warning',
+    '好': 'grade-good',
+    '需改进': 'grade-needs-improvement',
     '差': 'grade-poor'
   }[grade] || ''
+}
+
+const getPerformanceDotClass = (metric: string, value: number): string => {
+  const grade = getPerformanceGrade(metric, value)
+  return {
+    '好': 'dot-good',
+    '需改进': 'dot-needs-improvement',
+    '差': 'dot-poor'
+  }[grade] || 'dot-good'
 }
 
 const truncateUrl = (url: string) => {
@@ -435,7 +453,7 @@ onMounted(() => {
 }
 
 .metric-card {
-  height: 120px;
+  height: 140px;
 }
 
 .metric-content {
@@ -444,6 +462,15 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   height: 100%;
+  gap: 6px;
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
 }
 
 .metric-value {
@@ -455,33 +482,72 @@ onMounted(() => {
 .metric-label {
   font-size: 14px;
   color: #94a3b8;
-  margin-top: 8px;
 }
 
-.metric-grade {
-  margin-top: 8px;
-  padding: 4px 12px;
+.metric-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-good {
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.dot-needs-improvement {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.dot-poor {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+.metric-badge {
+  padding: 4px 14px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
 }
 
 .grade-good {
-  background: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.15);
   color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
-.grade-warning {
-  background: rgba(245, 158, 11, 0.2);
+.grade-needs-improvement {
+  background: rgba(245, 158, 11, 0.15);
   color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .grade-poor {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .filter-card {
   margin-bottom: 20px;
+}
+
+.metric-cell {
+  font-weight: 500;
+}
+
+.metric-cell.grade-good {
+  color: #10b981;
+}
+
+.metric-cell.grade-needs-improvement {
+  color: #f59e0b;
+}
+
+.metric-cell.grade-poor {
+  color: #ef4444;
 }
 </style>
