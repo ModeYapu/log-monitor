@@ -19,6 +19,7 @@
       @row-click="handleRowClick"
       @cluster-click="handleClusterClick"
       @page-change="handlePageChange"
+      @apply-saved-view="handleApplySavedView"
     />
 
     <LogDetail v-model:visible="drawerVisible" :log="selectedLog" />
@@ -261,6 +262,11 @@ const handleClusterPageChange = ({ page, size }: { page: number; size: number })
   if (selectedCluster.value) {
     fetchClusterEvents(selectedCluster.value.fingerprint)
   }
+}
+
+const handleApplySavedView = (savedFilters: QueryParams & { dateRange?: [number, number] }) => {
+  Object.assign(filters.value, savedFilters)
+  handleSearch()
 }
 
 const formatTime = (timestamp: number) => {

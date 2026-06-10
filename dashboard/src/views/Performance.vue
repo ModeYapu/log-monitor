@@ -477,26 +477,39 @@ const renderCharts = () => {
   renderScoreDistribution()
 }
 
+const getChartTheme = () => {
+  const isDark = document.documentElement.classList.contains('dark')
+  return {
+    backgroundColor: 'transparent',
+    textColor: isDark ? '#94a3b8' : '#606266',
+    axisColor: isDark ? '#4a5568' : '#dcdfe6',
+    splitLineColor: isDark ? '#2d3748' : '#f0f2f5',
+    itemBorderColor: isDark ? '#131829' : '#ffffff',
+    gridColor: isDark ? '#2d3748' : '#f0f2f5'
+  }
+}
+
 const renderTrendChart = (element: HTMLElement | undefined, metric: string) => {
   if (!element) return
 
   const chart = echarts.init(element)
   const trendData = performanceTrends.value[metric] || []
+  const theme = getChartTheme()
 
   const option = {
-    backgroundColor: 'transparent',
+    backgroundColor: theme.backgroundColor,
     grid: { top: 20, right: 20, bottom: 30, left: 50 },
     xAxis: {
       type: 'category',
       data: trendData.map((d: any) => new Date(d.timestamp).toLocaleTimeString()),
-      axisLine: { lineStyle: { color: '#4a5568' } },
-      axisLabel: { color: '#94a3b8', fontSize: 10 }
+      axisLine: { lineStyle: { color: theme.axisColor } },
+      axisLabel: { color: theme.textColor, fontSize: 10 }
     },
     yAxis: {
       type: 'value',
-      axisLine: { lineStyle: { color: '#4a5568' } },
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: '#2d3748' } }
+      axisLine: { lineStyle: { color: theme.axisColor } },
+      axisLabel: { color: theme.textColor },
+      splitLine: { lineStyle: { color: theme.splitLineColor } }
     },
     series: [{
       data: trendData.map((d: any) => d.value),
@@ -519,6 +532,7 @@ const renderScoreDistribution = () => {
   if (!scoreDistChartRef.value) return
 
   const chart = echarts.init(scoreDistChartRef.value)
+  const theme = getChartTheme()
 
   const grades = { good: 0, needsImprovement: 0, poor: 0 }
 
@@ -531,14 +545,14 @@ const renderScoreDistribution = () => {
   }
 
   const option = {
-    backgroundColor: 'transparent',
+    backgroundColor: theme.backgroundColor,
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)'
     },
     legend: {
       bottom: 10,
-      textStyle: { color: '#94a3b8' }
+      textStyle: { color: theme.textColor }
     },
     series: [{
       type: 'pie',
@@ -546,7 +560,7 @@ const renderScoreDistribution = () => {
       avoidLabelOverlap: false,
       itemStyle: {
         borderRadius: 6,
-        borderColor: '#131829',
+        borderColor: theme.itemBorderColor,
         borderWidth: 2
       },
       label: {
@@ -565,6 +579,21 @@ const renderScoreDistribution = () => {
 
 onMounted(() => {
   fetchApps()
+
+  // Listen for theme changes and re-render charts
+  const observer = new MutationObserver(() => {
+    renderCharts()
+  })
+
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class']
+  })
+
+  // Cleanup on unmount
+  return () => {
+    observer.disconnect()
+  }
 })
 </script>
 

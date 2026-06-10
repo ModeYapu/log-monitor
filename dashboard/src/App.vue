@@ -17,38 +17,54 @@
         :text-color="isLight ? '#606266' : '#94a3b8'"
         :active-text-color="'#6366f1'"
       >
-        <el-menu-item index="/">
-          <el-icon><DataLine /></el-icon>
-          <span>概览</span>
-        </el-menu-item>
-        <el-menu-item index="/logs">
-          <el-icon><Document /></el-icon>
-          <span>日志列表</span>
-        </el-menu-item>
-        <el-menu-item index="/performance">
-          <el-icon><TrendCharts /></el-icon>
-          <span>性能分析</span>
-        </el-menu-item>
-        <el-menu-item index="/alerts">
-          <el-icon><Bell /></el-icon>
-          <span>告警管理</span>
-        </el-menu-item>
-        <el-menu-item index="/live">
-          <el-icon><VideoCamera /></el-icon>
-          <span>实时会话</span>
-        </el-menu-item>
-        <el-menu-item index="/recordings">
-          <el-icon><Film /></el-icon>
-          <span>录制回放</span>
-        </el-menu-item>
-        <el-menu-item index="/settings">
-          <el-icon><Setting /></el-icon>
-          <span>系统设置</span>
-        </el-menu-item>
-        <el-menu-item index="/users" v-if="isAdmin">
-          <el-icon><User /></el-icon>
-          <span>用户管理</span>
-        </el-menu-item>
+        <el-tooltip content="概览" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/">
+            <el-icon><DataLine /></el-icon>
+            <span>概览</span>
+          </el-menu-item>
+        </el-tooltip>
+        <el-tooltip content="日志列表" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/logs">
+            <el-icon><Document /></el-icon>
+            <span>日志列表</span>
+          </el-menu-item>
+        </el-tooltip>
+        <el-tooltip content="性能分析" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/performance">
+            <el-icon><TrendCharts /></el-icon>
+            <span>性能分析</span>
+          </el-menu-item>
+        </el-tooltip>
+        <el-tooltip content="告警管理" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/alerts">
+            <el-icon><Bell /></el-icon>
+            <span>告警管理</span>
+          </el-menu-item>
+        </el-tooltip>
+        <el-tooltip content="实时会话" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/live">
+            <el-icon><VideoCamera /></el-icon>
+            <span>实时会话</span>
+          </el-menu-item>
+        </el-tooltip>
+        <el-tooltip content="录制回放" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/recordings">
+            <el-icon><Film /></el-icon>
+            <span>录制回放</span>
+          </el-menu-item>
+        </el-tooltip>
+        <el-tooltip content="系统设置" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/settings">
+            <el-icon><Setting /></el-icon>
+            <span>系统设置</span>
+          </el-menu-item>
+        </el-tooltip>
+        <el-tooltip content="用户管理" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/users" v-if="isAdmin">
+            <el-icon><User /></el-icon>
+            <span>用户管理</span>
+          </el-menu-item>
+        </el-tooltip>
       </el-menu>
       <div class="sidebar-toggle" @click="toggleSidebar">
         <el-icon :size="16">
@@ -60,23 +76,26 @@
 
     <el-main class="main-content">
       <div class="app-header" :class="{ 'app-header-light': isLight }">
-        <el-select
-          v-model="selectedAppId"
-          placeholder="选择应用"
-          filterable
-          @change="handleAppChange"
-          style="width: 300px"
-        >
-          <el-option
-            v-for="app in apps"
-            :key="app.app_id"
-            :label="app.app_id"
-            :value="app.app_id"
+        <div class="header-left">
+          <GlobalSearch />
+          <el-select
+            v-model="selectedAppId"
+            placeholder="选择应用"
+            filterable
+            @change="handleAppChange"
+            style="width: 300px"
           >
-            <span>{{ app.app_id }}</span>
-            <span class="app-stats">({{ app.error_count }} errors)</span>
-          </el-option>
-        </el-select>
+            <el-option
+              v-for="app in apps"
+              :key="app.app_id"
+              :label="app.app_id"
+              :value="app.app_id"
+            >
+              <span>{{ app.app_id }}</span>
+              <span class="app-stats">({{ app.error_count }} errors)</span>
+            </el-option>
+          </el-select>
+        </div>
         <div class="header-actions">
           <div class="user-info" v-if="currentUser">
             <span class="user-name">{{ currentUser.display_name || currentUser.username }}</span>
@@ -114,6 +133,7 @@ import { ElMessage } from 'element-plus'
 import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny, User, SwitchButton, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { logApi } from './api'
 import type { App, UserInfo } from './types'
+import GlobalSearch from './components/GlobalSearch.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -146,15 +166,48 @@ const toggleSidebar = () => {
 
 const initTheme = () => {
   const saved = localStorage.getItem('logmon-theme')
+
   if (saved === 'light') {
     isDark.value = false
     document.documentElement.setAttribute('data-theme', 'light')
     document.documentElement.classList.remove('dark')
-  } else {
+  } else if (saved === 'dark') {
     isDark.value = true
     document.documentElement.setAttribute('data-theme', 'dark')
     document.documentElement.classList.add('dark')
+  } else {
+    // Check system preference on first visit
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    if (prefersDark) {
+      isDark.value = true
+      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.classList.add('dark')
+      // Save the preference
+      localStorage.setItem('logmon-theme', 'dark')
+    } else {
+      isDark.value = false
+      document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('logmon-theme', 'light')
+    }
   }
+
+  // Listen for system theme changes
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  mediaQuery.addEventListener('change', (e) => {
+    // Only auto-switch if user hasn't set a preference
+    if (!localStorage.getItem('logmon-theme')) {
+      if (e.matches) {
+        isDark.value = true
+        document.documentElement.setAttribute('data-theme', 'dark')
+        document.documentElement.classList.add('dark')
+      } else {
+        isDark.value = false
+        document.documentElement.setAttribute('data-theme', 'light')
+        document.documentElement.classList.remove('dark')
+      }
+    }
+  })
 }
 
 const toggleTheme = (val: boolean) => {
@@ -234,7 +287,7 @@ onMounted(() => {
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, background 0.3s ease, border-color 0.3s ease;
   overflow: hidden;
 }
 
@@ -330,6 +383,14 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
 }
 
 .app-header-light {

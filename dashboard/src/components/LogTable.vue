@@ -3,7 +3,7 @@
     <el-card class="filter-card">
       <el-form :inline="true" :model="filters" @submit.prevent="$emit('search')">
         <el-form-item label="应用">
-          <el-select v-model="filters.appId" placeholder="选择应用" style="width: 180px" @change="$emit('app-change')">
+          <el-select v-model="filters.appId" placeholder="选择应用" style="width: 180px" @change="emit('app-change')">
             <el-option
               v-for="app in apps"
               :key="app.app_id"
@@ -13,7 +13,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="Release">
-          <el-select v-model="filters.release" placeholder="全部" clearable style="width: 150px" @change="$emit('release-change')">
+          <el-select v-model="filters.release" placeholder="全部" clearable style="width: 150px" @change="emit('release-change')">
             <el-option
               v-for="rel in releases"
               :key="rel"
@@ -65,22 +65,57 @@
             placeholder="搜索消息内容"
             clearable
             style="width: 200px"
-            @keyup.enter="$emit('search')"
+            @keyup.enter="emit('search')"
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="$emit('search')" :icon="Search">搜索</el-button>
-          <el-button @click="$emit('reset')">重置</el-button>
-          <el-button :icon="Download" @click="$emit('export')">导出</el-button>
+          <el-button type="primary" @click="emit('search')" :icon="Search">搜索</el-button>
+          <el-button @click="emit('reset')">重置</el-button>
+          <el-button :icon="Download" @click="emit('export')">导出</el-button>
+          <el-dropdown @command="handleSavedViewAction" split-button type="default" @click="showSaveViewDialog = true">
+            保存视图
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-for="view in savedViews" :key="view.name" :command="`load-${view.name}`">
+                  {{ view.name }}
+                </el-dropdown-item>
+                <el-dropdown-item v-if="savedViews.length === 0" disabled>
+                  暂无保存的视图
+                </el-dropdown-item>
+                <el-dropdown-item divided v-if="savedViews.length > 0" command="manage">
+                  管理视图
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </el-form-item>
         <el-form-item>
-          <el-radio-group v-model="viewMode" @change="$emit('view-mode-change', $event)">
+          <el-radio-group v-model="viewMode" @change="emit('view-mode-change', $event)">
             <el-radio-button value="list">列表视图</el-radio-button>
             <el-radio-button value="clusters">聚类视图</el-radio-button>
           </el-radio-group>
         </el-form-item>
       </el-form>
     </el-card>
+
+    <!-- Save View Dialog -->
+    <el-dialog v-model="showSaveViewDialog" title="保存当前视图" width="400px">
+      <el-form @submit.prevent="saveCurrentView">
+        <el-form-item label="视图名称">
+          <el-input
+            v-model="newViewName"
+            placeholder="输入视图名称"
+            maxlength="30"
+            show-word-limit
+            @keyup.enter="saveCurrentView"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showSaveViewDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveCurrentView" :disabled="!newViewName.trim()">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-card class="table-card">
       <!-- List View -->
@@ -89,7 +124,7 @@
         :data="logs"
         v-loading="loading"
         stripe
-        @row-click="$emit('row-click', $event)"
+        @row-click="emit('row-click', $event)"
         style="cursor: pointer"
       >
         <el-table-column prop="created_at" label="时间" width="170">
@@ -134,7 +169,7 @@
         :data="clusters"
         v-loading="loading"
         stripe
-        @row-click="$emit('cluster-click', $event)"
+        @row-click="emit('cluster-click', $event)"
         style="cursor: pointer"
       >
         <el-table-column prop="fingerprint" label="指纹" width="120">
@@ -179,8 +214,8 @@
           :page-sizes="[20, 50, 100, 200]"
           :total="pagination.total"
           layout="total, sizes, prev, pager, next"
-          @size-change="$emit('page-change', { page: pagination.page, size: $event })"
-          @current-change="$emit('page-change', { page: $event, size: pagination.pageSize })"
+          @size-change="emit('page-change', { page: pagination.page, size: $event })"
+          @current-change="emit('page-change', { page: $event, size: pagination.pageSize })"
         />
       </div>
     </el-card>
@@ -188,8 +223,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Search, Download } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { formatTime, truncateMessage, getLevelTag } from '../utils/formatters'
 import type { Event, QueryParams } from '../types'
 
@@ -207,7 +243,7 @@ defineProps<Props>()
 
 const viewMode = ref<'list' | 'clusters'>('list')
 
-defineEmits<{
+const emit = defineEmits<{
   search: []
   reset: []
   export: []
@@ -217,7 +253,122 @@ defineEmits<{
   'row-click': [row: Event]
   'cluster-click': [row: any]
   'page-change': [params: { page: number; size: number }]
+  'apply-saved-view': [filters: QueryParams & { dateRange?: [number, number] }]
 }>()
+
+// Saved Views
+interface SavedView {
+  name: string
+  filters: QueryParams & { dateRange?: [number, number] }
+}
+
+const savedViews = ref<SavedView[]>([])
+const showSaveViewDialog = ref(false)
+const newViewName = ref('')
+
+const loadSavedViews = () => {
+  try {
+    const saved = localStorage.getItem('logmonitor_saved_views')
+    if (saved) {
+      savedViews.value = JSON.parse(saved)
+    }
+  } catch (error) {
+    console.error('Failed to load saved views:', error)
+  }
+}
+
+const saveCurrentView = () => {
+  if (!newViewName.value.trim()) {
+    ElMessage.warning('请输入视图名称')
+    return
+  }
+
+  const existingIndex = savedViews.value.findIndex(v => v.name === newViewName.value.trim())
+  if (existingIndex >= 0) {
+    ElMessageBox.confirm(
+      `视图 "${newViewName.value}" 已存在，是否覆盖？`,
+      '确认覆盖',
+      {
+        confirmButtonText: '覆盖',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    ).then(() => {
+      savedViews.value[existingIndex] = {
+        name: newViewName.value.trim(),
+        filters: { ...filters.value }
+      }
+      saveViewsToStorage()
+      showSaveViewDialog.value = false
+      newViewName.value = ''
+      ElMessage.success('视图已覆盖')
+    }).catch(() => {})
+  } else {
+    savedViews.value.push({
+      name: newViewName.value.trim(),
+      filters: { ...filters.value }
+    })
+    saveViewsToStorage()
+    showSaveViewDialog.value = false
+    newViewName.value = ''
+    ElMessage.success('视图已保存')
+  }
+}
+
+const saveViewsToStorage = () => {
+  try {
+    localStorage.setItem('logmonitor_saved_views', JSON.stringify(savedViews.value))
+  } catch (error) {
+    console.error('Failed to save views:', error)
+    ElMessage.error('保存视图失败')
+  }
+}
+
+const handleSavedViewAction = (command: string) => {
+  if (command === 'manage') {
+    showManageViewsDialog()
+  } else if (command.startsWith('load-')) {
+    const viewName = command.replace('load-', '')
+    loadView(viewName)
+  }
+}
+
+const loadView = (viewName: string) => {
+  const view = savedViews.value.find(v => v.name === viewName)
+  if (view) {
+    emit('apply-saved-view', view.filters)
+    ElMessage.success(`已加载视图 "${viewName}"`)
+  }
+}
+
+const showManageViewsDialog = () => {
+  ElMessageBox.confirm(
+    `您有 ${savedViews.value.length} 个已保存的视图。`,
+    '管理视图',
+    {
+      confirmButtonText: '关闭',
+      cancelButtonText: '删除所有',
+      distinguishCancelAndClose: true,
+      type: 'info'
+    }
+  ).catch((action) => {
+    if (action === 'cancel') {
+      ElMessageBox.confirm(
+        '确定要删除所有已保存的视图吗？此操作不可恢复。',
+        '确认删除',
+        {
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      ).then(() => {
+        savedViews.value = []
+        saveViewsToStorage()
+        ElMessage.success('所有视图已删除')
+      }).catch(() => {})
+    }
+  })
+}
 
 const getTypeTag = (type: string) => {
   const map: Record<string, string> = { error: 'danger', xhr: 'warning', performance: '', info: 'info', warn: 'warning', track: 'success', console: 'info' }
@@ -247,6 +398,10 @@ const parseUA = (ua: string) => {
   if (ua.includes('Edge')) return 'Edge'
   return 'Other'
 }
+
+onMounted(() => {
+  loadSavedViews()
+})
 </script>
 
 <style scoped>
