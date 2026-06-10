@@ -89,7 +89,7 @@ func (h *SourceMapHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// Read file content
 	content, err := io.ReadAll(file)
 	if err != nil {
-		slog.Error("Failed to read uploaded file: %v", err)
+		slog.Error("Failed to read uploaded file", "error", err)
 		http.Error(w, "Failed to read file", http.StatusInternalServerError)
 		return
 	}
@@ -103,7 +103,7 @@ func (h *SourceMapHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	// Save file to storage
 	filePath, fileSize, err := h.smStorage.Save(appID, release, buildID, content)
 	if err != nil {
-		slog.Error("Failed to save source map: %v", err)
+		slog.Error("Failed to save source map", "error", err)
 		http.Error(w, "Failed to save source map", http.StatusInternalServerError)
 		return
 	}
@@ -122,13 +122,12 @@ func (h *SourceMapHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.db.CreateSourceMap(record)
 	if err != nil {
-		slog.Error("Failed to create source map record: %v", err)
+		slog.Error("Failed to create source map record", "error", err)
 		http.Error(w, "Failed to create source map record", http.StatusInternalServerError)
 		return
 	}
 
-	slog.Error("Source map uploaded: app=%s release=%s env=%s build=%s size=%d",
-		appID, release, env, buildID, fileSize)
+	slog.Info("Source map uploaded", "app", appID, "release", release, "env", env, "build", buildID, "size", fileSize)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -155,7 +154,7 @@ func (h *SourceMapHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	records, err := h.db.ListSourceMaps(appID, 100)
 	if err != nil {
-		slog.Error("Failed to list source maps: %v", err)
+		slog.Error("Failed to list source maps", "error", err)
 		http.Error(w, "Failed to list source maps", http.StatusInternalServerError)
 		return
 	}
@@ -189,7 +188,7 @@ func (h *SourceMapHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		slog.Error("Failed to get source map: %v", err)
+		slog.Error("Failed to get source map", "error", err)
 		http.Error(w, "Failed to get source map", http.StatusInternalServerError)
 		return
 	}
@@ -202,7 +201,7 @@ func (h *SourceMapHandler) Download(w http.ResponseWriter, r *http.Request) {
 	// Read file content
 	content, err := h.smStorage.GetByPath(record.FilePath)
 	if err != nil {
-		slog.Error("Failed to read source map file: %v", err)
+		slog.Error("Failed to read source map file", "error", err)
 		http.Error(w, "Failed to read source map file", http.StatusInternalServerError)
 		return
 	}
@@ -235,7 +234,7 @@ func (h *SourceMapHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.DeleteSourceMap(id); err != nil {
-		slog.Error("Failed to delete source map: %v", err)
+		slog.Error("Failed to delete source map", "error", err)
 		http.Error(w, "Failed to delete source map", http.StatusInternalServerError)
 		return
 	}
@@ -293,7 +292,7 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		slog.Error("Failed to get source map: %v", err)
+		slog.Error("Failed to get source map", "error", err)
 	}
 
 	if record == nil {
@@ -308,7 +307,7 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 	// Read source map file
 	smContent, err := h.smStorage.GetByPath(record.FilePath)
 	if err != nil {
-		slog.Error("Failed to read source map file: %v", err)
+		slog.Error("Failed to read source map file", "error", err)
 		http.Error(w, "Failed to read source map", http.StatusInternalServerError)
 		return
 	}
@@ -316,7 +315,7 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 	// Parse source map
 	parser, err := sourcemap.NewParser(smContent)
 	if err != nil {
-		slog.Error("Failed to parse source map: %v", err)
+		slog.Error("Failed to parse source map", "error", err)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"deobfuscated": false,
 			"reason":       "Failed to parse source map",

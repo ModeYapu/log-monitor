@@ -129,9 +129,8 @@ func (h *SystemHandler) TriggerCleanup(w http.ResponseWriter, r *http.Request) {
 	// Perform cleanup
 	cleanupResult := h.db.CleanupOldDataWithDays(days)
 
-	slog.Error("[cleanup] Manual cleanup triggered: %d days retention", days)
-	slog.Error("[cleanup] Deleted: %d events, %d recording_events, %d alert_logs",
-		cleanupResult.DeletedEvents, cleanupResult.DeletedScreenshots, cleanupResult.TotalFilesFreed)
+	slog.Info("[cleanup] Manual cleanup triggered", "days", days)
+	slog.Info("[cleanup] Deleted", "events", cleanupResult.DeletedEvents, "recording_events", cleanupResult.DeletedScreenshots, "alert_logs", cleanupResult.TotalFilesFreed)
 
 	json.NewEncoder(w).Encode(cleanupResult)
 }
@@ -204,8 +203,7 @@ func (h *AdminHandler) SetRetentionPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	slog.Info("[admin] Retention policy updated: events=%d days, recordings=%d days, screenshots=%d days, alerts=%d days",
-		policy.Events, policy.RecordingEvents, policy.Screenshots, policy.AlertLogs)
+	slog.Info("[admin] Retention policy updated", "events_days", policy.Events, "recordings_days", policy.RecordingEvents, "screenshots_days", policy.Screenshots, "alerts_days", policy.AlertLogs)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Retention policy updated successfully",
@@ -236,8 +234,7 @@ func (h *AdminHandler) TriggerManualCleanup(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	slog.Info("[admin] Manual cleanup completed: %d events, %d recording_events, %d alert_logs deleted, %d bytes freed",
-		result.EventsDeleted, result.RecordingEventsDeleted, result.AlertLogsDeleted, result.FreedBytes)
+	slog.Info("[admin] Manual cleanup completed", "events", result.EventsDeleted, "recording_events", result.RecordingEventsDeleted, "alert_logs", result.AlertLogsDeleted, "bytes_freed", result.FreedBytes)
 
 	json.NewEncoder(w).Encode(result)
 }

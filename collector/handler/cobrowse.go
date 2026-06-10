@@ -85,7 +85,7 @@ func (h *CoBrowseHub) removeSession(sessionID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.sessions, sessionID)
-	slog.Error("[CoBrowse] Session removed: %s", sessionID)
+	slog.Info("[CoBrowse] Session removed", "session", sessionID)
 }
 
 // SetAuthConfig sets the authentication configuration
@@ -157,7 +157,7 @@ func (h *CoBrowseHub) HandleUserConnection(w http.ResponseWriter, r *http.Reques
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("[CoBrowse] Failed to upgrade user connection: %v", err)
+		slog.Error("[CoBrowse] Failed to upgrade user connection", "error", err)
 		return
 	}
 
@@ -193,10 +193,10 @@ func (h *CoBrowseHub) HandleUserConnection(w http.ResponseWriter, r *http.Reques
 		CreatedAt:    hub.startTime,
 	}
 	if _, err := h.db.CreateRecording(recording); err != nil {
-		slog.Error("[CoBrowse] Failed to create recording: %v", err)
+		slog.Error("[CoBrowse] Failed to create recording", "error", err)
 	}
 
-	slog.Error("[CoBrowse] User connected: session=%s app=%s", sessionID, appID)
+	slog.Info("[CoBrowse] User connected", "session", sessionID, "app", appID)
 
 	// Start message handler
 	go hub.handleUserMessages(h.db)
@@ -228,7 +228,7 @@ func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Requ
 	}
 	conn, err := viewerUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("[CoBrowse] Failed to upgrade viewer connection: %v", err)
+		slog.Error("[CoBrowse] Failed to upgrade viewer connection", "error", err)
 		return
 	}
 
@@ -248,12 +248,12 @@ func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Requ
 	viewerCount := len(hub.viewerConns)
 	hub.mu.Unlock()
 
-	slog.Error("[CoBrowse] Viewer connected: session=%s totalViewers=%d", sessionID, viewerCount)
+	slog.Info("[CoBrowse] Viewer connected", "session", sessionID, "totalViewers", viewerCount)
 
 	// Send all accumulated events to viewer for proper replay
 	hub.mu.RLock()
 	eventCount := len(hub.events)
-	slog.Error("[CoBrowse] Sending %d events to viewer: session=%s", eventCount, sessionID)
+	slog.Info("[CoBrowse] Sending events to viewer", "eventCount", eventCount, "session", sessionID)
 	sentCount := 0
 	if eventCount > 0 {
 		// First event is always the full snapshot
@@ -264,7 +264,7 @@ func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Requ
 		}); err == nil {
 			sentCount++
 		} else {
-			slog.Error("[CoBrowse] Error sending snapshot to viewer: %v", err)
+			slog.Error("[CoBrowse] Error sending snapshot to viewer", "error", err)
 		}
 
 		// Send recent incremental events (max 50 to avoid overwhelming viewer)
@@ -283,7 +283,7 @@ func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	hub.mu.RUnlock()
-	slog.Error("[CoBrowse] Sent %d/%d events to viewer", sentCount, eventCount)
+	slog.Info("[CoBrowse] Sent events to viewer", "sentCount", sentCount, "eventCount", eventCount)
 
 	// Handle viewer messages (control commands)
 	go hub.handleViewerMessages(conn, hub)
@@ -303,7 +303,7 @@ func (hub *SessionHub) handleUserMessages(db CoBrowseDB) {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				slog.Error("[CoBrowse] User connection error: %v", err)
+				slog.Error("[CoBrowse] User connection error", "error", err)
 			}
 			break
 		}
@@ -311,11 +311,11 @@ func (hub *SessionHub) handleUserMessages(db CoBrowseDB) {
 		// Parse message
 		var msg model.CoBrowseMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
-			slog.Error("[CoBrowse] Failed to parse message: %v", err)
+			slog.Error("[CoBrowse] Failed to parse message", "error", err)
 			continue
 		}
 
-		slog.Error("[CoBrowse] User msg: type=%s len=%d", msg.Type, len(message))
+		slog.Debug("[CoBrowse] User message", "type", msg.Type, "length", len(message))
 
 		switch msg.Type {
 		case "rrweb-event":
@@ -325,7 +325,7 @@ func (hub *SessionHub) handleUserMessages(db CoBrowseDB) {
 		case "pong":
 			// Keep alive response, ignore
 		default:
-			slog.Error("[CoBrowse] Unknown message type: %s", msg.Type)
+			slog.Error("[CoBrowse] Unknown message type", "type", msg.Type)
 		}
 	}
 }
@@ -337,14 +337,14 @@ func (hub *SessionHub) handleViewerMessages(conn *websocket.Conn, sessionHub *Se
 		delete(hub.viewerConns, conn)
 		hub.mu.Unlock()
 		conn.Close()
-		slog.Error("[CoBrowse] Viewer disconnected: session=%s", hub.sessionID)
+		slog.Info("[CoBrowse] Viewer disconnected", "session", hub.sessionID)
 	}()
 
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				slog.Error("[CoBrowse] Viewer connection error: %v", err)
+				slog.Error("[CoBrowse] Viewer connection error", "error", err)
 			}
 			break
 		}
@@ -352,7 +352,7 @@ func (hub *SessionHub) handleViewerMessages(conn *websocket.Conn, sessionHub *Se
 		// Parse control command
 		var msg model.CoBrowseMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
-			slog.Error("[CoBrowse] Failed to parse viewer message: %v", err)
+			slog.Error("[CoBrowse] Failed to parse viewer message", "error", err)
 			continue
 		}
 
@@ -364,9 +364,9 @@ func (hub *SessionHub) handleViewerMessages(conn *websocket.Conn, sessionHub *Se
 
 			if userConn != nil {
 				if err := userConn.WriteMessage(websocket.TextMessage, message); err != nil {
-					slog.Error("[CoBrowse] Failed to send control to user: %v", err)
+					slog.Error("[CoBrowse] Failed to send control to user", "error", err)
 				} else {
-					slog.Error("[CoBrowse] Control sent: session=%s action=%s", hub.sessionID, msg.Action)
+					slog.Info("[CoBrowse] Control sent", "session", hub.sessionID, "action", msg.Action)
 				}
 			}
 		}
@@ -388,7 +388,7 @@ func (hub *SessionHub) handleRRWebEvent(msg *model.CoBrowseMessage, db CoBrowseD
 		// Try single event
 		var event model.RRWebEvent
 		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			slog.Error("[CoBrowse] Failed to parse rrweb event: %v", err)
+			slog.Error("[CoBrowse] Failed to parse rrweb event", "error", err)
 			return
 		}
 		events = []model.RRWebEvent{event}
@@ -410,7 +410,7 @@ func (hub *SessionHub) handleRRWebEvent(msg *model.CoBrowseMessage, db CoBrowseD
 
 		// Save to database
 		if err := db.AddRecordingEvent(hub.sessionID, hub.eventCount, event.Timestamp, fullEventJSON); err != nil {
-			slog.Error("[CoBrowse] Failed to save event: %v", err)
+			slog.Error("[CoBrowse] Failed to save event", "error", err)
 		}
 	}
 
@@ -419,10 +419,10 @@ func (hub *SessionHub) handleRRWebEvent(msg *model.CoBrowseMessage, db CoBrowseD
 		// Remove oldest events to maintain the limit
 		removed := len(hub.events) - hub.maxEvents
 		hub.events = hub.events[removed:]
-		slog.Error("[CoBrowse] Removed %d old events to prevent memory leak (session=%s)", removed, hub.sessionID)
+		slog.Info("[CoBrowse] Removed old events to prevent memory leak", "removed", removed, "session", hub.sessionID)
 	}
 
-	slog.Error("[CoBrowse] Stored %d events total (session=%s), broadcasting to %d viewers", len(events), hub.sessionID, len(hub.viewerConns))
+	slog.Info("[CoBrowse] Stored events total, broadcasting to viewers", "eventCount", len(events), "session", hub.sessionID, "viewerCount", len(hub.viewerConns))
 
 	// Broadcast to all viewers
 	broadcastMsg := map[string]interface{}{
@@ -433,7 +433,7 @@ func (hub *SessionHub) handleRRWebEvent(msg *model.CoBrowseMessage, db CoBrowseD
 
 	for viewerConn := range hub.viewerConns {
 		if err := viewerConn.WriteMessage(websocket.TextMessage, data); err != nil {
-			slog.Error("[CoBrowse] Failed to send to viewer: %v", err)
+			slog.Error("[CoBrowse] Failed to send to viewer", "error", err)
 			delete(hub.viewerConns, viewerConn)
 		}
 	}
@@ -466,7 +466,7 @@ func (hub *SessionHub) handleFullSnapshot(msg *model.CoBrowseMessage, db CoBrows
 
 	// Save to database
 	if err := db.AddRecordingEvent(hub.sessionID, 0, recEvent.Timestamp, msg.Data); err != nil {
-		slog.Error("[CoBrowse] Failed to save full snapshot: %v", err)
+		slog.Error("[CoBrowse] Failed to save full snapshot", "error", err)
 	}
 
 	// Broadcast to all viewers
@@ -478,12 +478,12 @@ func (hub *SessionHub) handleFullSnapshot(msg *model.CoBrowseMessage, db CoBrows
 
 	for viewerConn := range hub.viewerConns {
 		if err := viewerConn.WriteMessage(websocket.TextMessage, data); err != nil {
-			slog.Error("[CoBrowse] Failed to send snapshot to viewer: %v", err)
+			slog.Error("[CoBrowse] Failed to send snapshot to viewer", "error", err)
 			delete(hub.viewerConns, viewerConn)
 		}
 	}
 
-	slog.Error("[CoBrowse] Full snapshot received: session=%s", hub.sessionID)
+	slog.Info("[CoBrowse] Full snapshot received", "session", hub.sessionID)
 }
 
 // close closes the session and cleans up resources
@@ -516,9 +516,9 @@ func (hub *SessionHub) close() {
 		durationMs := endTime - hub.startTime
 		eventCount := len(hub.events)
 		if err := hub.db.UpdateRecording(hub.sessionID, endTime, durationMs, eventCount, "completed"); err != nil {
-			slog.Error("[CoBrowse] Failed to update recording on close: %v", err)
+			slog.Error("[CoBrowse] Failed to update recording on close", "error", err)
 		} else {
-			slog.Error("[CoBrowse] Recording updated: session=%s events=%d duration=%dms", hub.sessionID, eventCount, durationMs)
+			slog.Info("[CoBrowse] Recording updated", "session", hub.sessionID, "eventCount", eventCount, "durationMs", durationMs)
 		}
 	}
 
@@ -544,7 +544,7 @@ func (hub *SessionHub) pingUser(conn *websocket.Conn) {
 			hub.mu.RUnlock()
 
 			if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping"}`)); err != nil {
-				slog.Error("[CoBrowse] Ping failed: %v", err)
+				slog.Error("[CoBrowse] Ping failed", "error", err)
 				return
 			}
 		case <-hub.stopCh:

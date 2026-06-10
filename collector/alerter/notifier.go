@@ -302,7 +302,7 @@ func (n *Notifier) SendEmail(to, title, message string) error {
 	}
 
 	// Otherwise, just log the email (for testing/debugging)
-	slog.Error("[Email] To: %s | Subject: %s | Body (first 200 chars): %.200s", addr.Address, subject, body)
+	slog.Error("[Email] Email log", "to", addr.Address, "subject", subject, "body", body[:min(200, len(body))])
 	return nil
 }
 
@@ -354,7 +354,7 @@ func (n *Notifier) SendEmailWithSMTP(to, title, message, smtpHost, smtpPort, smt
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	slog.Error("Email sent successfully to %s", to)
+	slog.Info("Email sent successfully", "to", to)
 	return nil
 }
 
@@ -378,7 +378,7 @@ func (n *Notifier) sendWebhookWithRetry(webhookURL string, payload interface{}, 
 			if backoff > 30*time.Second {
 				backoff = 30 * time.Second
 			}
-			slog.Error("Webhook retry %d/%d for %s after %v", attempt+1, maxRetries, webhookURL, backoff)
+			slog.Error("Webhook retry", "attempt", attempt+1, "maxRetries", maxRetries, "url", webhookURL, "backoff", backoff)
 			time.Sleep(backoff)
 		}
 
@@ -404,7 +404,7 @@ func (n *Notifier) sendWebhookWithRetry(webhookURL string, payload interface{}, 
 			continue
 		}
 
-		slog.Error("Notification sent successfully to %s", webhookURL)
+		slog.Info("Notification sent successfully", "url", webhookURL)
 		return nil
 	}
 

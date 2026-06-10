@@ -56,14 +56,14 @@ func (h *AlertsHandler) GetAlerts(w http.ResponseWriter, r *http.Request) {
 
 	rules, err := h.db.GetAlertRules(appID)
 	if err != nil {
-		slog.Error("Failed to get alert rules: %v", err)
+		slog.Error("Failed to get alert rules", "error", err)
 		http.Error(w, "Failed to get alert rules", http.StatusInternalServerError)
 		return
 	}
 
 	logs, err := h.db.GetAlertLogs(appID, 100)
 	if err != nil {
-		slog.Error("Failed to get alert logs: %v", err)
+		slog.Error("Failed to get alert logs", "error", err)
 	}
 
 	response := map[string]interface{}{
@@ -129,7 +129,7 @@ func (h *AlertsHandler) CreateAlert(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.db.CreateAlertRule(rule)
 	if err != nil {
-		slog.Error("Failed to create alert rule: %v", err)
+		slog.Error("Failed to create alert rule", "error", err)
 		http.Error(w, "Failed to create alert rule", http.StatusInternalServerError)
 		return
 	}
@@ -163,7 +163,7 @@ func (h *AlertsHandler) DeleteAlert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.DeleteAlertRule(id); err != nil {
-		slog.Error("Failed to delete alert rule: %v", err)
+		slog.Error("Failed to delete alert rule", "error", err)
 		http.Error(w, "Failed to delete alert rule", http.StatusInternalServerError)
 		return
 	}
@@ -212,7 +212,7 @@ func (h *AlertsHandler) TestAlert(w http.ResponseWriter, r *http.Request) {
 
 	var notifyConfig map[string]interface{}
 	if err := json.Unmarshal(req.NotifyConfig, &notifyConfig); err != nil {
-		slog.Error("Failed to parse notify config: %v", err)
+		slog.Error("Failed to parse notify config", "error", err)
 		http.Error(w, "Invalid notify config", http.StatusBadRequest)
 		return
 	}
@@ -225,38 +225,38 @@ func (h *AlertsHandler) TestAlert(w http.ResponseWriter, r *http.Request) {
 	case "feishu":
 		webhookURL, _ := notifyConfig["url"].(string)
 		if err := notifier.SendFeishu(webhookURL, title, req.Message); err != nil {
-			slog.Error("Failed to send Feishu notification: %v", err)
+			slog.Error("Failed to send Feishu notification", "error", err)
 			hasError = true
 		}
 	case "wecom":
 		webhookURL, _ := notifyConfig["url"].(string)
 		if err := notifier.SendWeCom(webhookURL, title, req.Message); err != nil {
-			slog.Error("Failed to send WeCom notification: %v", err)
+			slog.Error("Failed to send WeCom notification", "error", err)
 			hasError = true
 		}
 	case "dingtalk":
 		webhookURL, _ := notifyConfig["url"].(string)
 		if err := notifier.SendDingTalk(webhookURL, title, req.Message); err != nil {
-			slog.Error("Failed to send DingTalk notification: %v", err)
+			slog.Error("Failed to send DingTalk notification", "error", err)
 			hasError = true
 		}
 	case "telegram":
 		botToken, _ := notifyConfig["bot_token"].(string)
 		chatID, _ := notifyConfig["chat_id"].(string)
 		if err := notifier.SendTelegram(botToken, chatID, req.Message); err != nil {
-			slog.Error("Failed to send Telegram notification: %v", err)
+			slog.Error("Failed to send Telegram notification", "error", err)
 			hasError = true
 		}
 	case "webhook":
 		webhookURL, _ := notifyConfig["url"].(string)
 		if err := notifier.SendWebhook(webhookURL, title, req.Message); err != nil {
-			slog.Error("Failed to send Webhook notification: %v", err)
+			slog.Error("Failed to send Webhook notification", "error", err)
 			hasError = true
 		}
 	case "email":
 		email, _ := notifyConfig["email"].(string)
 		if err := notifier.SendEmail(email, title, req.Message); err != nil {
-			slog.Error("Failed to send Email notification: %v", err)
+			slog.Error("Failed to send Email notification", "error", err)
 			hasError = true
 		}
 	default:
@@ -312,7 +312,7 @@ func (h *AlertsHandler) SilenceAlert(w http.ResponseWriter, r *http.Request) {
 	silencedUntil := time.Now().Add(time.Duration(duration) * time.Minute).UnixMilli()
 
 	if err := h.db.SilenceAlertRule(req.ID, silencedUntil); err != nil {
-		slog.Error("Failed to silence alert: %v", err)
+		slog.Error("Failed to silence alert", "error", err)
 		http.Error(w, "Failed to silence alert", http.StatusInternalServerError)
 		return
 	}
@@ -350,7 +350,7 @@ func (h *AlertsHandler) UnsilenceAlert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.UnsilenceAlertRule(req.ID); err != nil {
-		slog.Error("Failed to unsilence alert: %v", err)
+		slog.Error("Failed to unsilence alert", "error", err)
 		http.Error(w, "Failed to unsilence alert", http.StatusInternalServerError)
 		return
 	}
