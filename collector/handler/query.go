@@ -37,6 +37,12 @@ func (h *QueryHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/query/similar", h.QuerySimilar)
 	mux.HandleFunc("GET /api/query/export", h.QueryExport)
 	mux.HandleFunc("GET /api/health", h.Health)
+
+	// Performance endpoints
+	mux.HandleFunc("GET /api/query/performance/summary", h.QueryPerformanceSummary)
+	mux.HandleFunc("GET /api/query/performance/trend", h.QueryPerformanceTrend)
+	mux.HandleFunc("GET /api/query/performance/pages", h.QueryPerformancePages)
+	mux.HandleFunc("GET /api/query/performance/regression", h.QueryPerformanceRegression)
 }
 
 // QueryLogs handles log queries
@@ -552,4 +558,121 @@ func abs(x int64) int64 {
 		return -x
 	}
 	return x
+}
+
+// QueryPerformanceSummary handles performance summary queries
+func (h *QueryHandler) QueryPerformanceSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	timeRange := r.URL.Query().Get("range")
+	if timeRange == "" {
+		timeRange = "24h"
+	}
+
+	summary, err := h.db.GetPerformanceSummary(appID, timeRange)
+	if err != nil {
+		slog.Error("Failed to get performance summary", "error", err)
+		http.Error(w, "Failed to get performance summary", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(summary)
+}
+
+// QueryPerformanceTrend handles performance trend queries
+func (h *QueryHandler) QueryPerformanceTrend(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	metric := r.URL.Query().Get("metric")
+	if metric == "" {
+		http.Error(w, "Missing metric parameter", http.StatusBadRequest)
+		return
+	}
+
+	granularity := r.URL.Query().Get("granularity")
+	if granularity == "" {
+		granularity = "1h"
+	}
+
+	trend, err := h.db.GetPerformanceTrend(appID, metric, granularity)
+	if err != nil {
+		slog.Error("Failed to get performance trend", "error", err)
+		http.Error(w, "Failed to get performance trend", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"metric":   metric,
+		"granularity": granularity,
+		"data":     trend,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryPerformancePages handles page performance ranking queries
+func (h *QueryHandler) QueryPerformancePages(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	timeRange := r.URL.Query().Get("range")
+	if timeRange == "" {
+		timeRange = "7d"
+	}
+
+	pages, err := h.db.GetPagePerformanceRanking(appID, timeRange)
+	if err != nil {
+		slog.Error("Failed to get page performance ranking", "error", err)
+		http.Error(w, "Failed to get page performance ranking", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"time_range": timeRange,
+		"data":       pages,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryPerformanceRegression handles performance regression queries
+func (h *QueryHandler) QueryPerformanceRegression(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	regressions, err := h.db.GetPerformanceRegressions(appID)
+	if err != nil {
+		slog.Error("Failed to get performance regressions", "error", err)
+		http.Error(w, "Failed to get performance regressions", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"regressions": regressions,
+		"count":       len(regressions),
+	}
+
+	json.NewEncoder(w).Encode(response)
 }

@@ -103,7 +103,26 @@ export const logApi = {
     api.get<{ releases: Array<{ release: string; env: string; totalSessions: number; crashSessions: number; crashFreeRate: number; errorCount: number; firstSeen: number; lastSeen: number; adoptionRate: number }>; totalSessions: number }>('/query/release-health', { params }),
 
   getSessionStats: (params: { appId: string; startTime?: number; endTime?: number }) =>
-    api.get<{ totalSessions: number; crashSessions: number; crashFreeRate: number; errorCount: number; avgSessionDuration: number; startTime: number; endTime: number }>('/query/session-stats', { params })
+    api.get<{ totalSessions: number; crashSessions: number; crashFreeRate: number; errorCount: number; avgSessionDuration: number; startTime: number; endTime: number }>('/query/session-stats', { params }),
+
+  // Performance API
+  getPerformanceSummary: (params: { app_id: string; range?: string }) =>
+    api.get<{
+      fcp: { p75: number; grade: string };
+      lcp: { p75: number; grade: string };
+      cls: { p75: number; grade: string };
+      inp: { p75: number; grade: string };
+      ttfb: { p75: number; grade: string };
+    }>('/query/performance/summary', { params }),
+
+  getPerformanceTrend: (params: { app_id: string; metric: string; granularity?: string }) =>
+    api.get<{ metric: string; granularity: string; data: Array<{ timestamp: number; value: number; count: number }> }>('/query/performance/trend', { params }),
+
+  getPerformancePages: (params: { app_id: string; range?: string }) =>
+    api.get<{ time_range: string; data: Array<{ url: string; fcp_p75: number; lcp_p75: number; cls_p75: number; inp_p75: number; ttfb_p75: number; samples: number; previous_period?: { lcp_change?: number } }> }>('/query/performance/pages', { params }),
+
+  getPerformanceRegression: (params: { app_id: string }) =>
+    api.get<{ regressions: Array<{ url: string; metric: string; current_value: number; previous_value: number; change_percent: number; grade: string }>; count: number }>('/query/performance/regression', { params })
 }
 
 export const cobrowseApi = {
