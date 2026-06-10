@@ -145,7 +145,37 @@ export const logApi = {
       events_change: number;
       errors_change: number;
       affected_users_change: number;
-    }>('/query/stats/comparison', { params })
+    }>('/query/stats/comparison', { params }),
+
+  // Issues API
+  getIssues: (params: { app_id: string; status?: string; priority?: string; search?: string; sort?: string; page?: number; page_size?: number }) =>
+    api.get<{ total: number; page: number; page_size: number; data: Array<{ id: number; fingerprint: string; app_id: string; title: string; type: string; status: string; priority: string; assignee: string; first_seen_at: number; last_seen_at: number; event_count: number; user_count: number; resolved_at: number; created_at: number; updated_at: number }> }>('/query/issues', { params }),
+
+  getIssue: (id: number) =>
+    api.get<{ issue: any; recent_events: Event[]; event_count: number }>(`/query/issues/${id}`),
+
+  updateIssue: (id: number, data: { status?: string; priority?: string; assignee?: string }) =>
+    api.put<{ success: boolean; issue: any }>(`/query/issues/${id}`, data),
+
+  resolveIssue: (id: number) =>
+    api.post<{ success: boolean; issue: any }>(`/query/issues/${id}?action=resolve`),
+
+  ignoreIssue: (id: number) =>
+    api.post<{ success: boolean; issue: any }>(`/query/issues/${id}?action=ignore`),
+
+  getIssueStats: (params: { app_id: string }) =>
+    api.get<{
+      open_count: number;
+      resolved_count: number;
+      ignored_count: number;
+      muted_count: number;
+      total_count: number;
+      high_priority: number;
+      critical_priority: number;
+      by_status: Record<string, number>;
+      by_priority: Record<string, number>;
+      trend_data: Array<{ timestamp: number; count: number }>;
+    }>('/query/issues/stats', { params })
 }
 
 export const cobrowseApi = {

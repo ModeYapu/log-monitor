@@ -190,3 +190,55 @@ export interface ChangePasswordRequest {
 export interface ResetPasswordRequest {
   new_password: string
 }
+
+// Issue types
+export interface Issue {
+  id: number
+  fingerprint: string
+  app_id: string
+  title: string
+  type: string
+  status: 'open' | 'resolved' | 'ignored' | 'muted'
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  assignee: string
+  first_seen_at: number
+  last_seen_at: number
+  event_count: number
+  user_count: number
+  resolved_at: number
+  created_at: number
+  updated_at: number
+}
+
+export interface IssueFilter {
+  app_id: string
+  status?: string
+  priority?: string
+  search?: string
+  sort?: string
+  page?: number
+  page_size?: number
+}
+
+export interface IssueResult {
+  total: number
+  page: number
+  page_size: number
+  data: Issue[]
+}
+
+export interface IssueStats {
+  open_count: number
+  resolved_count: number
+  ignored_count: number
+  muted_count: number
+  total_count: number
+  high_priority: number
+  critical_priority: number
+  by_status: Record<string, number>
+  by_priority: Record<string, number>
+  trend_data: Array<{
+    timestamp: number
+    count: number
+  }>
+}

@@ -72,3 +72,27 @@ export const formatDuration = (ms: number): string => {
   if (ms < 3600000) return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
   return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`
 }
+
+export const formatTimestamp = (timestamp: number): string => {
+  return formatTime(timestamp)
+}
+
+export const formatStatus = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    open: 'Open',
+    resolved: 'Resolved',
+    ignored: 'Ignored',
+    muted: 'Muted'
+  }
+  return statusMap[status] || status
+}
+
+export const formatPriority = (priority: string): string => {
+  const priorityMap: Record<string, string> = {
+    critical: 'Critical',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low'
+  }
+  return priorityMap[priority] || priority
+}

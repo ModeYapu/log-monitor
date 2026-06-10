@@ -155,6 +155,7 @@ func main() {
 	clustersHandler := handler.NewClustersHandler(store.Events())
 	sourceMapHandler := handler.NewSourceMapHandler(db, smStorage)
 	healthHandler := handler.NewHealthHandler(db)
+	issuesHandler := handler.NewIssuesHandler(db)
 	sourceMapHandler.SetAllowedOrigins(cfg.Server.AllowedOrigins)
 
 	// API routes that require JWT authentication
@@ -178,6 +179,21 @@ func main() {
 			{"GET /api/query/anomaly/alert-triggers", queryHandler.QueryAlertTriggers},
 			{"GET /api/query/anomaly/active-sessions", queryHandler.QueryActiveSessions},
 			{"GET /api/query/stats/comparison", queryHandler.QueryStatsComparison},
+			{"GET /api/query/issues", issuesHandler.GetIssues},
+			{"GET /api/query/issues/", issuesHandler.GetIssue},
+			{"PUT /api/query/issues/", issuesHandler.UpdateIssue},
+			{"POST /api/query/issues/", func(w http.ResponseWriter, r *http.Request) {
+				// Handle resolve/ignore actions based on query parameter
+				action := r.URL.Query().Get("action")
+				if action == "resolve" {
+					issuesHandler.ResolveIssue(w, r)
+				} else if action == "ignore" {
+					issuesHandler.IgnoreIssue(w, r)
+				} else {
+					http.Error(w, "Invalid action", http.StatusBadRequest)
+				}
+			}},
+			{"GET /api/query/issues/stats", issuesHandler.GetIssueStats},
 		{"GET /api/query/clusters", clustersHandler.GetClusters},
 		{"GET /api/query/release-health", healthHandler.GetReleaseHealth},
 		{"GET /api/query/session-stats", healthHandler.GetSessionStats},

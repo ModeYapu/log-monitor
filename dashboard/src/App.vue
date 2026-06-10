@@ -41,6 +41,12 @@
             <span>告警管理</span>
           </el-menu-item>
         </el-tooltip>
+        <el-tooltip content="问题管理" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/issues">
+            <el-icon><Warning /></el-icon>
+            <span>问题管理</span>
+          </el-menu-item>
+        </el-tooltip>
         <el-tooltip content="实时会话" placement="right" :disabled="!sidebarCollapsed">
           <el-menu-item index="/live">
             <el-icon><VideoCamera /></el-icon>
@@ -130,7 +136,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny, User, SwitchButton, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny, User, SwitchButton, ArrowLeft, ArrowRight, Warning } from '@element-plus/icons-vue'
 import { logApi } from './api'
 import type { App, UserInfo } from './types'
 import GlobalSearch from './components/GlobalSearch.vue'

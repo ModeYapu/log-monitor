@@ -95,30 +95,45 @@
         <el-card class="anomaly-card">
           <template #header>
             <div class="card-header">
-              <span>活跃会话</span>
-              <el-button size="small" link @click="refreshSessions">刷新</el-button>
+              <span>待处理问题</span>
+              <el-button size="small" link @click="goToIssues">查看全部</el-button>
             </div>
           </template>
-          <div v-loading="loadingSessions" class="anomaly-content">
-            <div v-if="activeSessions.length === 0" class="empty-state">
-              <el-empty description="暂无活跃会话" :image-size="40" />
+          <div v-loading="loadingIssues" class="anomaly-content">
+            <div v-if="issueStats.total_count === 0" class="empty-state">
+              <el-empty description="暂无待处理问题" :image-size="40" />
             </div>
-            <div v-else class="session-list">
-              <div
-                v-for="(session, index) in activeSessions"
-                :key="index"
-                class="session-item"
-              >
-                <div class="session-info">
-                  <div class="session-url">{{ truncateMessage(session.url, 40) }}</div>
-                  <div class="session-meta">
-                    <span>{{ session.event_count }} 事件</span>
-                    <span class="time-ago">{{ formatRelativeTime(session.last_activity) }}</span>
-                  </div>
+            <div v-else class="issue-stats">
+              <div class="issue-count" @click="goToIssues">
+                <div class="count-number">{{ issueStats.open_count }}</div>
+                <div class="count-label">待处理</div>
+              </div>
+              <div class="issue-meta">
+                <div class="meta-item">
+                  <el-tag size="small" type="danger">{{ issueStats.critical_priority }} 严重</el-tag>
                 </div>
-                <el-button size="small" type="primary" link @click="goToSession(session.session_id)">
-                  回放
-                </el-button>
+                <div class="meta-item">
+                  <el-tag size="small" type="warning">{{ issueStats.high_priority }} 高优</el-tag>
+                </div>
+              </div>
+              <div class="recent-issues">
+                <div
+                  v-for="(issue, index) in recentIssues"
+                  :key="index"
+                  class="issue-item"
+                  @click="goToIssue(issue.id)"
+                >
+                  <div class="issue-info">
+                    <div class="issue-title">{{ truncateMessage(issue.title, 40) }}</div>
+                    <div class="issue-meta">
+                      <span>{{ issue.event_count }} 事件</span>
+                      <span class="time-ago">{{ formatRelativeTime(issue.last_seen_at) }}</span>
+                    </div>
+                  </div>
+                  <el-tag :type="getPriorityTagType(issue.priority)" size="small">
+                    {{ formatPriority(issue.priority) }}
+                  </el-tag>
+                </div>
               </div>
             </div>
           </div>
@@ -249,7 +264,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { logApi } from '../api'
-import { formatNumber, formatRelativeTime, truncateMessage } from '../utils/formatters'
+import { formatNumber, formatRelativeTime, truncateMessage, formatPriority } from '../utils/formatters'
 import { Warning, InfoFilled, WarningFilled, CircleCheck } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -270,6 +285,22 @@ const statsComparison = ref<any>(null)
 const loadingNewErrors = ref(false)
 const loadingAlerts = ref(false)
 const loadingSessions = ref(false)
+
+// Issues data
+const issueStats = ref<any>({
+  open_count: 0,
+  resolved_count: 0,
+  ignored_count: 0,
+  muted_count: 0,
+  total_count: 0,
+  high_priority: 0,
+  critical_priority: 0,
+  by_status: {},
+  by_priority: {},
+  trend_data: []
+})
+const recentIssues = ref<any[]>([])
+const loadingIssues = ref(false)
 
 const statsCards = computed(() => [
   {
@@ -525,6 +556,9 @@ const fetchAnomalyData = async () => {
     console.error('Failed to fetch stats comparison:', error)
     statsComparison.value = null
   }
+
+  // Fetch issues data
+  fetchIssuesData()
 }
 
 const refreshSessions = () => {
@@ -597,6 +631,64 @@ const getAlertTagType = (severity: string) => {
     low: 'info'
   }
   return types[severity] || 'info'
+}
+
+// Issues methods
+const fetchIssuesData = async () => {
+  if (!currentAppId.value) return
+
+  loadingIssues.value = true
+  try {
+    // Fetch issue stats
+    const { data: statsData } = await logApi.getIssueStats({ app_id: currentAppId.value })
+    issueStats.value = statsData
+
+    // Fetch recent open issues
+    const { data: issuesData } = await logApi.getIssues({
+      app_id: currentAppId.value,
+      status: 'open',
+      sort: 'last_seen',
+      page: 1,
+      page_size: 5
+    })
+    recentIssues.value = issuesData.data
+  } catch (error) {
+    console.error('Failed to fetch issues data:', error)
+    issueStats.value = {
+      open_count: 0,
+      resolved_count: 0,
+      ignored_count: 0,
+      muted_count: 0,
+      total_count: 0,
+      high_priority: 0,
+      critical_priority: 0,
+      by_status: {},
+      by_priority: {},
+      trend_data: []
+    }
+    recentIssues.value = []
+  } finally {
+    loadingIssues.value = false
+  }
+}
+
+const goToIssues = () => {
+  router.push(`/issues/${currentAppId.value}`)
+}
+
+const goToIssue = (issueId: number) => {
+  router.push(`/issues/${currentAppId.value}`)
+  // Could also open a modal with issue details here
+}
+
+const getPriorityTagType = (priority: string) => {
+  const types: Record<string, string> = {
+    critical: 'danger',
+    high: 'warning',
+    medium: 'primary',
+    low: 'info'
+  }
+  return types[priority] || 'info'
 }
 
 onMounted(() => {
@@ -916,6 +1008,96 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
 }
 
+/* Issues List */
+.issue-stats {
+  padding: 16px 0;
+}
+
+.issue-count {
+  text-align: center;
+  cursor: pointer;
+  padding: 16px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: background 0.2s;
+}
+
+.issue-count:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.count-number {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--color-danger);
+  line-height: 1;
+}
+
+.count-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.issue-meta {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 16px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.recent-issues {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.issue-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.issue-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.issue-item:last-child {
+  margin-bottom: 0;
+}
+
+.issue-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.issue-title {
+  font-size: 13px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.issue-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
 /* Responsive adjustments */
 @media (max-width: 1200px) {
   .anomaly-card {
@@ -924,7 +1106,7 @@ onUnmounted(() => {
 
   .error-list,
   .alert-list,
-  .session-list {
+  .issue-list {
     max-height: 200px;
   }
 }
