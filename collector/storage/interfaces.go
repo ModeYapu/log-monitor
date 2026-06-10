@@ -1,9 +1,22 @@
 package storage
 
-import "github.com/logmonitor/collector/model"
+import (
+	"time"
 
-// EventRepository handles event CRUD operations
-type EventRepository interface {
+	"github.com/logmonitor/collector/model"
+)
+
+// CleanupResult represents the result of a cleanup operation
+type CleanupResult struct {
+	DeletedEvents      int64
+	DeletedScreenshots int64
+	TotalFilesFreed    int64
+	TotalBytesFreed    int64
+	Duration           time.Duration
+}
+
+// EventStore handles event CRUD operations and queries
+type EventStore interface {
 	InsertEvents(events []EventRecord) error
 	QueryEvents(query QueryParams) (*QueryResult, error)
 	GetStats(appID string) (*Stats, error)
@@ -19,10 +32,38 @@ type EventRepository interface {
 	GetErrorClustersByTime(appID string, startTime, endTime int64, limit int) ([]ErrorClusterResult, error)
 	GetClusterEvents(appID, fingerprint string, page, pageSize int) ([]EventRecord, int64, error)
 	GetClusterStats(appID, fingerprint string) (ClusterStats, error)
+	GetErrorClusters(appID, errorMessage string, threshold float64, limit int) ([]ErrorCluster, error)
+	GetRecentEvents(limit int) ([]EventRecord, error)
 }
 
-// AlertRepository handles alert rules and logs
-type AlertRepository interface {
+// IssueStore handles issue CRUD operations and lifecycle management
+type IssueStore interface {
+	CreateOrUpdateIssues(events []EventRecord) error
+	GetIssues(filter IssueFilter) ([]Issue, int64, error)
+	GetIssue(id int64) (*Issue, error)
+	GetIssueEvents(issueID int64, page, pageSize int) ([]EventRecord, int64, error)
+	UpdateIssue(id int64, updates map[string]interface{}) error
+	GetIssueStats(appID string) (*IssueStats, error)
+}
+
+// ProjectStore handles project CRUD operations and member management
+type ProjectStore interface {
+	CreateProject(name, slug, description string) (*Project, error)
+	GetProject(idOrSlug interface{}) (*Project, error)
+	GetProjectByAPIKey(apiKey string) (*Project, error)
+	ListProjects(userID int64) ([]Project, error)
+	UpdateProject(id int64, updates map[string]interface{}) error
+	DeleteProject(id int64) error
+	AutoCreateDefaultProject() error
+	AddProjectMember(projectID, userID int64, role string) error
+	RemoveProjectMember(projectID, userID int64) error
+	GetProjectMembers(projectID int64) ([]ProjectMember, error)
+	UpdateProjectMemberRole(projectID, userID int64, newRole string) error
+	RegenerateApiKey(projectID int64) (string, error)
+}
+
+// AlertStore handles alert rules and alert logs
+type AlertStore interface {
 	CreateAlertRule(rule AlertRule) (int64, error)
 	GetAlertRules(appID string) ([]AlertRule, error)
 	GetAllAlertRules() ([]AlertRule, error)
@@ -32,6 +73,31 @@ type AlertRepository interface {
 	UnsilenceAlertRule(id int64) error
 	CreateAlertLog(log AlertLog) error
 	GetAlertLogs(appID string, limit int) ([]AlertLog, error)
+}
+
+// AnalyticsStore handles statistics, performance, and anomaly queries
+type AnalyticsStore interface {
+	GetStats(appID string) (*Stats, error)
+	GetApps() ([]AppStats, error)
+	GetTopN(appID, topType, orderBy string, limit int, filters map[string]interface{}) (*TopNResult, error)
+	GetTopErrors(params TopListParams) ([]TopError, error)
+	GetTopPages(params TopListParams) ([]TopPage, error)
+	GetTopReleases(params TopListParams) ([]TopRelease, error)
+	GetTopBrowsers(params TopListParams) ([]TopBrowser, error)
+	GetReleaseHealth(appID string, startTime, endTime int64) (map[string]interface{}, error)
+	GetSessionStats(appID string, startTime, endTime int64) (map[string]interface{}, error)
+	GetClusterStats(appID, fingerprint string) (ClusterStats, error)
+}
+
+// SystemStore handles system metadata and storage operations
+type SystemStore interface {
+	GetStorageStats() (*StorageStats, error)
+	GetRetentionPolicySimple() (int, error)
+	SetRetentionPolicySimple(days int) error
+	TriggerManualCleanup() error
+	GetLastCleanupTime() int64
+	SetLastCleanupTime(timestamp int64) error
+	CleanupOldDataWithDays(days int) CleanupResult
 }
 
 // RecordingRepository handles session recordings
@@ -71,8 +137,12 @@ type UserRepository interface {
 
 // Store combines all repositories for easy dependency injection
 type Store interface {
-	Events() EventRepository
-	Alerts() AlertRepository
+	Events() EventStore
+	Issues() IssueStore
+	Projects() ProjectStore
+	Alerts() AlertStore
+	Analytics() AnalyticsStore
+	System() SystemStore
 	Recordings() RecordingRepository
 	SourceMaps() SourceMapRepository
 	Users() UserRepository

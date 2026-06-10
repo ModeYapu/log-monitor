@@ -13,7 +13,8 @@ import (
 
 // SystemHandler handles system-related requests
 type SystemHandler struct {
-	db          *storage.DB
+	systemStore  storage.SystemStore
+	db          *storage.DB // Keep for legacy methods
 	dbPath      string
 	startTime   time.Time
 	retentionDays int
@@ -23,6 +24,19 @@ type SystemHandler struct {
 // NewSystemHandler creates a new system handler
 func NewSystemHandler(db *storage.DB, dbPath string, retentionDays int) *SystemHandler {
 	return &SystemHandler{
+		systemStore:   db,
+		db:            db,
+		dbPath:        dbPath,
+		startTime:     time.Now(),
+		retentionDays: retentionDays,
+		version:       "1.0.0",
+	}
+}
+
+// NewSystemHandlerWithStore creates a new system handler with explicit store
+func NewSystemHandlerWithStore(systemStore storage.SystemStore, db *storage.DB, dbPath string, retentionDays int) *SystemHandler {
+	return &SystemHandler{
+		systemStore:   systemStore,
 		db:            db,
 		dbPath:        dbPath,
 		startTime:     time.Now(),
@@ -117,7 +131,7 @@ func (h *SystemHandler) TriggerCleanup(w http.ResponseWriter, r *http.Request) {
 
 	slog.Error("[cleanup] Manual cleanup triggered: %d days retention", days)
 	slog.Error("[cleanup] Deleted: %d events, %d recording_events, %d alert_logs",
-		cleanupResult.EventsDeleted, cleanupResult.RecordingEventsDeleted, cleanupResult.AlertLogsDeleted)
+		cleanupResult.DeletedEvents, cleanupResult.DeletedScreenshots, cleanupResult.TotalFilesFreed)
 
 	json.NewEncoder(w).Encode(cleanupResult)
 }

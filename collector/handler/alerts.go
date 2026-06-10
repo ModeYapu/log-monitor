@@ -14,12 +14,24 @@ import (
 
 // AlertsHandler handles alert-related requests
 type AlertsHandler struct {
-	db *storage.DB
+	alertStore storage.AlertStore
+	db        *storage.DB // Keep for legacy methods
 }
 
 // NewAlertsHandler creates a new alerts handler
 func NewAlertsHandler(db *storage.DB) *AlertsHandler {
-	return &AlertsHandler{db: db}
+	return &AlertsHandler{
+		alertStore: db,
+		db:         db,
+	}
+}
+
+// NewAlertsHandlerWithStore creates a new alerts handler with explicit store
+func NewAlertsHandlerWithStore(alertStore storage.AlertStore, db *storage.DB) *AlertsHandler {
+	return &AlertsHandler{
+		alertStore: alertStore,
+		db:         db,
+	}
 }
 
 // RegisterRoutes registers alert routes

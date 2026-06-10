@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logmonitor/collector/alerter"
 	"github.com/logmonitor/collector/buffer"
 	"github.com/logmonitor/collector/config"
 	"github.com/logmonitor/collector/handler"
 	"github.com/logmonitor/collector/internal/logger"
 	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/storage"
+	"github.com/logmonitor/collector/worker"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -137,7 +137,7 @@ func main() {
 		BatchSize:     cfg.Buffer.FlushBatchSize,
 	})
 	defer func() {
-		if err := writer.Close(); err != nil {
+		if err = writer.Close(); err != nil {
 			slog.Error("Failed to close writer", "error", err)
 		}
 	}()
@@ -265,9 +265,34 @@ func main() {
 		})
 	}
 
-	// Initialize alert checker
-	alertChecker := alerter.NewChecker(store.Alerts(), store.Events())
-	alertChecker.SetEmailConfig(alerter.EmailConfig{
+	// Initialize worker manager
+	workerManager := worker.NewManager()
+
+	// Register cleanup worker
+	cleanupWorker := worker.NewCleanupWorker(
+		store.System(),
+		cfg.Database.RetentionDays,
+		24*time.Hour, // Check daily
+	)
+	workerManager.RegisterWorker(cleanupWorker)
+
+	// Register issue aggregator worker
+	issueAggregatorWorker := worker.NewIssueAggregatorWorker(
+		store.Issues(),
+		store.Events(),
+		5*time.Minute, // Check every 5 minutes
+	)
+	workerManager.RegisterWorker(issueAggregatorWorker)
+
+	// Register alert checker worker
+	alertCheckerWorker := worker.NewAlertCheckerWorker(
+		store.Alerts(),
+		store.Events(),
+		time.Duration(cfg.Alert.CheckInterval)*time.Millisecond,
+	)
+
+	// Configure email notifications for alert checker
+	alertCheckerWorker.SetEmailConfig(worker.EmailConfig{
 		Enabled:   cfg.Alert.Email.Enabled,
 		SMTPHost:  cfg.Alert.Email.SMTPHost,
 		SMTPPort:  cfg.Alert.Email.SMTPPort,
@@ -276,10 +301,37 @@ func main() {
 		FromEmail: cfg.Alert.Email.FromEmail,
 		FromName:  cfg.Alert.Email.FromName,
 	})
-	go alertChecker.Start(time.Duration(cfg.Alert.CheckInterval) * time.Millisecond)
-	defer alertChecker.Stop()
+	workerManager.RegisterWorker(alertCheckerWorker)
 
-	slog.Info("Alert checker started", "intervalMs", cfg.Alert.CheckInterval, "emailEnabled", cfg.Alert.Email.Enabled)
+	// Start worker manager
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := workerManager.Start(ctx); err != nil {
+		slog.Error("Failed to start worker manager", "error", err)
+		os.Exit(1)
+	}
+	defer workerManager.Stop()
+
+	slog.Info("Worker manager started", "workers", workerManager.WorkerCount())
+
+	// Initialize config watcher
+	configWatcher := config.NewWatcher(*configPath, func(oldCfg, newCfg *config.Config) error {
+		slog.Info("Config reloaded", "retentionDays", newCfg.Database.RetentionDays)
+
+		// Update cleanup worker if retention days changed
+		if oldCfg.Database.RetentionDays != newCfg.Database.RetentionDays {
+			cleanupWorker.UpdateRetention(newCfg.Database.RetentionDays)
+		}
+
+		return nil
+	})
+
+	// Start config watcher
+	if err := configWatcher.Start(cfg); err != nil {
+		slog.Warn("Failed to start config watcher, continuing without hot reload", "error", err)
+	}
+	defer configWatcher.Stop()
 
 	// Initialize cobrowse hub
 	cobrowseHub := handler.NewCoBrowseHub(db)

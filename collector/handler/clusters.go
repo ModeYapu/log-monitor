@@ -12,11 +12,11 @@ import (
 
 // ClustersHandler handles error cluster queries
 type ClustersHandler struct {
-	db storage.EventRepository
+	db storage.EventStore
 }
 
 // NewClustersHandler creates a new clusters handler
-func NewClustersHandler(db storage.EventRepository) *ClustersHandler {
+func NewClustersHandler(db storage.EventStore) *ClustersHandler {
 	return &ClustersHandler{
 		db: db,
 	}

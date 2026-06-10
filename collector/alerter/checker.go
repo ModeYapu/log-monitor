@@ -12,8 +12,8 @@ import (
 
 // Checker checks alert rules and triggers notifications
 type Checker struct {
-	db       storage.AlertRepository
-	events   storage.EventRepository
+	db       storage.AlertStore
+	events   storage.EventStore
 	notifier *Notifier
 	stopCh   chan struct{}
 }
@@ -33,7 +33,7 @@ type AlertContext struct {
 }
 
 // NewChecker creates a new alert checker
-func NewChecker(db storage.AlertRepository, events storage.EventRepository) *Checker {
+func NewChecker(db storage.AlertStore, events storage.EventStore) *Checker {
 	return &Checker{
 		db:       db,
 		events:   events,

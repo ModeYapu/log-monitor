@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"time"
+
 )
 
 // GetTopN retrieves top N items grouped by type (errors/pages/releases/browsers)
@@ -1241,4 +1242,103 @@ func (db *DB) CleanupOldDataWithPolicy(policy *RetentionPolicy) (*CleanupResultD
 		result.EventsDeleted, result.RecordingEventsDeleted, result.AlertLogsDeleted)
 
 	return result, nil
+}
+
+// GetRetentionPolicySimple returns the retention policy as a simple integer (for SystemStore interface)
+func (db *DB) GetRetentionPolicySimple() (int, error) {
+	policy, err := db.GetRetentionPolicy()
+	if err != nil {
+		return 30, err // default 30 days
+	}
+	return policy.Events, nil
+}
+
+// SetRetentionPolicySimple sets the retention policy from a simple integer (for SystemStore interface)
+func (db *DB) SetRetentionPolicySimple(days int) error {
+	if days < 1 || days > 365 {
+		return fmt.Errorf("retention days must be between 1 and 365")
+	}
+
+	policy := &RetentionPolicy{
+		Events:          days,
+		RecordingEvents: days,
+		Screenshots:     days / 2, // shorter for screenshots
+		AlertLogs:       days,
+	}
+
+	return db.SetRetentionPolicy(policy)
+}
+
+// TriggerManualCleanup triggers a manual cleanup operation (for SystemStore interface)
+func (db *DB) TriggerManualCleanup() error {
+	policy, err := db.GetRetentionPolicy()
+	if err != nil {
+		return fmt.Errorf("failed to get retention policy: %w", err)
+	}
+
+	_, err = db.CleanupOldDataWithPolicy(policy)
+	return err
+}
+
+// GetLastCleanupTime retrieves the last cleanup time from system_meta
+func (db *DB) GetLastCleanupTime() int64 {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return 0
+	}
+
+	var lastCleanupTime int64
+	err := db.conn.QueryRow("SELECT value FROM system_meta WHERE key = 'last_cleanup_time'").Scan(&lastCleanupTime)
+	if err != nil {
+		return 0
+	}
+
+	return lastCleanupTime
+}
+
+// SetLastCleanupTime updates the last cleanup time in system_meta
+func (db *DB) SetLastCleanupTime(timestamp int64) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return fmt.Errorf("database is closed")
+	}
+
+	_, err := db.conn.Exec(`
+		INSERT OR REPLACE INTO system_meta (key, value, updated_at)
+		VALUES ('last_cleanup_time', ?, ?)
+	`, timestamp, timestamp)
+	return err
+}
+
+// CleanupOldDataWithDays performs cleanup with specified days (for SystemStore interface)
+func (db *DB) CleanupOldDataWithDays(days int) CleanupResult {
+	policy := &RetentionPolicy{
+		Events:          days,
+		RecordingEvents: days,
+		Screenshots:     days / 2,
+		AlertLogs:       days,
+	}
+
+	result, err := db.CleanupOldDataWithPolicy(policy)
+	if err != nil {
+		return CleanupResult{
+			DeletedEvents:      0,
+			DeletedScreenshots: 0,
+			TotalFilesFreed:     0,
+			TotalBytesFreed:     0,
+			Duration:            0,
+		}
+	}
+
+	return CleanupResult{
+		DeletedEvents:      result.EventsDeleted,
+		DeletedScreenshots: 0, // Not implemented yet
+		TotalFilesFreed:     result.EventsDeleted + result.RecordingEventsDeleted + result.AlertLogsDeleted,
+		TotalBytesFreed:     result.FreedBytes,
+		Duration:            0, // Not tracked in current implementation
+	}
 }

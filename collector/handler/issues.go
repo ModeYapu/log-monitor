@@ -11,13 +11,23 @@ import (
 
 // IssuesHandler handles issue-related requests
 type IssuesHandler struct {
-	db *storage.DB
+	issueStore storage.IssueStore
+	db        *storage.DB // Keep for legacy methods
 }
 
 // NewIssuesHandler creates a new issues handler
 func NewIssuesHandler(db *storage.DB) *IssuesHandler {
 	return &IssuesHandler{
-		db: db,
+		issueStore: db,
+		db:         db,
+	}
+}
+
+// NewIssuesHandlerWithStore creates a new issues handler with explicit store
+func NewIssuesHandlerWithStore(issueStore storage.IssueStore, db *storage.DB) *IssuesHandler {
+	return &IssuesHandler{
+		issueStore: issueStore,
+		db:         db,
 	}
 }
 

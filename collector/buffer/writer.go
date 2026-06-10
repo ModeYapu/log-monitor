@@ -12,7 +12,7 @@ import (
 
 // Writer manages buffered batch writing to database
 type Writer struct {
-	db            storage.EventRepository
+	db            storage.EventStore
 	buffer        chan storage.EventRecord
 	bufferSize    int32
 	flushInterval time.Duration
@@ -31,7 +31,7 @@ type Config struct {
 }
 
 // NewWriter creates a new buffered writer
-func NewWriter(db storage.EventRepository, cfg Config) *Writer {
+func NewWriter(db storage.EventStore, cfg Config) *Writer {
 	if cfg.BufferSize <= 0 {
 		cfg.BufferSize = 10000
 	}

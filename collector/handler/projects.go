@@ -12,15 +12,26 @@ import (
 
 // ProjectsHandler handles project-related requests
 type ProjectsHandler struct {
-	db         *storage.DB
-	userStorage *storage.UserStorage
+	projectStore storage.ProjectStore
+	db           *storage.DB // Keep for legacy methods
+	userStorage  *storage.UserStorage
 }
 
 // NewProjectsHandler creates a new projects handler
 func NewProjectsHandler(db *storage.DB, userStorage *storage.UserStorage) *ProjectsHandler {
 	return &ProjectsHandler{
-		db:         db,
-		userStorage: userStorage,
+		projectStore: db,
+		db:           db,
+		userStorage:  userStorage,
+	}
+}
+
+// NewProjectsHandlerWithStore creates a new projects handler with explicit store
+func NewProjectsHandlerWithStore(projectStore storage.ProjectStore, db *storage.DB, userStorage *storage.UserStorage) *ProjectsHandler {
+	return &ProjectsHandler{
+		projectStore: projectStore,
+		db:           db,
+		userStorage:  userStorage,
 	}
 }
 

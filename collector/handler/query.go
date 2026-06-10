@@ -16,15 +16,29 @@ import (
 
 // QueryHandler handles log query requests
 type QueryHandler struct {
-	db            *storage.DB
-	screenshotDir string
+	eventStore     storage.EventStore
+	analyticsStore storage.AnalyticsStore
+	db             *storage.DB // Keep for legacy methods
+	screenshotDir  string
 }
 
 // NewQueryHandler creates a new query handler
 func NewQueryHandler(db *storage.DB) *QueryHandler {
 	return &QueryHandler{
-		db:            db,
-		screenshotDir: "./data/screenshots",
+		eventStore:     db,
+		analyticsStore: db,
+		db:             db, // Keep for backward compatibility
+		screenshotDir:  "./data/screenshots",
+	}
+}
+
+// NewQueryHandlerWithStores creates a new query handler with explicit stores
+func NewQueryHandlerWithStores(eventStore storage.EventStore, analyticsStore storage.AnalyticsStore, db *storage.DB) *QueryHandler {
+	return &QueryHandler{
+		eventStore:     eventStore,
+		analyticsStore: analyticsStore,
+		db:             db,
+		screenshotDir:  "./data/screenshots",
 	}
 }
 

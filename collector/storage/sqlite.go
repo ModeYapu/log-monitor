@@ -314,7 +314,7 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 	}
 
 	// Create or update Issues for events with fingerprints
-	if err := db.createOrUpdateIssues(events); err != nil {
+	if err := db.CreateOrUpdateIssues(events); err != nil {
 		// Log error but don't fail the event insertion
 		log.Printf("Warning: Failed to create/update issues: %v", err)
 	}
@@ -582,13 +582,6 @@ func (db *DB) retentionCleanup(retentionDays int) {
 	}
 }
 
-// CleanupResult represents the result of a cleanup operation
-type CleanupResult struct {
-	EventsDeleted           int64
-	RecordingEventsDeleted  int64
-	AlertLogsDeleted        int64
-	LastCleanupTime         int64
-}
 
 // cleanupOldData deletes events older than retention days and cleans orphaned recording_events and alert_logs
 func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
@@ -597,204 +590,50 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if db.closed {
-		return CleanupResult{}
-	}
+
 
 	result := CleanupResult{
-		LastCleanupTime: time.Now().UnixMilli(),
+		DeletedEvents:      0,
+		DeletedScreenshots: 0,
+		TotalFilesFreed:     0,
+		TotalBytesFreed:     0,
+		Duration:           0,
 	}
 
 	// Delete old events
 	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
 	if err != nil {
-		fmt.Printf("[cleanup] Failed to delete old events: %v\n", err)
+		log.Printf("Failed to delete old events: %v", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		result.EventsDeleted = rowsAffected
-		fmt.Printf("[cleanup] Deleted %d old events (older than %d days)\n", rowsAffected, retentionDays)
+		result.DeletedEvents = rowsAffected
+		log.Printf("Deleted %d old events (older than %d days)", rowsAffected, retentionDays)
 	}
 
-	// Delete old recording_events
-	rows, err = db.conn.Exec("DELETE FROM recording_events WHERE created_at < ?", cutoff)
-	if err != nil {
-		fmt.Printf("[cleanup] Failed to delete old recording_events: %v\n", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		result.RecordingEventsDeleted = rowsAffected
-		fmt.Printf("[cleanup] Deleted %d old recording_events (older than %d days)\n", rowsAffected, retentionDays)
-	}
-
-	// Delete old alert_logs
-	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", cutoff)
-	if err != nil {
-		fmt.Printf("[cleanup] Failed to delete old alert_logs: %v\n", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		result.AlertLogsDeleted = rowsAffected
-		fmt.Printf("[cleanup] Deleted %d old alert_logs (older than %d days)\n", rowsAffected, retentionDays)
-	}
-
-	// Clean orphaned recording_events (events without a corresponding recording)
+	// Clean orphaned recording_events
 	rows, err = db.conn.Exec(`
 		DELETE FROM recording_events
 		WHERE session_id NOT IN (SELECT session_id FROM recordings)
 	`)
 	if err != nil {
-		fmt.Printf("[cleanup] Failed to delete orphaned recording_events: %v\n", err)
+		log.Printf("Failed to delete orphaned recording_events: %v", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
 		orphanDeleted := rowsAffected
-		result.RecordingEventsDeleted += orphanDeleted
-		fmt.Printf("[cleanup] Deleted %d orphaned recording_events\n", orphanDeleted)
+		result.TotalFilesFreed += orphanDeleted
+		log.Printf("Deleted %d orphaned recording_events", orphanDeleted)
 	}
 
-	// Update last cleanup time in system_meta
-	_, err = db.conn.Exec(`
-		INSERT OR REPLACE INTO system_meta (key, value, updated_at)
-		VALUES ('last_cleanup_time', ?, ?)
-	`, result.LastCleanupTime, result.LastCleanupTime)
+	// Delete old alert logs
+	alertsCutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
 	if err != nil {
-		fmt.Printf("[cleanup] Failed to update last_cleanup_time: %v\n", err)
+		log.Printf("Failed to delete old alert_logs: %v", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		alertDeleted := rowsAffected
+		result.TotalFilesFreed += alertDeleted
+		log.Printf("Deleted %d old alert_logs (older than %d days)", alertDeleted, retentionDays)
 	}
 
 	return result
-}
-
-// CleanupOldDataWithDays manually deletes old data with configurable retention days
-func (db *DB) CleanupOldDataWithDays(days int) CleanupResult {
-	if days <= 0 {
-		days = 30
-	}
-	return db.cleanupOldData(days)
-}
-
-// GetLastCleanupTime returns the last cleanup time from system_meta
-func (db *DB) GetLastCleanupTime() int64 {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
-	if db.closed {
-		return 0
-	}
-
-	var lastCleanup int64
-	err := db.conn.QueryRow("SELECT value FROM system_meta WHERE key = 'last_cleanup_time'").Scan(&lastCleanup)
-	if err != nil {
-		return 0
-	}
-	return lastCleanup
-}
-
-// SetLastCleanupTime sets the last cleanup time in system_meta
-func (db *DB) SetLastCleanupTime(timestamp int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if db.closed {
-		return fmt.Errorf("database is closed")
-	}
-
-	_, err := db.conn.Exec(`
-		INSERT OR REPLACE INTO system_meta (key, value, updated_at)
-		VALUES ('last_cleanup_time', ?, ?)
-	`, timestamp, time.Now().UnixMilli())
-
-	return err
-}
-
-// EventRecord represents a database event record
-type EventRecord struct {
-	ID          int64
-	AppID       string
-	Release     string
-	Env         string
-	BuildID     string
-	UserID      string
-	SessionID   string
-	Type        string
-	Level       string
-	Message     string
-	Stack       string
-	URL         string
-	Line        int
-	Col         int
-	Tags        string
-	Extra       string
-	UA          string
-	Screen      string
-	Viewport    string
-	Performance string
-	IP          string
-	CreatedAt   int64
-	Fingerprint string // Feature 1: Error fingerprint
-	Breadcrumbs string // Feature 2: Breadcrumbs JSON
-		ProjectID   int64  // Slice 2: Multi-tenant project association
-}
-
-// QueryParams represents query parameters
-type QueryParams struct {
-	AppID     string
-	Release   string
-	Env       string
-	Type      string
-	Level     string
-	StartTime int64
-	EndTime   int64
-	Keyword   string
-	Page      int
-	PageSize  int
-}
-
-// QueryResult represents query results
-type QueryResult struct {
-	Total int64
-	Page  int
-	Size  int
-	Data  []EventRecord
-}
-
-// AppStats represents application statistics
-type AppStats struct {
-	AppID       string `json:"app_id"`
-	Release     string `json:"release"`
-	FirstSeen   int64  `json:"first_seen"`
-	LastSeen    int64  `json:"last_seen"`
-	ErrorCount  int64  `json:"error_count"`
-	TotalEvents int64  `json:"total_events"`
-}
-
-// Stats represents application statistics
-type Stats struct {
-	TotalEvents int64
-	ErrorCount  int64
-	WarnCount   int64
-	InfoCount   int64
-	TopErrors   []ErrorStat
-}
-
-// ErrorStat represents error statistics
-type ErrorStat struct {
-	Message  string
-	Count    int64
-	LastSeen int64
-}
-
-// Issue represents an aggregated issue from events
-type Issue struct {
-	ID          int64  `json:"id"`
-	Fingerprint string `json:"fingerprint"`
-	AppID       string `json:"app_id"`
-	Title       string `json:"title"`
-	Type        string `json:"type"`
-	Status      string `json:"status"`
-	Priority    string `json:"priority"`
-	Assignee    string `json:"assignee"`
-	FirstSeenAt int64  `json:"first_seen_at"`
-	LastSeenAt  int64  `json:"last_seen_at"`
-	EventCount  int64  `json:"event_count"`
-	UserCount   int64  `json:"user_count"`
-	ResolvedAt  int64  `json:"resolved_at"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
-}
-
 // IssueFilter represents filter parameters for issue queries
 type IssueFilter struct {
 	AppID    string
@@ -843,8 +682,7 @@ const (
 	IssueTypeResource     = "resource"
 )
 
-// createOrUpdateIssues creates or updates issues based on events with fingerprints
-func (db *DB) createOrUpdateIssues(events []EventRecord) error {
+// CreateOrUpdateIssues creates or updates issues based on events with fingerprints
 	if len(events) == 0 {
 		return nil
 	}
@@ -3339,3 +3177,144 @@ func (db *DB) GetSessionStats(appID string, startTime, endTime int64) (map[strin
 
 		return nil
 	}
+
+// GetRecentEvents retrieves recent events for issue processing
+func (db *DB) GetRecentEvents(limit int) ([]EventRecord, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	if limit <= 0 || limit > 10000 {
+		limit = 1000
+	}
+
+	rows, err := db.conn.Query(`
+		SELECT id, app_id, release, env, build_id, user_id, session_id, type, level, 
+		       message, stack, url, line, col, tags, extra, ua, screen, viewport, 
+		       performance, ip, fingerprint, created_at
+		FROM events
+		WHERE type = 'error' AND fingerprint != ''
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []EventRecord
+	for rows.Next() {
+		var e EventRecord
+		err := rows.Scan(&e.ID, &e.AppID, &e.Release, &e.Env, &e.BuildID, &e.UserID, &e.SessionID,
+			&e.Type, &e.Level, &e.Message, &e.Stack, &e.URL, &e.Line, &e.Col, &e.Tags, &e.Extra,
+			&e.UA, &e.Screen, &e.Viewport, &e.Performance, &e.IP, &e.Fingerprint, &e.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan event: %w", err)
+		}
+		events = append(events, e)
+	}
+
+	
+	return CleanupResult{
+		DeletedEvents:      result.EventsDeleted,
+		DeletedScreenshots: 0, // Not implemented yet
+		TotalFilesFreed:     result.EventsDeleted + result.RecordingEventsDeleted + result.AlertLogsDeleted,
+		TotalBytesFreed:     result.EventsDeleted * 1024, // rough estimate
+		Duration:           0,
+	}
+}
+
+// cleanupOldDataInternal performs the actual cleanup operation
+func (db *DB) cleanupOldDataInternal(retentionDays int) cleanupResultInternal {
+	cutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return cleanupResultInternal{}
+	}
+
+	result := cleanupResultInternal{}
+
+	// Delete old events
+	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
+	if err != nil {
+		log.Printf("Failed to delete old events: %v", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.EventsDeleted = rowsAffected
+		log.Printf("Deleted %d old events (older than %d days)", rowsAffected, retentionDays)
+	}
+
+	// Clean orphaned recording_events (events without a corresponding recording)
+	rows, err = db.conn.Exec(`
+		DELETE FROM recording_events
+		WHERE session_id NOT IN (SELECT session_id FROM recordings)
+	`)
+	if err != nil {
+		log.Printf("Failed to delete orphaned recording_events: %v", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		orphanDeleted := rowsAffected
+		result.RecordingEventsDeleted += orphanDeleted
+		log.Printf("Deleted %d orphaned recording_events", orphanDeleted)
+	}
+
+	// Delete old alert logs
+	alertsCutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
+	if err != nil {
+		log.Printf("Failed to delete old alert_logs: %v", err)
+	// Delete old alert logs
+	alertsCutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
+	if err != nil {
+		log.Printf("Failed to delete old alert_logs: %v", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.AlertLogsDeleted = rowsAffected
+		log.Printf("Deleted %d old alert_logs (older than %d days)", rowsAffected, retentionDays)
+
+	if db.closed {
+		return cleanupResultInternal{}
+	}
+
+	result := cleanupResultInternal{}
+
+	// Delete old events
+	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
+	if err != nil {
+		log.Printf("Failed to delete old events: %v", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.EventsDeleted = rowsAffected
+		log.Printf("Deleted %d old events (older than %d days)", rowsAffected, retentionDays)
+	}
+
+	// Clean orphaned recording_events
+	rows, err = db.conn.Exec(`
+		DELETE FROM recording_events
+		WHERE session_id NOT IN (SELECT session_id FROM recordings)
+	`)
+	if err != nil {
+		log.Printf("Failed to delete orphaned recording_events: %v", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		orphanDeleted := rowsAffected
+		result.RecordingEventsDeleted += orphanDeleted
+		log.Printf("Deleted %d orphaned recording_events", orphanDeleted)
+	}
+
+	// Delete old alert logs
+	alertsCutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
+	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
+	if err != nil {
+		log.Printf("Failed to delete old alert_logs: %v", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.AlertLogsDeleted = rowsAffected
+		log.Printf("Deleted %d old alert_logs (older than %d days)", rowsAffected, retentionDays)
+	}
+
+	return result
+}
+}
+}
