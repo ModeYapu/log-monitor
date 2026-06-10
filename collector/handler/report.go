@@ -17,12 +17,14 @@ import (
 // ReportHandler handles log report requests from SDK
 type ReportHandler struct {
 	writer *buffer.Writer
+	db     *storage.DB
 }
 
 // NewReportHandler creates a new report handler
-func NewReportHandler(writer *buffer.Writer, cfg *config.ServerConfig) *ReportHandler {
+func NewReportHandler(writer *buffer.Writer, cfg *config.ServerConfig, db *storage.DB) *ReportHandler {
 	return &ReportHandler{
 		writer: writer,
+		db:     db,
 	}
 }
 
@@ -71,6 +73,22 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get project ID from request (via project_id or api_key)
+	var projectID int64
+	if req.ProjectID != 0 {
+		projectID = req.ProjectID
+	} else if req.APIKey != "" {
+		// Look up project by API key
+		project, err := h.db.GetProjectByAPIKey(req.APIKey)
+		if err != nil {
+			slog.Warn("Invalid API key provided", "error", err)
+			// Don't reject the request, just continue without project association
+			projectID = 0
+		} else {
+			projectID = project.ID
+		}
+	}
+
 	// Get client IP
 	ip := r.RemoteAddr
 	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
@@ -100,35 +118,36 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			eventIP = ip
 		}
 
-		// Convert to buffer record
-		records = append(records, storage.EventRecord{
-			AppID:       appID,
-			Release:     release,
-			Type:        e.Type,
-			Level:       e.Level,
-			Message:     truncateString(e.Message, 10000),
-			Stack:       truncateString(e.Stack, 50000),
-			URL:         truncateString(e.URL, 2000),
-			Line:        e.Line,
-			Col:         e.Col,
-			Tags:        toJSON(e.Tags),
-			Extra:       toJSON(e.Extra),
-			UA:          truncateString(e.UA, 1000),
-			Screen:      e.Screen,
-			Viewport:    e.Viewport,
-			Performance: toJSON(e.Performance),
-			IP:          eventIP,
-			CreatedAt:   createdAt,
-		})
-	}
 
-	// Write to buffer
-	for _, r := range records {
-		if err := h.writer.Write(r); err != nil {
-			slog.Error("Failed to write event to buffer: %v", err)
+			// Convert to buffer record
+			records = append(records, storage.EventRecord{
+				AppID:       appID,
+				Release:     release,
+				Type:        e.Type,
+				Level:       e.Level,
+				Message:     truncateString(e.Message, 10000),
+				Stack:       truncateString(e.Stack, 50000),
+				URL:         truncateString(e.URL, 2000),
+				Line:        e.Line,
+				Col:         e.Col,
+				Tags:        toJSON(e.Tags),
+				Extra:       toJSON(e.Extra),
+				UA:          truncateString(e.UA, 1000),
+				Screen:      e.Screen,
+				Viewport:    e.Viewport,
+				Performance: toJSON(e.Performance),
+				IP:          eventIP,
+				CreatedAt:   createdAt,
+				ProjectID:   projectID,
+			})
 		}
-	}
 
+		// Write to buffer
+		for _, r := range records {
+			if err := h.writer.Write(r); err != nil {
+				slog.Error("Failed to write event to buffer: %v", err)
+			}
+		}
 	// Respond with success
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{

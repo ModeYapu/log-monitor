@@ -52,6 +52,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/projects',
+    name: 'ProjectsAdmin',
+    component: () => import('../views/ProjectsAdmin.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue'),

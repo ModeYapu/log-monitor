@@ -33,9 +33,11 @@ type Event struct {
 
 // ReportRequest is the batch report request from SDK
 type ReportRequest struct {
-	AppID   string  `json:"appId"`
-	Release string  `json:"release"`
-	Events  []Event `json:"events"`
+	AppID     string  `json:"appId"`
+	Release   string  `json:"release"`
+	Events    []Event `json:"events"`
+	ProjectID int64   `json:"projectId"` // Optional: project ID for multi-tenant support
+	APIKey    string  `json:"apiKey"`    // Optional: API key to identify project
 }
 
 // LogsQuery is the query parameters for /api/query/logs

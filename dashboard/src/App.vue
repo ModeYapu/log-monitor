@@ -71,6 +71,12 @@
             <span>用户管理</span>
           </el-menu-item>
         </el-tooltip>
+        <el-tooltip content="项目管理" placement="right" :disabled="!sidebarCollapsed">
+          <el-menu-item index="/projects" v-if="isAdmin">
+            <el-icon><Folder /></el-icon>
+            <span>项目管理</span>
+          </el-menu-item>
+        </el-tooltip>
       </el-menu>
       <div class="sidebar-toggle" @click="toggleSidebar">
         <el-icon :size="16">
@@ -84,6 +90,24 @@
       <div class="app-header" :class="{ 'app-header-light': isLight }">
         <div class="header-left">
           <GlobalSearch />
+          <el-select
+            v-model="selectedProjectId"
+            placeholder="选择项目"
+            filterable
+            @change="handleProjectChange"
+            style="width: 250px"
+            v-if="projects.length > 0"
+          >
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            >
+              <span>{{ project.name }}</span>
+              <span class="project-stats" v-if="project.event_count !== undefined">({{ project.event_count }} events)</span>
+            </el-option>
+          </el-select>
           <el-select
             v-model="selectedAppId"
             placeholder="选择应用"
@@ -137,14 +161,17 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, DataLine, Document, TrendCharts, Bell, Setting, VideoCamera, Film, Moon, Sunny, User, SwitchButton, ArrowLeft, ArrowRight, Warning } from '@element-plus/icons-vue'
-import { logApi } from './api'
-import type { App, UserInfo } from './types'
+import { logApi, projectApi } from './api'
+import type { App, UserInfo, Project } from './types'
 import GlobalSearch from './components/GlobalSearch.vue'
 
 const route = useRoute()
 const router = useRouter()
 
 const selectedAppId = ref<string>('')
+
+	const selectedProjectId = ref<number>(0)
+	const projects = ref<Project[]>([])
 const apps = ref<App[]>([])
 const loading = ref(false)
 const currentUser = ref<UserInfo | null>(null)
@@ -242,6 +269,36 @@ const fetchApps = async () => {
   }
 }
 
+	const fetchProjects = async () => {
+	  try {
+	    const { data } = await projectApi.listProjects()
+	    projects.value = data
+	    // Restore selected project from localStorage
+	    const savedProjectId = localStorage.getItem('logmonitor_current_project')
+	    if (savedProjectId) {
+	      const projectId = parseInt(savedProjectId)
+	      const projectExists = projects.value.find(p => p.id === projectId)
+	      if (projectExists) {
+	        selectedProjectId.value = projectId
+	      } else if (projects.value.length > 0) {
+	        selectedProjectId.value = projects.value[0].id
+	      }
+	    } else if (projects.value.length > 0) {
+	      selectedProjectId.value = projects.value[0].id
+	    }
+	  } catch (error) {
+	    console.error('Failed to fetch projects:', error)
+	    // Don't show error message for projects - it might not be implemented yet
+	  }
+	}
+
+	const handleProjectChange = (projectId: number) => {
+	  localStorage.setItem('logmonitor_current_project', String(projectId))
+	  // Reload current page to apply project filter
+	  const currentPath = route.path
+	  router.replace({ path: currentPath, query: { ...route.query, projectId } })
+	}
+
 const handleAppChange = (appId: string) => {
   const currentPath = route.path
   if (currentPath.startsWith('/logs') || currentPath.startsWith('/performance') || currentPath.startsWith('/alerts')) {
@@ -279,7 +336,8 @@ onMounted(() => {
   initTheme()
   initSidebar()
   getCurrentUser()
-  fetchApps()
+  fetchProjects()
+	fetchApps()
 })
 </script>
 
@@ -435,6 +493,12 @@ onMounted(() => {
   color: var(--color-text-secondary);
   font-size: 12px;
   margin-left: 8px;
+
+.project-stats {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  margin-left: 8px;
+}
 }
 
 .fade-enter-active,

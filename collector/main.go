@@ -119,6 +119,17 @@ func main() {
 	// Initialize admin handler
 	adminHandler := handler.NewAdminHandler(db)
 
+	// Initialize projects handler
+	projectsHandler := handler.NewProjectsHandler(db, userStorage)
+
+	// Auto-create default project if none exist
+	if err := db.AutoCreateDefaultProject(); err != nil {
+		slog.Error("Failed to auto-create default project", "error", err)
+		// Don't exit on error, just log it
+	} else {
+		slog.Info("Default project check completed")
+	}
+
 	// Initialize buffer writer
 	writer := buffer.NewWriter(store.Events(), buffer.Config{
 		BufferSize:    cfg.Buffer.Size,
@@ -137,7 +148,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Public routes (no authentication required)
-	reportHandler := handler.NewReportHandler(writer, &cfg.Server)
+	reportHandler := handler.NewReportHandler(writer, &cfg.Server, db)
 	mux.Handle("/api/report", reportHandler)
 	mux.Handle("/api/events", reportHandler)
 	mux.Handle("/api/report/screenshot", handler.NewScreenshotHandler("./data/screenshots"))
@@ -224,6 +235,17 @@ func main() {
 		{"GET /api/admin/retention/policy", adminHandler.GetRetentionPolicy},
 		{"PUT /api/admin/retention/policy", adminHandler.SetRetentionPolicy},
 		{"POST /api/admin/cleanup/manual", adminHandler.TriggerManualCleanup},
+			// Slice 2: Multi-tenant project endpoints
+			{"POST /api/admin/projects", projectsHandler.CreateProject},
+			{"GET /api/admin/projects", projectsHandler.ListProjects},
+			{"GET /api/admin/projects/", projectsHandler.GetProject},
+			{"PUT /api/admin/projects/", projectsHandler.UpdateProject},
+			{"DELETE /api/admin/projects/", projectsHandler.DeleteProject},
+			{"POST /api/admin/projects//api-key", projectsHandler.RegenerateApiKey},
+			{"GET /api/admin/projects//members", projectsHandler.ListMembers},
+			{"POST /api/admin/projects//members", projectsHandler.AddMember},
+			{"PUT /api/admin/projects//members/", projectsHandler.UpdateMemberRole},
+			{"DELETE /api/admin/projects//members/", projectsHandler.RemoveMember},
 	}
 
 	for _, route := range authRoutes {

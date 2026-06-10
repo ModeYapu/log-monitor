@@ -242,3 +242,28 @@ export interface IssueStats {
     count: number
   }>
 }
+
+// Project and multi-tenant types
+export interface Project {
+  id: number
+  name: string
+  slug: string
+  description: string
+  api_key: string
+  retention_days: number
+  created_at: number
+  updated_at: number
+  deleted_at: number
+  member_count?: number
+  event_count?: number
+}
+
+export interface ProjectMember {
+  id: number
+  project_id: number
+  user_id: number
+  role: 'owner' | 'developer' | 'viewer'
+  created_at: number
+  username?: string
+  display_name?: string
+}

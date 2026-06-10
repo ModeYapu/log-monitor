@@ -300,3 +300,45 @@ export const adminApi = {
 }
 
 export default api
+
+export const projectApi = {
+  // List all projects (admin) or user's projects
+  listProjects: () =>
+    api.get<Project[]>('/admin/projects'),
+
+  // Get single project
+  getProject: (id: number) =>
+    api.get<Project>(`/admin/projects/${id}`),
+
+  // Create new project
+  createProject: (data: { name: string; slug: string; description: string }) =>
+    api.post<Project>('/admin/projects', data),
+
+  // Update project
+  updateProject: (id: number, data: { name?: string; description?: string; retention_days?: number }) =>
+    api.put<Project>(`/admin/projects/${id}`, data),
+
+  // Delete project
+  deleteProject: (id: number) =>
+    api.delete<{ success: boolean }>(`/admin/projects/${id}`),
+
+  // Regenerate API key
+  regenerateApiKey: (id: number) =>
+    api.post<{ api_key: string }>(`/admin/projects/${id}/api-key`),
+
+  // List project members
+  listMembers: (projectId: number) =>
+    api.get<ProjectMember[]>(`/admin/projects/${projectId}/members`),
+
+  // Add project member
+  addMember: (projectId: number, data: { user_id: number; role: string }) =>
+    api.post<{ success: string }>(`/admin/projects/${projectId}/members`, data),
+
+  // Update member role
+  updateMemberRole: (projectId: number, userId: number, data: { role: string }) =>
+    api.put<{ success: string }>(`/admin/projects/${projectId}/members/${userId}`, data),
+
+  // Remove member
+  removeMember: (projectId: number, userId: number) =>
+    api.delete<{ success: string }>(`/admin/projects/${projectId}/members/${userId}`)
+}
