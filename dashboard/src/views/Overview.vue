@@ -11,7 +11,138 @@
             <div class="stat-info">
               <div class="stat-value">{{ stat.value }}</div>
               <div class="stat-label">{{ stat.label }}</div>
+              <div v-if="stat.comparison" class="stat-comparison" :class="getTrendClass(stat.trend)">
+                {{ stat.comparison }}
+              </div>
             </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- Anomaly Workstation Area -->
+    <el-row :gutter="20" class="mt-4">
+      <el-col :span="8">
+        <el-card class="anomaly-card">
+          <template #header>
+            <div class="card-header">
+              <span>需要关注</span>
+              <el-tag size="small" type="danger">NEW</el-tag>
+            </div>
+          </template>
+          <div v-loading="loadingNewErrors" class="anomaly-content">
+            <div v-if="newErrors.length === 0" class="empty-state">
+              <el-empty description="暂无新错误" :image-size="40" />
+            </div>
+            <div v-else class="error-list">
+              <div
+                v-for="(error, index) in newErrors"
+                :key="index"
+                class="error-item-new"
+                @click="goToLogsWithError(error.message)"
+              >
+                <div class="error-info">
+                  <div class="error-message">{{ truncateMessage(error.message, 50) }}</div>
+                  <div class="error-meta">
+                    <span>{{ error.count }} 次</span>
+                    <span>{{ error.affected_users }} 用户</span>
+                    <span class="time-ago">{{ formatRelativeTime(error.first_seen) }}</span>
+                  </div>
+                </div>
+                <el-tag size="small" type="danger">NEW</el-tag>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="8">
+        <el-card class="anomaly-card">
+          <template #header>
+            <div class="card-header">
+              <span>最近告警</span>
+              <el-button size="small" link @click="goToAlerts">查看全部</el-button>
+            </div>
+          </template>
+          <div v-loading="loadingAlerts" class="anomaly-content">
+            <div v-if="alertTriggers.length === 0" class="empty-state">
+              <el-empty description="暂无告警触发" :image-size="40" />
+            </div>
+            <div v-else class="alert-list">
+              <div
+                v-for="(alert, index) in alertTriggers"
+                :key="index"
+                class="alert-item"
+                :class="getAlertClass(alert.severity)"
+                @click="goToAlerts"
+              >
+                <div class="alert-info">
+                  <div class="alert-name">{{ alert.alert_name || `告警 #${alert.alert_id}` }}</div>
+                  <div class="alert-meta">
+                    <span>{{ formatRelativeTime(alert.triggered_at) }}</span>
+                  </div>
+                </div>
+                <el-tag :type="getAlertTagType(alert.severity)" size="small">
+                  {{ alert.severity }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="8">
+        <el-card class="anomaly-card">
+          <template #header>
+            <div class="card-header">
+              <span>活跃会话</span>
+              <el-button size="small" link @click="refreshSessions">刷新</el-button>
+            </div>
+          </template>
+          <div v-loading="loadingSessions" class="anomaly-content">
+            <div v-if="activeSessions.length === 0" class="empty-state">
+              <el-empty description="暂无活跃会话" :image-size="40" />
+            </div>
+            <div v-else class="session-list">
+              <div
+                v-for="(session, index) in activeSessions"
+                :key="index"
+                class="session-item"
+              >
+                <div class="session-info">
+                  <div class="session-url">{{ truncateMessage(session.url, 40) }}</div>
+                  <div class="session-meta">
+                    <span>{{ session.event_count }} 事件</span>
+                    <span class="time-ago">{{ formatRelativeTime(session.last_activity) }}</span>
+                  </div>
+                </div>
+                <el-button size="small" type="primary" link @click="goToSession(session.session_id)">
+                  回放
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- Quick Actions Area -->
+    <el-row :gutter="20" class="mt-4">
+      <el-col :span="24">
+        <el-card class="quick-actions-card">
+          <template #header>
+            <span>快捷操作</span>
+          </template>
+          <div class="quick-actions">
+            <el-button @click="goToTodayErrors" type="danger" plain>
+              今天错误
+            </el-button>
+            <el-button @click="goToYesterdayCompare" type="info" plain>
+              昨天对比
+            </el-button>
+            <el-button @click="goToThisWeekTop" type="warning" plain>
+              本周 Top
+            </el-button>
           </div>
         </el-card>
       </el-col>
@@ -131,36 +262,102 @@ const topData = ref<any[]>([])
 const loadingTop = ref(false)
 let trendChart: echarts.ECharts | null = null
 
+// Anomaly workstation data
+const newErrors = ref<any[]>([])
+const alertTriggers = ref<any[]>([])
+const activeSessions = ref<any[]>([])
+const statsComparison = ref<any>(null)
+const loadingNewErrors = ref(false)
+const loadingAlerts = ref(false)
+const loadingSessions = ref(false)
+
 const statsCards = computed(() => [
   {
     key: 'total',
     label: '总事件数',
     value: formatNumber(stats.value?.totalEvents || 0),
     icon: InfoFilled,
-    color: 'linear-gradient(135deg, #3b82f6, #1d4ed8)'
+    color: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+    comparison: getComparisonDisplay('events'),
+    trend: getTrendDirection('events')
   },
   {
     key: 'errors',
     label: '错误数',
     value: formatNumber(stats.value?.errorCount || 0),
     icon: WarningFilled,
-    color: 'linear-gradient(135deg, #ef4444, #dc2626)'
+    color: 'linear-gradient(135deg, #ef4444, #dc2626)',
+    comparison: getComparisonDisplay('errors'),
+    trend: getTrendDirection('errors')
   },
   {
     key: 'warnings',
     label: '警告数',
     value: formatNumber(stats.value?.warnCount || 0),
     icon: Warning,
-    color: 'linear-gradient(135deg, #f59e0b, #d97706)'
+    color: 'linear-gradient(135deg, #f59e0b, #d97706)',
+    comparison: null, // No comparison for warnings
+    trend: null
   },
   {
     key: 'info',
     label: '信息数',
     value: formatNumber(stats.value?.infoCount || 0),
     icon: CircleCheck,
-    color: 'linear-gradient(135deg, #10b981, #059669)'
+    color: 'linear-gradient(135deg, #10b981, #059669)',
+    comparison: null, // No comparison for info
+    trend: null
+  },
+  {
+    key: 'affectedUsers',
+    label: '影响用户数',
+    value: formatNumber(statsComparison.value?.today_affected_users || 0),
+    icon: InfoFilled,
+    color: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+    comparison: getComparisonDisplay('affected_users'),
+    trend: getTrendDirection('affected_users')
   }
 ])
+
+// Helper functions for stat card enhancements
+const getComparisonDisplay = (metric: string) => {
+  if (!statsComparison.value) return null
+
+  const changeKey = `${metric}_change` as keyof typeof statsComparison.value
+  const change = statsComparison.value[changeKey] as number
+
+  if (change === undefined || change === 0) return null
+
+  const direction = change > 0 ? '↑' : '↓'
+  const percentage = Math.abs(change).toFixed(1)
+  return `${direction} ${percentage}%`
+}
+
+const getTrendDirection = (metric: string) => {
+  if (!statsComparison.value) return null
+
+  const changeKey = `${metric}_change` as keyof typeof statsComparison.value
+  const change = statsComparison.value[changeKey] as number
+
+  if (change === undefined || change === 0) return null
+
+  // For errors, positive change is bad (red), negative is good (green)
+  // For events and affected users, positive change is usually neutral
+  if (metric === 'errors') {
+    return change > 0 ? 'bad' : 'good'
+  }
+  return change > 0 ? 'neutral' : 'neutral'
+}
+
+const getTrendClass = (trend: string | null) => {
+  if (!trend) return ''
+  const classes: Record<string, string> = {
+    good: 'trend-good',
+    bad: 'trend-bad',
+    neutral: 'trend-neutral'
+  }
+  return classes[trend] || ''
+}
 
 const topErrors = computed(() => stats.value?.topErrors || [])
 
@@ -280,8 +477,131 @@ const goToLogs = (appId: string) => {
   router.push(`/logs/${appId}`)
 }
 
+// Anomaly workstation methods
+const fetchAnomalyData = async () => {
+  if (!currentAppId.value) return
+
+  // Fetch new errors from last hour
+  loadingNewErrors.value = true
+  try {
+    const { data } = await logApi.getNewErrors({ app_id: currentAppId.value, since: 60 })
+    newErrors.value = data.data || []
+  } catch (error) {
+    console.error('Failed to fetch new errors:', error)
+    newErrors.value = []
+  } finally {
+    loadingNewErrors.value = false
+  }
+
+  // Fetch recent alert triggers
+  loadingAlerts.value = true
+  try {
+    const { data } = await logApi.getAlertTriggers({ limit: 5 })
+    alertTriggers.value = data.data || []
+  } catch (error) {
+    console.error('Failed to fetch alert triggers:', error)
+    alertTriggers.value = []
+  } finally {
+    loadingAlerts.value = false
+  }
+
+  // Fetch active sessions
+  loadingSessions.value = true
+  try {
+    const { data } = await logApi.getActiveSessions({ app_id: currentAppId.value, limit: 5 })
+    activeSessions.value = data.data || []
+  } catch (error) {
+    console.error('Failed to fetch active sessions:', error)
+    activeSessions.value = []
+  } finally {
+    loadingSessions.value = false
+  }
+
+  // Fetch stats comparison
+  try {
+    const { data } = await logApi.getStatsComparison({ app_id: currentAppId.value })
+    statsComparison.value = data
+  } catch (error) {
+    console.error('Failed to fetch stats comparison:', error)
+    statsComparison.value = null
+  }
+}
+
+const refreshSessions = () => {
+  fetchAnomalyData()
+}
+
+const goToLogsWithError = (errorMessage: string) => {
+  router.push({
+    path: `/logs/${currentAppId.value}`,
+    query: { keyword: errorMessage, level: 'error' }
+  })
+}
+
+const goToAlerts = () => {
+  router.push(`/alerts/${currentAppId.value}`)
+}
+
+const goToSession = (sessionId: string) => {
+  router.push(`/sessions/${currentAppId.value}/${sessionId}`)
+}
+
+// Quick action methods
+const goToTodayErrors = () => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const startTime = today.getTime()
+
+  router.push({
+    path: `/logs/${currentAppId.value}`,
+    query: { level: 'error', startTime: startTime.toString() }
+  })
+}
+
+const goToYesterdayCompare = () => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const yesterdayStart = new Date(today)
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+  const todayEnd = today.getTime()
+
+  router.push({
+    path: `/logs/${currentAppId.value}`,
+    query: { startTime: yesterdayStart.getTime().toString(), endTime: todayEnd.toString() }
+  })
+}
+
+const goToThisWeekTop = () => {
+  router.push({
+    path: `/logs/${currentAppId.value}`,
+    query: { type: 'top', orderBy: 'count' }
+  })
+}
+
+// Alert helper methods
+const getAlertClass = (severity: string) => {
+  const classes: Record<string, string> = {
+    critical: 'alert-critical',
+    high: 'alert-high',
+    medium: 'alert-medium',
+    low: 'alert-low'
+  }
+  return classes[severity] || ''
+}
+
+const getAlertTagType = (severity: string) => {
+  const types: Record<string, string> = {
+    critical: 'danger',
+    high: 'warning',
+    medium: 'info',
+    low: 'info'
+  }
+  return types[severity] || 'info'
+}
+
 onMounted(() => {
   fetchData()
+  fetchAnomalyData()
 })
 
 onUnmounted(() => {
@@ -394,5 +714,218 @@ onUnmounted(() => {
   font-size: 12px;
   color: #ef4444;
   font-weight: 600;
+}
+
+/* Anomaly Workstation Styles */
+.anomaly-card {
+  height: 320px;
+}
+
+.anomaly-content {
+  min-height: 200px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 160px;
+}
+
+/* New Errors List */
+.error-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.error-item-new {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.error-item-new:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.error-item-new:last-child {
+  margin-bottom: 0;
+}
+
+.error-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.error-message {
+  font-size: 13px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.error-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.time-ago {
+  margin-left: auto;
+}
+
+/* Alert Triggers List */
+.alert-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.alert-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.alert-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.alert-item:last-child {
+  margin-bottom: 0;
+}
+
+.alert-item.alert-critical {
+  border-left: 3px solid #ef4444;
+}
+
+.alert-item.alert-high {
+  border-left: 3px solid #f59e0b;
+}
+
+.alert-item.alert-medium {
+  border-left: 3px solid #3b82f6;
+}
+
+.alert-item.alert-low {
+  border-left: 3px solid #6b7280;
+}
+
+.alert-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.alert-name {
+  font-size: 13px;
+  color: var(--color-text);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.alert-meta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Active Sessions List */
+.session-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+}
+
+.session-item:last-child {
+  margin-bottom: 0;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-url {
+  font-size: 13px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.session-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Quick Actions Card */
+.quick-actions-card {
+  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+}
+
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Stat Card Enhancements */
+.stat-comparison {
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.trend-good {
+  color: #10b981;
+}
+
+.trend-bad {
+  color: #ef4444;
+}
+
+.trend-neutral {
+  color: var(--color-text-secondary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .anomaly-card {
+    height: 280px;
+  }
+
+  .error-list,
+  .alert-list,
+  .session-list {
+    max-height: 200px;
+  }
 }
 </style>

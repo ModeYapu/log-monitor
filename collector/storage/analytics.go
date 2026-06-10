@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -725,4 +726,268 @@ func getWebVitalsGrade(metric string, value float64) string {
 		return "needs-improvement"
 	}
 	return "poor"
+}
+
+// NewError represents an error that recently appeared
+type NewError struct {
+	Message      string `json:"message"`
+	Count        int64  `json:"count"`
+	FirstSeen    int64  `json:"first_seen"`
+	LastSeen     int64  `json:"last_seen"`
+	AffectedUsers int64 `json:"affected_users"`
+}
+
+// GetNewErrors returns errors that first appeared in the last N minutes
+func (db *DB) GetNewErrors(appID string, sinceMinutes int) ([]NewError, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	now := time.Now()
+	startTime := now.Add(-time.Duration(sinceMinutes) * time.Minute).UnixMilli()
+
+	query := `SELECT message, COUNT(*) as count, COUNT(DISTINCT user_id) as affected_users,
+	          MIN(created_at) as first_seen, MAX(created_at) as last_seen
+	          FROM events
+	          WHERE app_id = ? AND level = 'error' AND created_at >= ?
+	          GROUP BY message
+	          HAVING MIN(created_at) >= ?
+	          ORDER BY first_seen DESC, count DESC
+	          LIMIT 20`
+
+	rows, err := db.conn.Query(query, appID, startTime, startTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query new errors: %w", err)
+	}
+	defer rows.Close()
+
+	var newErrors []NewError
+	for rows.Next() {
+		var newError NewError
+		err := rows.Scan(&newError.Message, &newError.Count, &newError.AffectedUsers, &newError.FirstSeen, &newError.LastSeen)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan new error: %w", err)
+		}
+		newErrors = append(newErrors, newError)
+	}
+
+	return newErrors, nil
+}
+
+// AlertTrigger represents a triggered alert event
+type AlertTrigger struct {
+	ID         int64  `json:"id"`
+	AlertID    int64  `json:"alert_id"`
+	AlertName  string `json:"alert_name"`
+	Severity   string `json:"severity"`
+	TriggeredAt int64 `json:"triggered_at"`
+	Message    string `json:"message"`
+}
+
+// GetRecentAlertTriggers returns the last N triggered alerts
+func (db *DB) GetRecentAlertTriggers(limit int) ([]AlertTrigger, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	query := `SELECT al.id, al.alert_id, ar.name as alert_name, ar.severity,
+	          al.triggered_at, al.message
+	          FROM alert_logs al
+	          JOIN alert_rules ar ON al.alert_id = ar.id
+	          ORDER BY al.triggered_at DESC
+	          LIMIT ?`
+
+	rows, err := db.conn.Query(query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query alert triggers: %w", err)
+	}
+	defer rows.Close()
+
+	var triggers []AlertTrigger
+	for rows.Next() {
+		var trigger AlertTrigger
+		var alertName, severity, message sql.NullString
+
+		err := rows.Scan(&trigger.ID, &trigger.AlertID, &alertName, &severity, &trigger.TriggeredAt, &message)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan alert trigger: %w", err)
+		}
+
+		if alertName.Valid {
+			trigger.AlertName = alertName.String
+		}
+		if severity.Valid {
+			trigger.Severity = severity.String
+		}
+		if message.Valid {
+			trigger.Message = message.String
+		}
+
+		triggers = append(triggers, trigger)
+	}
+
+	return triggers, nil
+}
+
+// ActiveSession represents an active user session
+type ActiveSession struct {
+	SessionID    string `json:"session_id"`
+	URL         string `json:"url"`
+	EventCount  int64  `json:"event_count"`
+	LastActivity int64 `json:"last_activity"`
+	UserID      string `json:"user_id"`
+}
+
+// GetActiveSessions returns recent active sessions
+func (db *DB) GetActiveSessions(appID string, limit int) ([]ActiveSession, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+
+	// Consider sessions active in last 24 hours
+	activeThreshold := time.Now().Add(-24 * time.Hour).UnixMilli()
+
+	query := `SELECT session_id, MAX(url) as url, COUNT(*) as event_count,
+	          MAX(created_at) as last_activity, MAX(user_id) as user_id
+	          FROM events
+	          WHERE app_id = ? AND session_id IS NOT NULL AND session_id != ''
+	          AND created_at >= ?
+	          GROUP BY session_id
+	          ORDER BY last_activity DESC
+	          LIMIT ?`
+
+	rows, err := db.conn.Query(query, appID, activeThreshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query active sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []ActiveSession
+	for rows.Next() {
+		var session ActiveSession
+		var url, userID sql.NullString
+
+		err := rows.Scan(&session.SessionID, &url, &session.EventCount, &session.LastActivity, &userID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan active session: %w", err)
+		}
+
+		if url.Valid {
+			session.URL = url.String
+		}
+		if userID.Valid {
+			session.UserID = userID.String
+		}
+
+		sessions = append(sessions, session)
+	}
+
+	return sessions, nil
+}
+
+// StatsComparison represents today vs yesterday statistics comparison
+type StatsComparison struct {
+	TodayEvents       int64   `json:"today_events"`
+	TodayErrors       int64   `json:"today_errors"`
+	TodayAffectedUsers int64  `json:"today_affected_users"`
+
+	YesterdayEvents        int64   `json:"yesterday_events"`
+	YesterdayErrors        int64   `json:"yesterday_errors"`
+	YesterdayAffectedUsers int64   `json:"yesterday_affected_users"`
+
+	EventsChange        float64 `json:"events_change"`
+	ErrorsChange        float64 `json:"errors_change"`
+	AffectedUsersChange float64 `json:"affected_users_change"`
+}
+
+// GetStatsComparison returns today vs yesterday statistics comparison
+func (db *DB) GetStatsComparison(appID string) (*StatsComparison, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	now := time.Now()
+	// Today: from 00:00 today to now
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).UnixMilli()
+	todayEnd := now.UnixMilli()
+
+	// Yesterday: from 00:00 yesterday to 23:59:59 yesterday
+	yesterdayStart := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, now.Location()).UnixMilli()
+	yesterdayEnd := time.Date(now.Year(), now.Month(), now.Day()-1, 23, 59, 59, 999999999, now.Location()).UnixMilli()
+
+	// Query today's stats
+	todayQuery := `SELECT COUNT(*) as total_events,
+	              SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
+	              COUNT(DISTINCT user_id) as affected_users
+	              FROM events
+	              WHERE app_id = ? AND created_at >= ? AND created_at <= ?`
+
+	var todayEvents, todayErrors, todayAffectedUsers int64
+	err := db.conn.QueryRow(todayQuery, appID, todayStart, todayEnd).Scan(&todayEvents, &todayErrors, &todayAffectedUsers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query today stats: %w", err)
+	}
+
+	// Query yesterday's stats
+	yesterdayQuery := `SELECT COUNT(*) as total_events,
+	                 SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
+	                 COUNT(DISTINCT user_id) as affected_users
+	                 FROM events
+	                 WHERE app_id = ? AND created_at >= ? AND created_at <= ?`
+
+	var yesterdayEvents, yesterdayErrors, yesterdayAffectedUsers int64
+	err = db.conn.QueryRow(yesterdayQuery, appID, yesterdayStart, yesterdayEnd).Scan(&yesterdayEvents, &yesterdayErrors, &yesterdayAffectedUsers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query yesterday stats: %w", err)
+	}
+
+	// Calculate changes
+	eventsChange := calculateChange(todayEvents, yesterdayEvents)
+	errorsChange := calculateChange(todayErrors, yesterdayErrors)
+	affectedUsersChange := calculateChange(todayAffectedUsers, yesterdayAffectedUsers)
+
+	return &StatsComparison{
+		TodayEvents:        todayEvents,
+		TodayErrors:        todayErrors,
+		TodayAffectedUsers: todayAffectedUsers,
+
+		YesterdayEvents:        yesterdayEvents,
+		YesterdayErrors:        yesterdayErrors,
+		YesterdayAffectedUsers: yesterdayAffectedUsers,
+
+		EventsChange:        eventsChange,
+		ErrorsChange:        errorsChange,
+		AffectedUsersChange: affectedUsersChange,
+	}, nil
+}
+
+// calculateChange calculates percentage change
+func calculateChange(today, yesterday int64) float64 {
+	if yesterday == 0 {
+		if today > 0 {
+			return 100.0 // +100% if starting from 0
+		}
+		return 0.0 // no change if both 0
+	}
+	return ((float64(today) - float64(yesterday)) / float64(yesterday)) * 100.0
 }

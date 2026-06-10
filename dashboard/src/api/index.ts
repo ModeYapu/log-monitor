@@ -122,7 +122,30 @@ export const logApi = {
     api.get<{ time_range: string; data: Array<{ url: string; fcp_p75: number; lcp_p75: number; cls_p75: number; inp_p75: number; ttfb_p75: number; samples: number; previous_period?: { lcp_change?: number } }> }>('/query/performance/pages', { params }),
 
   getPerformanceRegression: (params: { app_id: string }) =>
-    api.get<{ regressions: Array<{ url: string; metric: string; current_value: number; previous_value: number; change_percent: number; grade: string }>; count: number }>('/query/performance/regression', { params })
+    api.get<{ regressions: Array<{ url: string; metric: string; current_value: number; previous_value: number; change_percent: number; grade: string }>; count: number }>('/query/performance/regression', { params }),
+
+  // Anomaly detection API
+  getNewErrors: (params: { app_id: string; since?: number }) =>
+    api.get<{ data: Array<{ message: string; count: number; first_seen: number; last_seen: number; affected_users: number }>; count: number; since_minutes: number }>('/query/anomaly/new-errors', { params }),
+
+  getAlertTriggers: (params?: { limit?: number }) =>
+    api.get<{ data: Array<{ id: number; alert_id: number; alert_name: string; severity: string; triggered_at: number; message: string }>; count: number }>('/query/anomaly/alert-triggers', { params }),
+
+  getActiveSessions: (params: { app_id: string; limit?: number }) =>
+    api.get<{ data: Array<{ session_id: string; url: string; event_count: number; last_activity: number; user_id: string }>; count: number }>('/query/anomaly/active-sessions', { params }),
+
+  getStatsComparison: (params: { app_id: string }) =>
+    api.get<{
+      today_events: number;
+      today_errors: number;
+      today_affected_users: number;
+      yesterday_events: number;
+      yesterday_errors: number;
+      yesterday_affected_users: number;
+      events_change: number;
+      errors_change: number;
+      affected_users_change: number;
+    }>('/query/stats/comparison', { params })
 }
 
 export const cobrowseApi = {
