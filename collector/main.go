@@ -116,6 +116,9 @@ func main() {
 	// Initialize system handler
 	systemHandler := handler.NewSystemHandler(db, cfg.Database.Path, cfg.Database.RetentionDays)
 
+	// Initialize admin handler
+	adminHandler := handler.NewAdminHandler(db)
+
 	// Initialize buffer writer
 	writer := buffer.NewWriter(store.Events(), buffer.Config{
 		BufferSize:    cfg.Buffer.Size,
@@ -200,6 +203,11 @@ func main() {
 		{"POST /api/users", authHandler.CreateUser},
 		{"PUT /api/users/", authHandler.UpdateUser},
 		{"DELETE /api/users/", authHandler.DeleteUser},
+		// Slice 4: Admin storage governance endpoints
+		{"GET /api/admin/storage/stats", adminHandler.GetStorageStats},
+		{"GET /api/admin/retention/policy", adminHandler.GetRetentionPolicy},
+		{"PUT /api/admin/retention/policy", adminHandler.SetRetentionPolicy},
+		{"POST /api/admin/cleanup/manual", adminHandler.TriggerManualCleanup},
 	}
 
 	for _, route := range authRoutes {

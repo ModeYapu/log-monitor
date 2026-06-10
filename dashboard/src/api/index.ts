@@ -236,4 +236,37 @@ export const systemApi = {
     }>('/system/cleanup', undefined, { params: days ? { days } : undefined })
 }
 
+export const adminApi = {
+  // Storage stats
+  getStorageStats: () =>
+    api.get<{
+      db_size_bytes: number
+      tables: Array<{ name: string; row_count: number; size_estimate: number }>
+      apps: Array<{ app_id: string; event_count: number }>
+    }>('/admin/storage/stats'),
+
+  // Retention policy
+  getRetentionPolicy: () =>
+    api.get<{
+      events: number
+      recording_events: number
+      screenshots: number
+      alert_logs: number
+    }>('/admin/retention/policy'),
+
+  setRetentionPolicy: (policy: { events: number; recording_events: number; screenshots: number; alert_logs: number }) =>
+    api.put('/admin/retention/policy', policy),
+
+  // Manual cleanup
+  triggerManualCleanup: () =>
+    api.post<{
+      events_deleted: number
+      recording_events_deleted: number
+      screenshots_deleted: number
+      alert_logs_deleted: number
+      freed_bytes: number
+      last_cleanup_time: number
+    }>('/admin/cleanup/manual')
+}
+
 export default api

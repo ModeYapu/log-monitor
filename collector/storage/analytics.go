@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"os"
 	"sort"
 	"time"
 )
@@ -990,4 +992,253 @@ func calculateChange(today, yesterday int64) float64 {
 		return 0.0 // no change if both 0
 	}
 	return ((float64(today) - float64(yesterday)) / float64(yesterday)) * 100.0
+}
+
+// ==================== Slice 4: Data Lifecycle Governance ====================
+
+// StorageStats represents storage statistics for the database
+type StorageStats struct {
+	DBSizeBytes    int64            `json:"db_size_bytes"`
+	Tables         []TableStats     `json:"tables"`
+	Apps           []AppStorageStats `json:"apps"`
+}
+
+// TableStats represents statistics for a single table
+type TableStats struct {
+	Name        string `json:"name"`
+	RowCount    int64  `json:"row_count"`
+	SizeEstimate int64 `json:"size_estimate"`
+}
+
+// AppStorageStats represents storage statistics for a single app
+type AppStorageStats struct {
+	AppID      string `json:"app_id"`
+	EventCount int64  `json:"event_count"`
+}
+
+// RetentionPolicy represents retention policy for different data types
+type RetentionPolicy struct {
+	Events          int `json:"events"`           // days to keep events
+	RecordingEvents int `json:"recording_events"` // days to keep recording events
+	Screenshots     int `json:"screenshots"`      // days to keep screenshots
+	AlertLogs       int `json:"alert_logs"`       // days to keep alert logs
+}
+
+// CleanupResultDetail represents detailed cleanup operation result
+type CleanupResultDetail struct {
+	EventsDeleted         int64 `json:"events_deleted"`
+	RecordingEventsDeleted int64 `json:"recording_events_deleted"`
+	ScreenshotsDeleted    int64 `json:"screenshots_deleted"`
+	AlertLogsDeleted      int64 `json:"alert_logs_deleted"`
+	FreedBytes           int64 `json:"freed_bytes"`
+	LastCleanupTime       int64 `json:"last_cleanup_time"`
+}
+
+// GetStorageStats retrieves storage statistics for the database
+func (db *DB) GetStorageStats() (*StorageStats, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	stats := &StorageStats{}
+
+	// Get database file size (assuming SQLite)
+	if info, err := os.Stat(db.path); err == nil {
+		stats.DBSizeBytes = info.Size()
+	}
+
+	// Get table row counts and estimate sizes
+	tables := []string{"events", "recording_events", "recordings", "alert_logs", "alert_rules", "system_meta", "users"}
+	for _, table := range tables {
+		var rowCount int64
+		err := db.conn.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&rowCount)
+		if err != nil {
+			// Table might not exist, skip it
+			continue
+		}
+
+		// Estimate size (rough estimate: assume 1KB per row)
+		sizeEstimate := rowCount * 1024
+
+		stats.Tables = append(stats.Tables, TableStats{
+			Name:         table,
+			RowCount:     rowCount,
+			SizeEstimate: sizeEstimate,
+		})
+	}
+
+	// Get event count per app
+	query := `SELECT app_id, COUNT(*) as count FROM events GROUP BY app_id`
+	rows, err := db.conn.Query(query)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var appID string
+			var count int64
+			if err := rows.Scan(&appID, &count); err == nil {
+				stats.Apps = append(stats.Apps, AppStorageStats{
+					AppID:      appID,
+					EventCount: count,
+				})
+			}
+		}
+	}
+
+	return stats, nil
+}
+
+// GetRetentionPolicy retrieves the current retention policy from system_meta
+func (db *DB) GetRetentionPolicy() (*RetentionPolicy, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	policy := &RetentionPolicy{
+		Events:          30,  // default 30 days
+		RecordingEvents: 14,  // default 14 days
+		Screenshots:     7,   // default 7 days
+		AlertLogs:       30,  // default 30 days
+	}
+
+	// Try to get policy from system_meta
+	var policyJSON string
+	err := db.conn.QueryRow("SELECT value FROM system_meta WHERE key = 'retention_policy'").Scan(&policyJSON)
+	if err == nil && policyJSON != "" {
+		if err := json.Unmarshal([]byte(policyJSON), policy); err == nil {
+			return policy, nil
+		}
+	}
+
+	// Return default policy if not found or error
+	return policy, nil
+}
+
+// SetRetentionPolicy saves the retention policy to system_meta
+func (db *DB) SetRetentionPolicy(policy *RetentionPolicy) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return fmt.Errorf("database is closed")
+	}
+
+	// Validate policy values
+	if policy.Events < 1 || policy.Events > 365 {
+		return fmt.Errorf("events retention must be between 1 and 365 days")
+	}
+	if policy.RecordingEvents < 1 || policy.RecordingEvents > 365 {
+		return fmt.Errorf("recording_events retention must be between 1 and 365 days")
+	}
+	if policy.Screenshots < 1 || policy.Screenshots > 365 {
+		return fmt.Errorf("screenshots retention must be between 1 and 365 days")
+	}
+	if policy.AlertLogs < 1 || policy.AlertLogs > 365 {
+		return fmt.Errorf("alert_logs retention must be between 1 and 365 days")
+	}
+
+	// Serialize policy to JSON
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return fmt.Errorf("failed to serialize policy: %w", err)
+	}
+
+	// Save to system_meta
+	_, err = db.conn.Exec(`
+		INSERT OR REPLACE INTO system_meta (key, value, updated_at)
+		VALUES ('retention_policy', ?, ?)
+	`, string(policyJSON), time.Now().UnixMilli())
+
+	if err != nil {
+		return fmt.Errorf("failed to save retention policy: %w", err)
+	}
+
+	return nil
+}
+
+// CleanupOldDataWithPolicy cleans up old data based on retention policy
+func (db *DB) CleanupOldDataWithPolicy(policy *RetentionPolicy) (*CleanupResultDetail, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	result := &CleanupResultDetail{
+		LastCleanupTime: time.Now().UnixMilli(),
+	}
+
+	now := time.Now()
+
+	// Clean events
+	eventsCutoff := now.AddDate(0, 0, -policy.Events).UnixMilli()
+	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", eventsCutoff)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to delete old events: %v\n", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.EventsDeleted = rowsAffected
+		fmt.Printf("[cleanup] Deleted %d old events (older than %d days)\n", rowsAffected, policy.Events)
+	}
+
+	// Clean recording_events
+	recordingsCutoff := now.AddDate(0, 0, -policy.RecordingEvents).UnixMilli()
+	rows, err = db.conn.Exec("DELETE FROM recording_events WHERE created_at < ?", recordingsCutoff)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to delete old recording_events: %v\n", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.RecordingEventsDeleted = rowsAffected
+		fmt.Printf("[cleanup] Deleted %d old recording_events (older than %d days)\n", rowsAffected, policy.RecordingEvents)
+	}
+
+	// Clean screenshots (from screenshots directory - if applicable)
+	// Note: Screenshots are stored as files, so we'd need to implement file-based cleanup
+	// For now, we'll just log this
+	fmt.Printf("[cleanup] Screenshots cleanup not yet implemented (older than %d days)\n", policy.Screenshots)
+
+	// Clean alert_logs
+	alertsCutoff := now.AddDate(0, 0, -policy.AlertLogs).UnixMilli()
+	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to delete old alert_logs: %v\n", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		result.AlertLogsDeleted = rowsAffected
+		fmt.Printf("[cleanup] Deleted %d old alert_logs (older than %d days)\n", rowsAffected, policy.AlertLogs)
+	}
+
+	// Calculate freed bytes (rough estimate)
+	deletedRows := result.EventsDeleted + result.RecordingEventsDeleted + result.AlertLogsDeleted
+	result.FreedBytes = deletedRows * 1024 // Assume 1KB per row
+
+	// Clean orphaned recording_events (events without a corresponding recording)
+	rows, err = db.conn.Exec(`
+		DELETE FROM recording_events
+		WHERE session_id NOT IN (SELECT session_id FROM recordings)
+	`)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to delete orphaned recording_events: %v\n", err)
+	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
+		orphanDeleted := rowsAffected
+		result.RecordingEventsDeleted += orphanDeleted
+		fmt.Printf("[cleanup] Deleted %d orphaned recording_events\n", orphanDeleted)
+	}
+
+	// Update last cleanup time in system_meta
+	_, err = db.conn.Exec(`
+		INSERT OR REPLACE INTO system_meta (key, value, updated_at)
+		VALUES ('last_cleanup_time', ?, ?)
+	`, result.LastCleanupTime, result.LastCleanupTime)
+	if err != nil {
+		fmt.Printf("[cleanup] Failed to update last_cleanup_time: %v\n", err)
+	}
+
+	slog.Error("[cleanup] Policy-based cleanup completed: %d events, %d recording_events, %d alert_logs deleted",
+		result.EventsDeleted, result.RecordingEventsDeleted, result.AlertLogsDeleted)
+
+	return result, nil
 }

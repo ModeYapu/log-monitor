@@ -121,3 +121,109 @@ func (h *SystemHandler) TriggerCleanup(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(cleanupResult)
 }
+
+// ==================== Slice 4: Admin APIs ====================
+
+// AdminHandler handles admin-specific requests
+type AdminHandler struct {
+	db *storage.DB
+}
+
+// NewAdminHandler creates a new admin handler
+func NewAdminHandler(db *storage.DB) *AdminHandler {
+	return &AdminHandler{db: db}
+}
+
+// GetStorageStats returns storage statistics
+func (h *AdminHandler) GetStorageStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	stats, err := h.db.GetStorageStats()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}
+
+// GetRetentionPolicy returns the current retention policy
+func (h *AdminHandler) GetRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	policy, err := h.db.GetRetentionPolicy()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(policy)
+}
+
+// SetRetentionPolicy updates the retention policy
+func (h *AdminHandler) SetRetentionPolicy(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var policy storage.RetentionPolicy
+	if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.db.SetRetentionPolicy(&policy); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("[admin] Retention policy updated: events=%d days, recordings=%d days, screenshots=%d days, alerts=%d days",
+		policy.Events, policy.RecordingEvents, policy.Screenshots, policy.AlertLogs)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Retention policy updated successfully",
+		"policy":  policy,
+	})
+}
+
+// TriggerManualCleanup triggers manual cleanup with current retention policy
+func (h *AdminHandler) TriggerManualCleanup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get current retention policy
+	policy, err := h.db.GetRetentionPolicy()
+	if err != nil {
+		http.Error(w, "Failed to get retention policy", http.StatusInternalServerError)
+		return
+	}
+
+	// Perform cleanup with policy
+	result, err := h.db.CleanupOldDataWithPolicy(policy)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("[admin] Manual cleanup completed: %d events, %d recording_events, %d alert_logs deleted, %d bytes freed",
+		result.EventsDeleted, result.RecordingEventsDeleted, result.AlertLogsDeleted, result.FreedBytes)
+
+	json.NewEncoder(w).Encode(result)
+}
