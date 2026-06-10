@@ -17,6 +17,7 @@ import (
 	"github.com/logmonitor/collector/internal/logger"
 	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/storage"
+	"github.com/logmonitor/collector/webhook"
 	"github.com/logmonitor/collector/worker"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -122,6 +123,22 @@ func main() {
 	// Initialize projects handler
 	projectsHandler := handler.NewProjectsHandler(db, userStorage)
 
+	// Initialize webhook manager and handler (Slice 4)
+	webhookManager := webhook.NewManager(db, webhook.ManagerConfig{
+		BufferSize:    100,
+		FlushInterval: 5 * time.Second,
+	})
+	webhooksHandler := handler.NewWebhooksHandler(db, webhookManager)
+
+	// Initialize OpenAPI handler (Slice 4)
+	openapiSpec, err := os.ReadFile("api/openapi.yaml")
+	if err != nil {
+		slog.Warn("Failed to read OpenAPI spec", "error", err)
+		// Continue without OpenAPI spec
+		openapiSpec = []byte("openapi: 3.0.0\ninfo:\n  title: LogMonitor API\n  version: 1.0.0")
+	}
+	openapiHandler := handler.NewOpenAPIHandler(openapiSpec)
+
 	// Auto-create default project if none exist
 	if err := db.AutoCreateDefaultProject(); err != nil {
 		slog.Error("Failed to auto-create default project", "error", err)
@@ -159,6 +176,8 @@ func main() {
 	mux.Handle("/api/health", corsMiddleware.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler.NewQueryHandler(db).Health(w, r)
 	})))
+	mux.Handle("/api/docs", corsMiddleware.Handler(http.HandlerFunc(openapiHandler.GetSpec)))
+	mux.Handle("/api/docs/ui", corsMiddleware.Handler(http.HandlerFunc(openapiHandler.GetSwaggerUI)))
 
 	// Protected routes (require authentication)
 	queryHandler := handler.NewQueryHandler(db)
@@ -246,6 +265,12 @@ func main() {
 			{"POST /api/admin/projects//members", projectsHandler.AddMember},
 			{"PUT /api/admin/projects//members/", projectsHandler.UpdateMemberRole},
 			{"DELETE /api/admin/projects//members/", projectsHandler.RemoveMember},
+			// Slice 4: Webhook management endpoints
+			{"GET /api/admin/webhooks", webhooksHandler.GetWebhooks},
+			{"POST /api/admin/webhooks", webhooksHandler.CreateWebhook},
+			{"PUT /api/admin/webhooks/", webhooksHandler.UpdateWebhook},
+			{"DELETE /api/admin/webhooks/", webhooksHandler.DeleteWebhook},
+			{"POST /api/admin/webhooks//test", webhooksHandler.TestWebhook},
 	}
 
 	for _, route := range authRoutes {
@@ -314,6 +339,11 @@ func main() {
 	defer workerManager.Stop()
 
 	slog.Info("Worker manager started", "workers", workerManager.WorkerCount())
+
+	// Start webhook manager (Slice 4)
+	// Note: Webhook manager runs in background goroutines, no need to start explicitly
+	defer webhookManager.Stop()
+	slog.Info("Webhook manager initialized")
 
 	// Initialize config watcher
 	configWatcher := config.NewWatcher(*configPath, func(oldCfg, newCfg *config.Config) error {

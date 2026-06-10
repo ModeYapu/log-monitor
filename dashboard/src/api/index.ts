@@ -296,7 +296,23 @@ export const adminApi = {
       alert_logs_deleted: number
       freed_bytes: number
       last_cleanup_time: number
-    }>('/admin/cleanup/manual')
+    }>('/admin/cleanup/manual'),
+
+  // Webhook management (Slice 4)
+  getWebhooks: () =>
+    api.get<any[]>('/admin/webhooks'),
+
+  createWebhook: (data: { project_id?: number; name: string; url: string; secret?: string; events: string[]; enabled?: boolean }) =>
+    api.post<any>('/admin/webhooks', data),
+
+  updateWebhook: (id: number, data: { name?: string; url?: string; secret?: string; events?: string[]; enabled?: boolean }) =>
+    api.put<any>(`/admin/webhooks/${id}`, data),
+
+  deleteWebhook: (id: number) =>
+    api.delete<{ success: boolean }>(`/admin/webhooks/${id}`),
+
+  testWebhook: (id: number) =>
+    api.post<{ success: boolean; message: string }>(`/admin/webhooks/${id}/test`)
 }
 
 export default api

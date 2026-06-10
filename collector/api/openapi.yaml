@@ -1,0 +1,1608 @@
+openapi: 3.0.0
+info:
+  title: LogMonitor Collector API
+  description: API for LogMonitor frontend monitoring system
+  version: 1.0.0
+  contact:
+    name: LogMonitor
+    email: support@logmonitor.dev
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.logmonitor.dev
+    description: Production server
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Events
+    description: Event reporting and querying
+  - name: Query
+    description: Data query endpoints
+  - name: Issues
+    description: Issue management
+  - name: Projects
+    description: Project management
+  - name: Alerts
+    description: Alert management
+  - name: Admin
+    description: Administration endpoints
+  - name: Performance
+    description: Performance monitoring
+  - name: Anomaly
+    description: Anomaly detection
+  - name: Webhooks
+    description: Webhook management
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login to get JWT token
+      description: Authenticate with username and password to receive JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: admin123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user info
+      description: Get information about the currently authenticated user
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /api/auth/password:
+    put:
+      tags: [Auth]
+      summary: Change password
+      description: Change current user's password
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_password, new_password]
+              properties:
+                old_password:
+                  type: string
+                new_password:
+                  type: string
+      responses:
+        '200':
+          description: Password changed successfully
+        '401':
+          description: Invalid old password
+
+  /api/events:
+    post:
+      tags: [Events]
+      summary: Report events
+      description: Submit events to LogMonitor (supports batching)
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Event'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Event'
+      responses:
+        '200':
+          description: Events accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  processed:
+                    type: integer
+                    example: 1
+
+  /api/report:
+    post:
+      tags: [Events]
+      summary: Report single event
+      description: Submit a single event to LogMonitor
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        '200':
+          description: Event accepted
+
+  /api/query/logs:
+    get:
+      tags: [Query]
+      summary: Query logs
+      description: Retrieve log events with filtering
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: integer
+            description: Start timestamp
+        - name: end
+          in: query
+          schema:
+            type: integer
+            description: End timestamp
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+
+  /api/query/stats:
+    get:
+      tags: [Query]
+      summary: Get statistics
+      description: Get event statistics by level and type
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: integer
+        - name: end
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Statistics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  by_level:
+                    type: object
+                  by_type:
+                    type: object
+
+  /api/query/apps:
+    get:
+      tags: [Query]
+      summary: List applications
+      description: Get list of applications that have reported events
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Applications list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    app_id:
+                      type: string
+                    event_count:
+                      type: integer
+                    last_seen:
+                      type: integer
+
+  /api/query/top:
+    get:
+      tags: [Query]
+      summary: Get top N results
+      description: Get top results by error count, users, or other metrics
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [errors, users, urls, releases]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Top N results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TopNItem'
+
+  /api/query/similar:
+    get:
+      tags: [Query]
+      summary: Find similar events
+      description: Get events similar to a specific event
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: fingerprint
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Similar events
+
+  /api/query/export:
+    get:
+      tags: [Query]
+      summary: Export events
+      description: Export events as CSV
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: integer
+        - name: end
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/query/clusters:
+    get:
+      tags: [Query]
+      summary: Get error clusters
+      description: Get clustered error groups
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: min_size
+          in: query
+          schema:
+            type: integer
+            default: 2
+      responses:
+        '200':
+          description: Error clusters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ErrorCluster'
+
+  /api/query/issues:
+    get:
+      tags: [Issues]
+      summary: List issues
+      description: Get issues with filtering and pagination
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, resolved, ignored, muted]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [last_seen, event_count, priority]
+            default: last_seen
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Issues list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Issue'
+
+  /api/query/issues/{id}:
+    get:
+      tags: [Issues]
+      summary: Get issue details
+      description: Get detailed information about a specific issue
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Issue details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+  /api/query/issues/{id}:
+    put:
+      tags: [Issues]
+      summary: Update issue
+      description: Update issue status, priority, or assignee
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [open, resolved, ignored, muted]
+                priority:
+                  type: string
+                  enum: [low, medium, high, critical]
+                assignee:
+                  type: string
+      responses:
+        '200':
+          description: Issue updated
+
+  /api/query/issues/{id}:
+    post:
+      tags: [Issues]
+      summary: Issue action
+      description: Perform actions on issue (resolve, ignore)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [resolve, ignore]
+      responses:
+        '200':
+          description: Action completed
+
+  /api/query/issues/stats:
+    get:
+      tags: [Issues]
+      summary: Get issue statistics
+      description: Get issue statistics by status and priority
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Issue statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  by_status:
+                    type: object
+                  by_priority:
+                    type: object
+                  trend:
+                    type: array
+                    items:
+                      type: object
+
+  /api/query/performance/summary:
+    get:
+      tags: [Performance]
+      summary: Get performance summary
+      description: Get overall performance metrics summary
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Performance summary
+
+  /api/query/performance/trend:
+    get:
+      tags: [Performance]
+      summary: Get performance trend
+      description: Get performance metrics over time
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          schema:
+            type: integer
+        - name: end
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Performance trend data
+
+  /api/query/performance/pages:
+    get:
+      tags: [Performance]
+      summary: Get page performance
+      description: Get performance metrics by page
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Page performance data
+
+  /api/query/performance/regression:
+    get:
+      tags: [Performance]
+      summary: Detect performance regression
+      description: Detect performance regressions
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Performance regression data
+
+  /api/query/anomaly/new-errors:
+    get:
+      tags: [Anomaly]
+      summary: Get new errors
+      description: Get newly detected errors
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: New errors list
+
+  /api/query/anomaly/alert-triggers:
+    get:
+      tags: [Anomaly]
+      summary: Get alert triggers
+      description: Get recent alert triggers
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert triggers list
+
+  /api/query/anomaly/active-sessions:
+    get:
+      tags: [Anomaly]
+      summary: Get active sessions
+      description: Get currently active user sessions
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active sessions list
+
+  /api/query/stats/comparison:
+    get:
+      tags: [Query]
+      summary: Compare statistics
+      description: Compare statistics between time periods
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comparison data
+
+  /api/query/release-health:
+    get:
+      tags: [Query]
+      summary: Get release health
+      description: Get health metrics by release
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Release health data
+
+  /api/query/session-stats:
+    get:
+      tags: [Query]
+      summary: Get session statistics
+      description: Get session-level statistics
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session statistics
+
+  /api/query/alerts:
+    get:
+      tags: [Alerts]
+      summary: List alerts
+      description: Get configured alert rules
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: app_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert rules list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alert'
+
+  /api/query/alerts:
+    post:
+      tags: [Alerts]
+      summary: Create alert
+      description: Create a new alert rule
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Alert created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+
+  /api/query/alerts/{id}:
+    delete:
+      tags: [Alerts]
+      summary: Delete alert
+      description: Delete an alert rule
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert deleted
+
+  /api/alerts/test:
+    post:
+      tags: [Alerts]
+      summary: Test alert
+      description: Send test alert notification
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Alert'
+      responses:
+        '200':
+          description: Test alert sent
+
+  /api/admin/projects:
+    get:
+      tags: [Projects]
+      summary: List projects
+      description: Get all projects (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Projects list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+
+  /api/admin/projects:
+    post:
+      tags: [Projects]
+      summary: Create project
+      description: Create a new project (admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug]
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /api/admin/projects/{id}:
+    get:
+      tags: [Projects]
+      summary: Get project
+      description: Get project details (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /api/admin/projects/{id}:
+    put:
+      tags: [Projects]
+      summary: Update project
+      description: Update project details (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                retention_days:
+                  type: integer
+      responses:
+        '200':
+          description: Project updated
+
+  /api/admin/projects/{id}:
+    delete:
+      tags: [Projects]
+      summary: Delete project
+      description: Delete a project (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Project deleted
+
+  /api/admin/projects/{id}/api-key:
+    post:
+      tags: [Projects]
+      summary: Regenerate API key
+      description: Regenerate project API key (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: API key regenerated
+
+  /api/admin/projects/{id}/members:
+    get:
+      tags: [Projects]
+      summary: List project members
+      description: Get project members (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Project members list
+
+  /api/admin/projects/{id}/members:
+    post:
+      tags: [Projects]
+      summary: Add project member
+      description: Add a member to project (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, role]
+              properties:
+                user_id:
+                  type: integer
+                role:
+                  type: string
+                  enum: [owner, developer, viewer]
+      responses:
+        '200':
+          description: Member added
+
+  /api/admin/projects/{id}/members/{user_id}:
+    put:
+      tags: [Projects]
+      summary: Update member role
+      description: Update project member role (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [owner, developer, viewer]
+      responses:
+        '200':
+          description: Member role updated
+
+  /api/admin/projects/{id}/members/{user_id}:
+    delete:
+      tags: [Projects]
+      summary: Remove project member
+      description: Remove member from project (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Member removed
+
+  /api/admin/storage/stats:
+    get:
+      tags: [Admin]
+      summary: Get storage statistics
+      description: Get database storage statistics (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Storage statistics
+
+  /api/admin/retention/policy:
+    get:
+      tags: [Admin]
+      summary: Get retention policy
+      description: Get current retention policy (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Retention policy
+
+  /api/admin/retention/policy:
+    put:
+      tags: [Admin]
+      summary: Set retention policy
+      description: Update retention policy (admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [retention_days]
+              properties:
+                retention_days:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Retention policy updated
+
+  /api/admin/cleanup/manual:
+    post:
+      tags: [Admin]
+      summary: Trigger manual cleanup
+      description: Manually trigger data cleanup (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cleanup triggered
+
+  /api/admin/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhooks
+      description: Get all webhooks (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Webhooks list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+
+  /api/admin/webhooks:
+    post:
+      tags: [Webhooks]
+      summary: Create webhook
+      description: Create a new webhook (admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url, events]
+              properties:
+                project_id:
+                  type: integer
+                  description: Project ID (0 for global webhooks)
+                name:
+                  type: string
+                url:
+                  type: string
+                  format: uri
+                secret:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [issue.created, issue.resolved, issue.reopened, alert.triggered]
+      responses:
+        '200':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+  /api/admin/webhooks/{id}:
+    put:
+      tags: [Webhooks]
+      summary: Update webhook
+      description: Update webhook configuration (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                url:
+                  type: string
+                  format: uri
+                secret:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Webhook updated
+
+  /api/admin/webhooks/{id}:
+    delete:
+      tags: [Webhooks]
+      summary: Delete webhook
+      description: Delete a webhook (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Webhook deleted
+
+  /api/admin/webhooks/{id}/test:
+    post:
+      tags: [Webhooks]
+      summary: Test webhook
+      description: Send test payload to webhook (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Test webhook sent
+
+  /api/system/info:
+    get:
+      tags: [Admin]
+      summary: Get system info
+      description: Get system information (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: System information
+
+  /api/system/cleanup:
+    post:
+      tags: [Admin]
+      summary: Trigger cleanup
+      description: Manually trigger data cleanup (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cleanup triggered
+
+  /api/health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: Check API health status
+      responses:
+        '200':
+          description: System healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/docs:
+    get:
+      tags: [System]
+      summary: Get OpenAPI spec
+      description: Get OpenAPI specification as YAML
+      responses:
+        '200':
+          description: OpenAPI spec
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /api/docs/ui:
+    get:
+      tags: [System]
+      summary: Swagger UI
+      description: OpenAPI documentation UI
+      responses:
+        '200':
+          description: Swagger UI HTML page
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT authentication token
+
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Project API key for programmatic access
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        created_at:
+          type: integer
+
+    Event:
+      type: object
+      required: [app_id, type, level, message]
+      properties:
+        app_id:
+          type: string
+          description: Application identifier
+        release:
+          type: string
+          description: Release version
+        env:
+          type: string
+          description: Environment
+        build_id:
+          type: string
+          description: Build identifier
+        user_id:
+          type: string
+          description: User identifier
+        session_id:
+          type: string
+          description: Session identifier
+        type:
+          type: string
+          enum: [error, log, performance, resource, interaction]
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+        message:
+          type: string
+        stack:
+          type: string
+          description: Stack trace for errors
+        url:
+          type: string
+          description: Page URL
+        line:
+          type: integer
+          description: Line number
+        col:
+          type: integer
+          description: Column number
+        tags:
+          type: object
+          additionalProperties: true
+        extra:
+          type: object
+          additionalProperties: true
+        ua:
+          type: string
+          description: User agent
+        screen:
+          type: string
+          description: Screen dimensions
+        viewport:
+          type: string
+          description: Viewport dimensions
+        performance:
+          type: object
+          properties:
+            ttfb:
+              type: integer
+            dns:
+              type: integer
+            tcp:
+              type: integer
+            ttl:
+              type: integer
+            download:
+              type: integer
+            first_paint:
+              type: integer
+            dom_content_loaded:
+              type: integer
+            load_complete:
+              type: integer
+        ip:
+          type: string
+          description: Client IP address
+
+    TopNItem:
+      type: object
+      properties:
+        key:
+          type: string
+        count:
+          type: integer
+        users:
+          type: integer
+        last_seen:
+          type: integer
+        first_seen:
+          type: integer
+        is_new:
+          type: boolean
+        impact_score:
+          type: integer
+
+    ErrorCluster:
+      type: object
+      properties:
+        clusterId:
+          type: string
+        message:
+          type: string
+        count:
+          type: integer
+        firstSeen:
+          type: integer
+        lastSeen:
+          type: integer
+        affectedUsers:
+          type: integer
+        pattern:
+          type: string
+        stack:
+          type: string
+        affectedURLs:
+          type: array
+          items:
+            type: string
+        releases:
+          type: array
+          items:
+            type: string
+        sampleEvents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+
+    Issue:
+      type: object
+      properties:
+        id:
+          type: integer
+        fingerprint:
+          type: string
+        app_id:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
+          enum: [error, performance, resource]
+        status:
+          type: string
+          enum: [open, resolved, ignored, muted]
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        assignee:
+          type: string
+        first_seen_at:
+          type: integer
+        last_seen_at:
+          type: integer
+        event_count:
+          type: integer
+        user_count:
+          type: integer
+        resolved_at:
+          type: integer
+          description: Timestamp when issue was resolved
+        created_at:
+          type: integer
+        updated_at:
+          type: integer
+
+    Alert:
+      type: object
+      required: [name, app_id, type, threshold]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        app_id:
+          type: string
+        type:
+          type: string
+          enum: [error_count, error_rate, crash_rate, custom]
+        threshold:
+          type: number
+        window_minutes:
+          type: integer
+          description: Time window in minutes
+        channels:
+          type: array
+          items:
+            type: string
+          description: Notification channels
+        enabled:
+          type: boolean
+        created_at:
+          type: integer
+        updated_at:
+          type: integer
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        api_key:
+          type: string
+        retention_days:
+          type: integer
+        created_at:
+          type: integer
+        updated_at:
+          type: integer
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: integer
+        project_id:
+          type: integer
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+        secret:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+            enum: [issue.created, issue.resolved, issue.reopened, alert.triggered]
+        enabled:
+          type: boolean
+        last_triggered_at:
+          type: integer
+        failure_count:
+          type: integer
+        created_at:
+          type: integer
+        updated_at:
+          type: integer

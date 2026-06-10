@@ -245,6 +245,57 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
             </div>
           </div>
         </el-card>
+
+        <!-- Slice 4: Webhook Management Section -->
+        <el-card class="mt-4">
+          <template #header>
+            <div class="flex justify-between items-center">
+              <span>Webhook 管理</span>
+              <el-button size="small" type="primary" @click="showCreateWebhookDialog">
+                <el-icon><Plus /></el-icon>
+                添加 Webhook
+              </el-button>
+            </div>
+          </template>
+
+          <div v-loading="loadingWebhooks" class="webhook-list">
+            <el-table :data="webhooks" stripe>
+              <el-table-column prop="name" label="名称" width="150" />
+              <el-table-column prop="url" label="URL" min-width="200" show-overflow-tooltip />
+              <el-table-column label="事件" width="180">
+                <template #default="{ row }">
+                  <el-tag v-for="event in row.events" :key="event" size="small" class="mr-1">
+                    {{ formatEventName(event) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="80">
+                <template #default="{ row }">
+                  <el-switch v-model="row.enabled" @change="toggleWebhookEnabled(row)" />
+                </template>
+              </el-table-column>
+              <el-table-column label="最后触发" width="160">
+                <template #default="{ row }">
+                  {{ row.last_triggered_at ? formatTime(row.last_triggered_at) : '从未触发' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="失败次数" width="80" prop="failure_count" />
+              <el-table-column label="操作" width="150" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" @click="testWebhook(row)">
+                    <el-icon><Connection /></el-icon>
+                    测试
+                  </el-button>
+                  <el-button size="small" type="danger" @click="confirmDeleteWebhook(row)">
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <el-empty v-if="!loadingWebhooks && webhooks.length === 0" description="暂无 Webhook" />
+          </div>
+        </el-card>
       </el-col>
 
       <el-col :span="8">
@@ -353,13 +404,66 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Slice 4: Webhook Create/Edit Dialog -->
+    <el-dialog
+      v-model="showWebhookDialog"
+      :title="editingWebhook ? '编辑 Webhook' : '添加 Webhook'"
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <el-form ref="webhookFormRef" :model="webhookForm" :rules="webhookRules" label-width="120px">
+        <el-form-item label="Webhook 名称" prop="name">
+          <el-input v-model="webhookForm.name" placeholder="请输入 Webhook 名称" />
+        </el-form-item>
+        <el-form-item label="URL" prop="url">
+          <el-input v-model="webhookForm.url" placeholder="https://example.com/webhook" />
+        </el-form-item>
+        <el-form-item label="Secret">
+          <el-input v-model="webhookForm.secret" placeholder="留空自动生成" show-password />
+        </el-form-item>
+        <el-form-item label="监听事件" prop="events">
+          <el-checkbox-group v-model="webhookForm.events">
+            <el-checkbox label="issue.created">问题创建</el-checkbox>
+            <el-checkbox label="issue.resolved">问题解决</el-checkbox>
+            <el-checkbox label="issue.reopened">问题重新打开</el-checkbox>
+            <el-checkbox label="alert.triggered">告警触发</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+        <el-form-item label="启用状态">
+          <el-switch v-model="webhookForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showWebhookDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveWebhook" :loading="savingWebhook">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Slice 4: Webhook Delete Confirmation Dialog -->
+    <el-dialog
+      v-model="showDeleteWebhookDialog"
+      title="确认删除 Webhook"
+      width="400px"
+    >
+      <p>确定要删除 Webhook "<strong>{{ deletingWebhook?.name }}</strong>" 吗？</p>
+      <p class="text-secondary">此操作不可恢复。</p>
+      <template #footer>
+        <el-button @click="showDeleteWebhookDialog = false">取消</el-button>
+        <el-button type="danger" @click="deleteWebhook" :loading="deletingWebhookInProgress">
+          确认删除
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { CircleCheck, Refresh, Delete } from '@element-plus/icons-vue'
+import { CircleCheck, Refresh, Delete, Plus, Connection } from '@element-plus/icons-vue'
 import { logApi, authApi, systemApi, adminApi } from '../api'
 import { formatNumber, formatTime } from '../utils/formatters'
 
@@ -390,6 +494,38 @@ const retentionPolicy = ref({
 const savingRetentionPolicy = ref(false)
 const cleanupResult = ref<any>(null)
 const showCleanupDialog = ref(false)
+
+// Slice 4: Webhook state
+const webhooks = ref<any[]>([])
+const loadingWebhooks = ref(false)
+const showWebhookDialog = ref(false)
+const showDeleteWebhookDialog = ref(false)
+const editingWebhook = ref<any>(null)
+const deletingWebhook = ref<any>(null)
+const savingWebhook = ref(false)
+const deletingWebhookInProgress = ref(false)
+const webhookFormRef = ref<FormInstance>()
+
+const webhookForm = reactive({
+  name: '',
+  url: '',
+  secret: '',
+  events: [] as string[],
+  enabled: true
+})
+
+const webhookRules: FormRules = {
+  name: [
+    { required: true, message: '请输入 Webhook 名称', trigger: 'blur' }
+  ],
+  url: [
+    { required: true, message: '请输入 Webhook URL', trigger: 'blur' },
+    { type: 'url', message: '请输入有效的 URL', trigger: 'blur' }
+  ],
+  events: [
+    { required: true, message: '请至少选择一个事件', trigger: 'change' }
+  ]
+}
 
 const passwordFormRef = ref<FormInstance>()
 const passwordForm = reactive({
@@ -631,6 +767,122 @@ const executeManualCleanup = async () => {
   }
 }
 
+// Slice 4: Webhook functions
+const fetchWebhooks = async () => {
+  loadingWebhooks.value = true
+  try {
+    const { data } = await adminApi.getWebhooks()
+    webhooks.value = data
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '获取 Webhook 列表失败')
+  } finally {
+    loadingWebhooks.value = false
+  }
+}
+
+const showCreateWebhookDialog = () => {
+  editingWebhook.value = null
+  Object.assign(webhookForm, {
+    name: '',
+    url: '',
+    secret: '',
+    events: [],
+    enabled: true
+  })
+  showWebhookDialog.value = true
+}
+
+const showEditWebhookDialog = (webhook: any) => {
+  editingWebhook.value = webhook
+  Object.assign(webhookForm, {
+    name: webhook.name,
+    url: webhook.url,
+    secret: webhook.secret,
+    events: [...webhook.events],
+    enabled: webhook.enabled
+  })
+  showWebhookDialog.value = true
+}
+
+const saveWebhook = async () => {
+  if (!webhookFormRef.value) return
+
+  await webhookFormRef.value.validate(async (valid) => {
+    if (!valid) return
+
+    savingWebhook.value = true
+    try {
+      if (editingWebhook.value) {
+        // Update existing webhook
+        await adminApi.updateWebhook(editingWebhook.value.id, webhookForm)
+        ElMessage.success('Webhook 更新成功')
+      } else {
+        // Create new webhook
+        await adminApi.createWebhook(webhookForm)
+        ElMessage.success('Webhook 创建成功')
+      }
+
+      showWebhookDialog.value = false
+      await fetchWebhooks()
+    } catch (error: any) {
+      ElMessage.error(error.response?.data?.error || '保存 Webhook 失败')
+    } finally {
+      savingWebhook.value = false
+    }
+  })
+}
+
+const toggleWebhookEnabled = async (webhook: any) => {
+  try {
+    await adminApi.updateWebhook(webhook.id, { enabled: webhook.enabled })
+    ElMessage.success(webhook.enabled ? 'Webhook 已启用' : 'Webhook 已禁用')
+  } catch (error: any) {
+    // Revert on error
+    webhook.enabled = !webhook.enabled
+    ElMessage.error(error.response?.data?.error || '更新 Webhook 状态失败')
+  }
+}
+
+const testWebhook = async (webhook: any) => {
+  try {
+    await adminApi.testWebhook(webhook.id)
+    ElMessage.success('测试 Webhook 发送成功')
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '测试 Webhook 发送失败')
+  }
+}
+
+const confirmDeleteWebhook = (webhook: any) => {
+  deletingWebhook.value = webhook
+  showDeleteWebhookDialog.value = true
+}
+
+const deleteWebhook = async () => {
+  if (!deletingWebhook.value) return
+
+  deletingWebhookInProgress.value = true
+  try {
+    await adminApi.deleteWebhook(deletingWebhook.value.id)
+    ElMessage.success('Webhook 删除成功')
+    showDeleteWebhookDialog.value = false
+    await fetchWebhooks()
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '删除 Webhook 失败')
+  } finally {
+    deletingWebhookInProgress.value = false
+  }
+}
+
+const formatEventName = (event: string) => {
+  const eventNames: Record<string, string> = {
+    'issue.created': '问题创建',
+    'issue.resolved': '问题解决',
+    'issue.reopened': '问题重新打开',
+    'alert.triggered': '告警触发'
+  }
+  return eventNames[event] || event
+}
+
 const handleChangePassword = async () => {
   if (!passwordFormRef.value) return
 
@@ -669,6 +921,7 @@ onMounted(() => {
   refreshSystemInfo()
   fetchStorageStats()
   fetchRetentionPolicy()
+  fetchWebhooks()
 })
 </script>
 
