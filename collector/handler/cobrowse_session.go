@@ -51,7 +51,7 @@ func (hub *SessionHub) handleUserMessages(db CoBrowseDB) {
 			continue
 		}
 
-		slog.Debug("[CoBrowse] User message", "type", msg.Type, "length", len(message))
+		slog.Info("[CoBrowse] User message received", "type", msg.Type, "session", hub.sessionID, "length", len(message))
 
 		switch msg.Type {
 		case "rrweb-event":
@@ -262,10 +262,17 @@ func (hub *SessionHub) forwardToViewers(message []byte) {
 	hub.mu.RLock()
 	defer hub.mu.RUnlock()
 
+	var msg model.CoBrowseMessage
+	json.Unmarshal(message, &msg)
+
+	slog.Info("[CoBrowse] Forwarding to viewers", "type", msg.Type, "viewerCount", len(hub.viewerConns), "session", hub.sessionID)
+
 	for viewerConn := range hub.viewerConns {
 		if err := viewerConn.WriteMessage(websocket.TextMessage, message); err != nil {
 			slog.Error("[CoBrowse] Failed to forward to viewer", "error", err)
 			delete(hub.viewerConns, viewerConn)
+		} else {
+			slog.Info("[CoBrowse] Forwarded to viewer", "type", msg.Type, "session", hub.sessionID)
 		}
 	}
 }

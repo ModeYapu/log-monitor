@@ -276,24 +276,17 @@ async function handleWebRTCRequest(): Promise<void> {
 		};
 
 		peerConnection.onnegotiationneeded = async () => {
-			console.log('[CoBrowse] Negotiation needed — creating offer');
-			try {
-				if (!peerConnection) return;
-				const offer = await peerConnection.createOffer();
-				await peerConnection.setLocalDescription(offer);
-
-				sendMessage({
-					type: 'webrtc-offer',
-					sdp: peerConnection.localDescription
-				});
-
-				webrtcActive = true;
-				updateWidgetStatus();
-				console.log('[CoBrowse] WebRTC offer sent');
-			} catch (err) {
-				console.error('[CoBrowse] Failed to create offer:', err);
-			}
+			console.log('[CoBrowse] onnegotiationneeded fired');
+			await createAndSendOffer();
 		};
+
+		// Fallback: explicitly create offer after a short delay in case onnegotiationneeded doesn't fire
+		setTimeout(async () => {
+			if (peerConnection && !peerConnection.localDescription) {
+				console.log('[CoBrowse] Fallback: creating offer manually');
+				await createAndSendOffer();
+			}
+		}, 1000);
 
 	} catch (err: any) {
 		console.error('[CoBrowse] Failed to start WebRTC:', err);
@@ -540,6 +533,37 @@ function executeNavigate(url: string): void {
 	const confirmed = window.confirm(`技术支持请求导航到: ${url}\n\n是否同意？`);
 	if (confirmed) {
 		window.location.href = url;
+	}
+}
+
+// ==================== Offer Helper ====================
+
+async function createAndSendOffer(): Promise<void> {
+	if (!peerConnection) {
+		console.error('[CoBrowse] createAndSendOffer: no peerConnection');
+		return;
+	}
+	if (peerConnection.localDescription) {
+		console.log('[CoBrowse] Offer already created, skipping');
+		return;
+	}
+	try {
+		console.log('[CoBrowse] Creating offer...');
+		const offer = await peerConnection.createOffer();
+		console.log('[CoBrowse] Offer created, setting local description...');
+		await peerConnection.setLocalDescription(offer);
+		console.log('[CoBrowse] Local description set, sending offer via WS...');
+
+		sendMessage({
+			type: 'webrtc-offer',
+			sdp: peerConnection.localDescription
+		});
+
+		webrtcActive = true;
+		updateWidgetStatus();
+		console.log('[CoBrowse] WebRTC offer sent successfully');
+	} catch (err) {
+		console.error('[CoBrowse] Failed to create/send offer:', err);
 	}
 }
 
