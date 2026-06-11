@@ -146,17 +146,9 @@ func (hub *SessionHub) handleViewerMessages(conn *websocket.Conn, sessionHub *Se
 
 // handleRRWebEvent processes an rrweb event from the user
 func (hub *SessionHub) handleRRWebEvent(msg *model.CoBrowseMessage, db CoBrowseDB) {
-	hub.mu.Lock()
-	defer hub.mu.Unlock()
-
-	if hub.closed {
-		return
-	}
-
-	// Parse events
+	// Parse events outside of lock
 	var events []model.RRWebEvent
 	if err := json.Unmarshal(msg.Data, &events); err != nil {
-		// Try single event
 		var event model.RRWebEvent
 		if err := json.Unmarshal(msg.Data, &event); err != nil {
 			slog.Error("[CoBrowse] Failed to parse rrweb event", "error", err)
@@ -165,47 +157,53 @@ func (hub *SessionHub) handleRRWebEvent(msg *model.CoBrowseMessage, db CoBrowseD
 		events = []model.RRWebEvent{event}
 	}
 
-	// Store events
+	// Store events in memory and get broadcast data
+	hub.mu.Lock()
+	if hub.closed {
+		hub.mu.Unlock()
+		return
+	}
+
 	for _, event := range events {
 		hub.eventCount++
-		// Serialize complete rrweb event for storage and replay
 		fullEventJSON, _ := json.Marshal(event)
-		recEvent := storage.RecordingEventData{
+		hub.events = append(hub.events, storage.RecordingEventData{
 			SessionID: hub.sessionID,
 			Seq:       hub.eventCount,
 			Timestamp: event.Timestamp,
 			EventData: string(fullEventJSON),
 			CreatedAt: time.Now().UnixMilli(),
-		}
-		hub.events = append(hub.events, recEvent)
+		})
+	}
 
-		// Save to database
+	if len(hub.events) > hub.maxEvents {
+		removed := len(hub.events) - hub.maxEvents
+		hub.events = hub.events[removed:]
+	}
+
+	// Prepare broadcast data while holding lock
+	broadcastMsg := map[string]interface{}{"type": "rrweb-event", "data": msg.Data}
+	data, _ := json.Marshal(broadcastMsg)
+	viewerConns := make(map[*websocket.Conn]bool, len(hub.viewerConns))
+	for conn := range hub.viewerConns {
+		viewerConns[conn] = true
+	}
+	hub.mu.Unlock()
+
+	// DB writes and broadcast outside of lock
+	for _, event := range events {
+		fullEventJSON, _ := json.Marshal(event)
 		if err := db.AddRecordingEvent(hub.sessionID, hub.eventCount, event.Timestamp, fullEventJSON); err != nil {
 			slog.Error("[CoBrowse] Failed to save event", "error", err)
 		}
 	}
 
-	// Prevent unbounded memory growth by limiting events stored in memory
-	if len(hub.events) > hub.maxEvents {
-		// Remove oldest events to maintain the limit
-		removed := len(hub.events) - hub.maxEvents
-		hub.events = hub.events[removed:]
-		slog.Info("[CoBrowse] Removed old events to prevent memory leak", "removed", removed, "session", hub.sessionID)
-	}
-
-	slog.Info("[CoBrowse] Stored events total, broadcasting to viewers", "eventCount", len(events), "session", hub.sessionID, "viewerCount", len(hub.viewerConns))
-
-	// Broadcast to all viewers
-	broadcastMsg := map[string]interface{}{
-		"type": "rrweb-event",
-		"data": msg.Data,
-	}
-	data, _ := json.Marshal(broadcastMsg)
-
-	for viewerConn := range hub.viewerConns {
+	for viewerConn := range viewerConns {
 		if err := viewerConn.WriteMessage(websocket.TextMessage, data); err != nil {
 			slog.Error("[CoBrowse] Failed to send to viewer", "error", err)
+			hub.mu.Lock()
 			delete(hub.viewerConns, viewerConn)
+			hub.mu.Unlock()
 		}
 	}
 }
@@ -213,13 +211,11 @@ func (hub *SessionHub) handleRRWebEvent(msg *model.CoBrowseMessage, db CoBrowseD
 // handleFullSnapshot processes a full snapshot from the user
 func (hub *SessionHub) handleFullSnapshot(msg *model.CoBrowseMessage, db CoBrowseDB) {
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
-
 	if hub.closed {
+		hub.mu.Unlock()
 		return
 	}
 
-	// Store as first event
 	recEvent := storage.RecordingEventData{
 		SessionID: hub.sessionID,
 		Seq:       0,
@@ -228,33 +224,32 @@ func (hub *SessionHub) handleFullSnapshot(msg *model.CoBrowseMessage, db CoBrows
 		CreatedAt: time.Now().UnixMilli(),
 	}
 
-	// Replace existing events or append
 	if len(hub.events) == 0 || hub.events[0].Seq != 0 {
 		hub.events = append([]storage.RecordingEventData{recEvent}, hub.events...)
 	} else {
 		hub.events[0] = recEvent
 	}
 
-	// Save to database
+	// Prepare broadcast data
+	broadcastMsg := map[string]interface{}{"type": "rrweb-full-snapshot", "data": msg.Data}
+	data, _ := json.Marshal(broadcastMsg)
+	viewerConns := make(map[*websocket.Conn]bool, len(hub.viewerConns))
+	for conn := range hub.viewerConns { viewerConns[conn] = true }
+	hub.mu.Unlock()
+
+	// DB write outside lock
 	if err := db.AddRecordingEvent(hub.sessionID, 0, recEvent.Timestamp, msg.Data); err != nil {
 		slog.Error("[CoBrowse] Failed to save full snapshot", "error", err)
 	}
 
-	// Broadcast to all viewers
-	broadcastMsg := map[string]interface{}{
-		"type": "rrweb-full-snapshot",
-		"data": msg.Data,
-	}
-	data, _ := json.Marshal(broadcastMsg)
-
-	for viewerConn := range hub.viewerConns {
+	for viewerConn := range viewerConns {
 		if err := viewerConn.WriteMessage(websocket.TextMessage, data); err != nil {
-			slog.Error("[CoBrowse] Failed to send snapshot to viewer", "error", err)
+			slog.Error("[CoBrowse] Failed to send snapshot", "error", err)
+			hub.mu.Lock()
 			delete(hub.viewerConns, viewerConn)
+			hub.mu.Unlock()
 		}
 	}
-
-	slog.Info("[CoBrowse] Full snapshot received", "session", hub.sessionID)
 }
 
 // forwardToViewers forwards a raw message to all connected viewers
@@ -265,14 +260,12 @@ func (hub *SessionHub) forwardToViewers(message []byte) {
 	var msg model.CoBrowseMessage
 	json.Unmarshal(message, &msg)
 
-	slog.Info("[CoBrowse] Forwarding to viewers", "type", msg.Type, "viewerCount", len(hub.viewerConns), "session", hub.sessionID)
+	slog.Debug("[CoBrowse] Forwarding", "type", msg.Type, "viewers", len(hub.viewerConns), "session", hub.sessionID)
 
 	for viewerConn := range hub.viewerConns {
 		if err := viewerConn.WriteMessage(websocket.TextMessage, message); err != nil {
-			slog.Error("[CoBrowse] Failed to forward to viewer", "error", err)
+			slog.Error("[CoBrowse] Forward failed", "error", err)
 			delete(hub.viewerConns, viewerConn)
-		} else {
-			slog.Info("[CoBrowse] Forwarded to viewer", "type", msg.Type, "session", hub.sessionID)
 		}
 	}
 }

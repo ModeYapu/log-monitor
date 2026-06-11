@@ -52,32 +52,19 @@
             </div>
 
             <div class="toolbar-right">
-              <!-- Intervene button -->
-              <button
-                v-if="wsConnected && !webrtcActive"
-                class="btn btn-primary"
-                @click="requestIntervene"
-                :disabled="webrtcState === 'requesting'"
-              >
+              <button v-if="wsConnected && !webrtcActive" class="btn btn-primary" @click="requestIntervene" :disabled="webrtcState === 'requesting'">
                 {{ webrtcState === 'requesting' ? '⏳ 等待确认...' : '🎯 介入' }}
               </button>
-
-              <!-- Exit intervene -->
               <button v-if="webrtcActive" class="btn btn-danger" @click="stopIntervene">✕ 退出介入</button>
-
-              <!-- Control mode -->
               <button v-if="webrtcActive" :class="['btn', controlMode ? 'btn-warning' : 'btn-default']" @click="toggleControlMode">
                 {{ controlMode ? '🖱️ 控制中(点击关闭)' : '🖱️ 开始控制' }}
               </button>
-
-              <!-- Zoom -->
               <div v-if="webrtcActive" class="zoom-controls">
                 <button class="btn btn-sm" @click="zoomOut" :disabled="zoomLevel <= 50">−</button>
                 <span class="zoom-label">{{ zoomLevel }}%</span>
                 <button class="btn btn-sm" @click="zoomIn" :disabled="zoomLevel >= 300">+</button>
                 <button class="btn btn-sm" @click="zoomReset">1:1</button>
               </div>
-
               <button v-if="selectedSession?.url" class="btn btn-default" @click="openOriginalPage">🔗 原页面</button>
               <button class="btn btn-default" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏'">
                 {{ isFullscreen ? '⬜' : '⛶' }}
@@ -87,40 +74,20 @@
           </div>
 
           <div class="viewer-content" ref="viewerContentRef" @dblclick="toggleFullscreen">
-            <!-- rrweb mode -->
             <div v-show="!webrtcActive" ref="replayContainerRef" class="replay-container"></div>
-
-            <!-- WebRTC mode -->
             <div v-show="webrtcActive" class="webrtc-wrapper" ref="webrtcWrapperRef">
               <div class="webrtc-scale-container" :style="{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top left' }">
                 <video ref="webrtcVideoRef" autoplay playsinline muted class="webrtc-video" />
-                <canvas
-                  v-if="controlMode"
-                  ref="controlCanvasRef"
-                  class="control-overlay"
-                  @mousedown="onControlMouseDown"
-                  @dblclick="onControlDblClick"
-                  @contextmenu.prevent="onControlContextMenu"
-                  @wheel="onControlWheel"
-                />
+                <canvas v-if="controlMode" ref="controlCanvasRef" class="control-overlay"
+                  @mousedown="onControlMouseDown" @dblclick="onControlDblClick"
+                  @contextmenu.prevent="onControlContextMenu" @wheel="onControlWheel" />
               </div>
             </div>
-
-            <div v-if="connecting" class="viewer-overlay">
-              <span class="spinner"></span>
-              <span>连接中...</span>
-            </div>
-            <div v-else-if="!wsConnected && eventCount === 0 && !webrtcActive" class="viewer-overlay">
-              <span class="big-icon">📹</span>
-              <span>等待数据...</span>
-            </div>
+            <div v-if="connecting" class="viewer-overlay"><span class="spinner"></span><span>连接中...</span></div>
+            <div v-else-if="!wsConnected && eventCount === 0 && !webrtcActive" class="viewer-overlay"><span class="big-icon">📹</span><span>等待数据...</span></div>
           </div>
         </div>
-
-        <div v-else class="viewer-empty">
-          <span class="big-icon">📹</span>
-          <p>请选择一个会话开始观看</p>
-        </div>
+        <div v-else class="viewer-empty"><span class="big-icon">📹</span><p>请选择一个会话开始观看</p></div>
       </div>
     </div>
   </div>
@@ -134,6 +101,7 @@ import type { LiveSession } from '../types'
 
 const router = useRouter()
 
+// ==================== State ====================
 const liveSessions = ref<LiveSession[]>([])
 const selectedSession = ref<LiveSession | null>(null)
 const selectedSessionId = ref('')
@@ -150,6 +118,7 @@ const controlMode = ref(false)
 const zoomLevel = ref(100)
 const isFullscreen = ref(false)
 
+// Template refs
 const replayContainerRef = ref<HTMLElement>()
 const webrtcVideoRef = ref<HTMLVideoElement>()
 const webrtcWrapperRef = ref<HTMLElement>()
@@ -158,6 +127,7 @@ const viewerContentRef = ref<HTMLElement>()
 const liveViewerRef = ref<HTMLElement>()
 const liveViewRef = ref<HTMLElement>()
 
+// Internal state
 let ws: WebSocket | null = null
 let replayer: any = null
 let allEvents: any[] = []
@@ -165,46 +135,32 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null
-
 let peerConnection: RTCPeerConnection | null = null
 let dataChannel: RTCDataChannel | null = null
+let keydownHandler: ((e: KeyboardEvent) => void) | null = null
+let keyupHandler: ((e: KeyboardEvent) => void) | null = null
+
+const debugMode = ref(false)
+const LOG = (...args: any[]) => { if (debugMode.value) console.log('[Live]', ...args) }
+const LOG_ERR = (...args: any[]) => console.error('[Live]', ...args)
 
 const rtcConfig: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: 'turn:14.103.85.111:3478?transport=udp',
-      username: 'logmon',
-      credential: 'logmon2024turn'
-    },
-    {
-      urls: 'turn:14.103.85.111:3478?transport=tcp',
-      username: 'logmon',
-      credential: 'logmon2024turn'
-    }
+    { urls: 'turn:14.103.85.111:3478?transport=udp', username: 'logmon', credential: 'logmon2024turn' },
+    { urls: 'turn:14.103.85.111:3478?transport=tcp', username: 'logmon', credential: 'logmon2024turn' }
   ]
 }
 
-let keydownHandler: ((e: KeyboardEvent) => void) | null = null
-let keyupHandler: ((e: KeyboardEvent) => void) | null = null
-
-const LOG = (...args: any[]) => console.log('[Live]', ...args)
-const LOG_ERR = (...args: any[]) => console.error('[Live]', ...args)
+// ==================== Lifecycle ====================
 
 onMounted(() => {
+  debugMode.value = !!(window as any).__LOGMON_DEBUG__
   refreshSessions()
   refreshTimer = setInterval(refreshSessions, 5000)
   document.addEventListener('fullscreenchange', onFullscreenChange)
-
-  // Load rrweb if not already available
-  if (!(window as any).rrweb?.Replayer) {
-    LOG('Loading rrweb via dynamic import...')
-    import('rrweb/lib/replay/rrweb-replay.js').then(mod => {
-      LOG('rrweb loaded, Replayer:', typeof mod.Replayer)
-      ;(window as any).rrweb = { Replayer: mod.Replayer }
-    }).catch(err => LOG('Failed to load rrweb:', err))
-  }
+  loadRRWebReplayer()
 })
 
 onUnmounted(() => {
@@ -214,26 +170,47 @@ onUnmounted(() => {
   removeKeyboardListeners()
 })
 
-function removeKeyboardListeners() {
-  if (keydownHandler) { document.removeEventListener('keydown', keydownHandler); keydownHandler = null }
-  if (keyupHandler) { document.removeEventListener('keyup', keyupHandler); keyupHandler = null }
+// ==================== rrweb Replayer Loading ====================
+
+function loadRRWebReplayer() {
+  if ((window as any).rrweb?.Replayer) return
+  LOG('Loading rrweb Replayer...')
+  import('rrweb/lib/replay/rrweb-replay.js').then(mod => {
+    LOG('rrweb Replayer loaded')
+    ;(window as any).rrweb = { Replayer: mod.Replayer }
+    // If we have events waiting, rebuild
+    if (allEvents.length >= 2 && !webrtcActive.value) rebuildReplayer()
+  }).catch(err => LOG_ERR('rrweb load failed:', err))
 }
 
-function cleanup() {
-  destroyReplayer()
-  // Don't kill WebRTC on WS disconnect — WebRTC is independent P2P
-  if (ws) { ws.close(); ws = null }
-  wsConnected.value = false
-  connecting.value = false
-  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
-  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
-  if (rebuildTimer) { clearTimeout(rebuildTimer); rebuildTimer = null }
-  removeKeyboardListeners()
-}
+function rebuildReplayer() {
+  const container = replayContainerRef.value
+  if (!container || allEvents.length < 2) return
 
-function destroyReplayer() {
+  const ReplayerClass = (window as any).rrweb?.Replayer
+  if (!ReplayerClass) {
+    LOG('Replayer not available, retrying in 2s...')
+    if (rebuildTimer) clearTimeout(rebuildTimer)
+    rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 2000)
+    return
+  }
+
+  // Destroy old replayer
   if (replayer) { try { replayer.pause() } catch {} replayer = null }
-  if (replayContainerRef.value) replayContainerRef.value.innerHTML = ''
+  container.innerHTML = ''
+
+  try {
+    replayer = new ReplayerClass(allEvents, {
+      root: container,
+      UNSAFE_replayCanvas: true,
+      mouseTail: false
+    })
+    const lastTime = allEvents[allEvents.length - 1]?.timestamp || 0
+    replayer.play(lastTime)
+  } catch (err) {
+    LOG_ERR('Replayer error:', err)
+    replayer = null
+  }
 }
 
 // ==================== Session Management ====================
@@ -252,7 +229,7 @@ function selectSession(session: LiveSession) {
   selectedSession.value = session
   allEvents = []
   eventCount.value = 0
-  destroyReplayer()
+  if (replayer) { try { replayer.pause() } catch {} replayer = null }
   connectToSession(session.sessionId)
 }
 
@@ -265,19 +242,16 @@ function connectToSession(sessionId: string) {
   const wsUrl = new URL(`${proto}//${location.host}/ws/cobrowse/${sessionId}/view`)
   if (token) wsUrl.searchParams.set('token', token)
 
-  LOG('Connecting to session:', sessionId, 'url:', wsUrl.toString())
+  LOG('Connecting:', wsUrl.toString())
   ws = new WebSocket(wsUrl.toString())
 
   ws.onopen = () => {
-    LOG('WebSocket OPEN')
+    LOG('WS open')
     wsConnected.value = true
     connecting.value = false
     reconnecting.value = false
     reconnectAttempts.value = 0
-    // Reset WebRTC state on new connection — don't auto-request
-    if (webrtcState.value !== 'connected') {
-      webrtcState.value = 'idle'
-    }
+    if (webrtcState.value !== 'connected') webrtcState.value = 'idle'
     heartbeatTimer = setInterval(() => {
       if (ws?.readyState === WebSocket.OPEN) ws.send('{"type":"pong"}')
     }, 25000)
@@ -287,106 +261,206 @@ function connectToSession(sessionId: string) {
     try {
       const msg = JSON.parse(event.data)
       if (msg.type === 'ping') { ws?.send('{"type":"pong"}'); return }
-
-      // Session removed by server — stop reconnecting
       if (msg.type === 'session-removed') {
-        LOG('Session removed by server, stopping reconnect')
+        LOG('Session removed by server')
         cleanup()
         selectedSessionId.value = ''
         selectedSession.value = null
         return
       }
-
-      LOG('WS message:', msg.type, msg.type?.startsWith('webrtc') ? JSON.stringify(msg).substring(0, 200) : '')
-
-      // WebRTC signaling from USER
-      if (msg.type === 'webrtc-offer') {
-        LOG('Received WebRTC offer from user, SDP type:', msg.sdp?.type)
-        handleWebRTCoffer(msg.sdp)
-        return
-      }
-      if (msg.type === 'webrtc-ice') {
-        LOG('Received ICE candidate from user')
-        handleICECandidate(msg.candidate)
-        return
-      }
-      if (msg.type === 'webrtc-rejected') {
-        LOG('User rejected screen sharing')
-        webrtcState.value = 'idle'
-        return
-      }
-      if (msg.type === 'webrtc-stop') {
-        LOG('User stopped screen sharing')
-        cleanupWebRTC()
-        return
-      }
-
-      // rrweb events
-      if (msg.type === 'rrweb-full-snapshot') {
-        allEvents = [msg.data]
-        eventCount.value = 1
-        if (rebuildTimer) clearTimeout(rebuildTimer)
-        if (!webrtcActive.value) {
-          rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
-        }
-      } else if (msg.type === 'rrweb-event') {
-        // Data may be a single event or array of events
-        const newEvents = Array.isArray(msg.data) ? msg.data : [msg.data]
-        allEvents.push(...newEvents)
-        eventCount.value = allEvents.length
-        if (!rebuildTimer && !webrtcActive.value) {
-          rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
-        }
-      }
-    } catch (err) {
-      // ignore
-    }
+      handleWSMessage(msg)
+    } catch {}
   }
 
   ws.onclose = (e) => {
-    LOG('WebSocket CLOSED, code:', e.code, 'reason:', e.reason)
+    LOG('WS closed, code:', e.code)
     wsConnected.value = false
     connecting.value = false
     if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
-    // Only reconnect for abnormal closures, not for intentional disconnects
-    // Code 1005 = no status (session likely removed), 1000 = normal close
-    if (e.code !== 1000) {
-      scheduleReconnect()
-    }
+    if (e.code !== 1000) scheduleReconnect()
   }
 
-  ws.onerror = (e) => {
-    LOG_ERR('WebSocket ERROR', e)
-    connecting.value = false
+  ws.onerror = () => { connecting.value = false }
+}
+
+function handleWSMessage(msg: any) {
+  // WebRTC signaling
+  if (msg.type === 'webrtc-offer') { handleWebRTCOffer(msg.sdp); return }
+  if (msg.type === 'webrtc-ice') { handleICECandidate(msg.candidate); return }
+  if (msg.type === 'webrtc-rejected') { webrtcState.value = 'idle'; return }
+  if (msg.type === 'webrtc-stop') { cleanupWebRTC(); return }
+
+  // rrweb events
+  if (msg.type === 'rrweb-full-snapshot') {
+    allEvents = [msg.data]
+    eventCount.value = 1
+    if (rebuildTimer) clearTimeout(rebuildTimer)
+    if (!webrtcActive.value) {
+      rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
+    }
+  } else if (msg.type === 'rrweb-event') {
+    const newEvents = Array.isArray(msg.data) ? msg.data : [msg.data]
+    allEvents.push(...newEvents)
+    eventCount.value = allEvents.length
+    if (!rebuildTimer && !webrtcActive.value) {
+      rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
+    }
   }
 }
 
-function rebuildReplayer() {
-  const container = replayContainerRef.value
-  if (!container || allEvents.length < 2) return
+// ==================== WebRTC ====================
 
-  if (replayer) { try { replayer.pause() } catch {}; replayer = null }
-  container.innerHTML = ''
+function requestIntervene() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  LOG('Requesting intervene')
+  webrtcState.value = 'requesting'
+  ws.send(JSON.stringify({ type: 'webrtc-offer-request' }))
+}
 
-  const rrwebLib = (window as any).rrweb
-  if (!rrwebLib?.Replayer) {
-    LOG('rrweb Replayer not available, retrying in 2s...')
-    if (rebuildTimer) clearTimeout(rebuildTimer)
-    rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 2000)
-    return
-  }
+async function handleWebRTCOffer(sdp: RTCSessionDescriptionInit) {
+  LOG('Handling offer')
+  webrtcState.value = 'connecting'
 
   try {
-    replayer = new rrwebLib.Replayer(allEvents, {
-      root: container,
-      UNSAFE_replayCanvas: true,
-      mouseTail: false
-    })
-    const lastTime = allEvents[allEvents.length - 1]?.timestamp || 0
-    replayer.play(lastTime)
+    peerConnection = new RTCPeerConnection(rtcConfig)
+
+    peerConnection.ontrack = (event) => {
+      const video = webrtcVideoRef.value
+      if (!video) return
+      const stream = event.streams[0] || new MediaStream([event.track])
+      video.srcObject = stream
+      webrtcActive.value = true
+      webrtcState.value = 'connected'
+      video.play().catch(() => {})
+      nextTick(() => resizeControlCanvas())
+    }
+
+    peerConnection.ondatachannel = (event) => { dataChannel = event.channel }
+
+    peerConnection.onicecandidate = (e) => {
+      if (e.candidate) ws?.send(JSON.stringify({ type: 'webrtc-ice', candidate: e.candidate.toJSON() }))
+    }
+
+    peerConnection.onconnectionstatechange = () => {
+      const s = peerConnection?.connectionState
+      LOG('PC state:', s)
+      if (s === 'disconnected' || s === 'failed' || s === 'closed') cleanupWebRTC()
+    }
+
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
+    const answer = await peerConnection.createAnswer()
+    await peerConnection.setLocalDescription(answer)
+    ws?.send(JSON.stringify({ type: 'webrtc-answer', sdp: peerConnection.localDescription }))
   } catch (err) {
-    replayer = null
+    LOG_ERR('WebRTC setup failed:', err)
+    cleanupWebRTC()
   }
+}
+
+async function handleICECandidate(candidate: RTCIceCandidateInit) {
+  if (!peerConnection) return
+  try { await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)) } catch {}
+}
+
+function stopIntervene() {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'webrtc-stop' }))
+  cleanupWebRTC()
+}
+
+function cleanupWebRTC() {
+  if (dataChannel) { try { dataChannel.close() } catch {} dataChannel = null }
+  if (peerConnection) { try { peerConnection.close() } catch {} peerConnection = null }
+  if (webrtcVideoRef.value) webrtcVideoRef.value.srcObject = null
+  webrtcActive.value = false
+  webrtcState.value = 'idle'
+  controlMode.value = false
+  removeKeyboardListeners()
+}
+
+// ==================== Control ====================
+
+function toggleControlMode() {
+  controlMode.value = !controlMode.value
+  if (controlMode.value) {
+    setupKeyboardListeners()
+    nextTick(() => resizeControlCanvas())
+  } else {
+    removeKeyboardListeners()
+  }
+}
+
+function resizeControlCanvas() {
+  const canvas = controlCanvasRef.value
+  const video = webrtcVideoRef.value
+  if (!canvas || !video) return
+  const rect = video.getBoundingClientRect()
+  canvas.width = rect.width
+  canvas.height = rect.height
+  canvas.style.width = rect.width + 'px'
+  canvas.style.height = rect.height + 'px'
+}
+
+function getVideoCoords(e: MouseEvent): { x: number; y: number } | null {
+  const video = webrtcVideoRef.value
+  if (!video || !video.videoWidth) return null
+  const r = video.getBoundingClientRect()
+  return {
+    x: Math.round((e.clientX - r.left) * video.videoWidth / r.width),
+    y: Math.round((e.clientY - r.top) * video.videoHeight / r.height)
+  }
+}
+
+function sendControl(cmd: any) {
+  if (dataChannel?.readyState === 'open') dataChannel.send(JSON.stringify({ type: 'control', ...cmd }))
+  else if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'control', ...cmd }))
+}
+
+function onControlMouseDown(e: MouseEvent) { const c = getVideoCoords(e); if (c) sendControl({ action: 'click', x: c.x, y: c.y, button: e.button }) }
+function onControlDblClick(e: MouseEvent) { const c = getVideoCoords(e); if (c) sendControl({ action: 'dblclick', x: c.x, y: c.y }) }
+function onControlContextMenu(e: MouseEvent) { const c = getVideoCoords(e); if (c) sendControl({ action: 'contextmenu', x: c.x, y: c.y }) }
+function onControlWheel(e: WheelEvent) { sendControl({ action: 'scroll', deltaX: Math.round(e.deltaX), deltaY: Math.round(e.deltaY) }) }
+
+function setupKeyboardListeners() {
+  keydownHandler = (e) => {
+    if (!controlMode.value || !webrtcActive.value || e.ctrlKey || e.metaKey || e.altKey) return
+    e.preventDefault()
+    sendControl({ action: 'keydown', key: e.key })
+  }
+  keyupHandler = (e) => {
+    if (!controlMode.value || !webrtcActive.value || e.ctrlKey || e.metaKey || e.altKey) return
+    sendControl({ action: 'keyup', key: e.key })
+  }
+  document.addEventListener('keydown', keydownHandler)
+  document.addEventListener('keyup', keyupHandler)
+}
+
+function removeKeyboardListeners() {
+  if (keydownHandler) { document.removeEventListener('keydown', keydownHandler); keydownHandler = null }
+  if (keyupHandler) { document.removeEventListener('keyup', keyupHandler); keyupHandler = null }
+}
+
+// ==================== Zoom & Fullscreen ====================
+
+function zoomIn() { zoomLevel.value = Math.min(zoomLevel.value + 25, 300) }
+function zoomOut() { zoomLevel.value = Math.max(zoomLevel.value - 25, 50) }
+function zoomReset() { zoomLevel.value = 100 }
+function toggleFullscreen() {
+  if (isFullscreen.value) document.exitFullscreen()
+  else liveViewerRef.value?.requestFullscreen()
+}
+function onFullscreenChange() { isFullscreen.value = !!document.fullscreenElement }
+
+// ==================== Cleanup & Reconnect ====================
+
+function cleanup() {
+  if (replayer) { try { replayer.pause() } catch {} replayer = null }
+  if (ws) { ws.close(); ws = null }
+  wsConnected.value = false
+  connecting.value = false
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+  if (rebuildTimer) { clearTimeout(rebuildTimer); rebuildTimer = null }
+  removeKeyboardListeners()
 }
 
 function disconnect() {
@@ -401,263 +475,30 @@ function scheduleReconnect() {
   if (reconnectAttempts.value >= maxReconnectAttempts) {
     reconnecting.value = false
     reconnectAttempts.value = 0
-    LOG('Max reconnect attempts reached, giving up')
     return
   }
   reconnectAttempts.value++
   reconnecting.value = true
-  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value - 1), 30000) // 1s, 2s, 4s, 8s...
-  LOG('Scheduling reconnect in', delay, 'ms, attempt', reconnectAttempts.value)
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value - 1), 30000)
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null
-    if (selectedSession.value) {
-      // Check if session still exists in live list before reconnecting
-      const stillAlive = liveSessions.value.some(s => s.sessionId === selectedSession.value!.sessionId)
-      if (stillAlive) {
-        connectToSession(selectedSession.value.sessionId)
-      } else {
-        LOG('Session no longer in live list, stopping reconnect')
-        reconnecting.value = false
-        cleanup()
-        selectedSessionId.value = ''
-        selectedSession.value = null
-      }
-    }
+    if (!selectedSession.value) return
+    const alive = liveSessions.value.some(s => s.sessionId === selectedSession.value!.sessionId)
+    if (alive) connectToSession(selectedSession.value.sessionId)
+    else { reconnecting.value = false; cleanup(); selectedSessionId.value = ''; selectedSession.value = null }
   }, delay)
-}
-
-// ==================== WebRTC ====================
-
-function requestIntervene() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    LOG_ERR('Cannot request intervene: WS not open, state:', ws?.readyState)
-    return
-  }
-  LOG('Sending webrtc-offer-request to user')
-  webrtcState.value = 'requesting'
-  ws.send(JSON.stringify({ type: 'webrtc-offer-request' }))
-}
-
-async function handleWebRTCoffer(sdp: RTCSessionDescriptionInit) {
-  LOG('handleWebRTCoffer called, creating PeerConnection')
-  webrtcState.value = 'connecting'
-
-  try {
-    peerConnection = new RTCPeerConnection(rtcConfig)
-
-    peerConnection.ontrack = (event) => {
-      LOG('ontrack fired, streams:', event.streams.length, 'tracks:', event.track.kind)
-      const video = webrtcVideoRef.value
-      if (video) {
-        const stream = event.streams[0] || new MediaStream([event.track])
-        video.srcObject = stream
-        LOG('Video srcObject set, tracks:', stream.getTracks().map(t => `${t.kind}:${t.readyState}`))
-
-        webrtcActive.value = true
-        webrtcState.value = 'connected'
-
-        video.play().then(() => LOG('Video playing!')).catch(err => LOG_ERR('Autoplay failed:', err))
-
-        nextTick(() => resizeControlCanvas())
-      } else {
-        LOG_ERR('Video element ref is null')
-      }
-    }
-
-    peerConnection.ondatachannel = (event) => {
-      LOG('DataChannel received:', event.channel.label)
-      dataChannel = event.channel
-    }
-
-    peerConnection.onicecandidate = (e) => {
-      if (e.candidate) {
-        LOG('Sending ICE candidate to user')
-        ws?.send(JSON.stringify({
-          type: 'webrtc-ice',
-          candidate: e.candidate.toJSON()
-        }))
-      } else {
-        LOG('ICE gathering complete (null candidate)')
-      }
-    }
-
-    peerConnection.oniceconnectionstatechange = () => {
-      LOG('ICE connection state:', peerConnection?.iceConnectionState)
-    }
-
-    peerConnection.onconnectionstatechange = () => {
-      const state = peerConnection?.connectionState
-      LOG('PeerConnection state:', state)
-      if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-        LOG_ERR('PeerConnection failed/closed')
-        cleanupWebRTC()
-      }
-    }
-
-    // Set remote offer and create answer
-    LOG('Setting remote description, SDP type:', sdp.type)
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
-    LOG('Remote description set, creating answer...')
-
-    const answer = await peerConnection.createAnswer()
-    LOG('Answer created, setting local description...')
-    await peerConnection.setLocalDescription(answer)
-
-    LOG('Sending answer to user')
-    ws?.send(JSON.stringify({
-      type: 'webrtc-answer',
-      sdp: peerConnection.localDescription
-    }))
-
-    LOG('WebRTC handshake initiated, waiting for media...')
-
-  } catch (err) {
-    LOG_ERR('WebRTC setup failed:', err)
-    cleanupWebRTC()
-  }
-}
-
-async function handleICECandidate(candidate: RTCIceCandidateInit) {
-  if (!peerConnection) { LOG_ERR('No PeerConnection for ICE'); return }
-  try {
-    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
-    LOG('ICE candidate added')
-  } catch (err) {
-    LOG_ERR('ICE candidate failed:', err)
-  }
-}
-
-function stopIntervene() {
-  LOG('Stopping intervention')
-  if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'webrtc-stop' }))
-  }
-  cleanupWebRTC()
-}
-
-function cleanupWebRTC() {
-  if (dataChannel) { try { dataChannel.close() } catch {}; dataChannel = null }
-  if (peerConnection) { try { peerConnection.close() } catch {}; peerConnection = null }
-  if (webrtcVideoRef.value) webrtcVideoRef.value.srcObject = null
-  webrtcActive.value = false
-  webrtcState.value = 'idle'
-  controlMode.value = false
-  removeKeyboardListeners()
-}
-
-function toggleControlMode() {
-  controlMode.value = !controlMode.value
-  if (controlMode.value) {
-    setupKeyboardListeners()
-    nextTick(() => resizeControlCanvas())
-  } else {
-    removeKeyboardListeners()
-  }
-}
-
-// ==================== Control ====================
-
-function resizeControlCanvas() {
-  const canvas = controlCanvasRef.value
-  const video = webrtcVideoRef.value
-  if (!canvas || !video) return
-  const rect = video.getBoundingClientRect()
-  canvas.width = rect.width
-  canvas.height = rect.height
-  canvas.style.width = rect.width + 'px'
-  canvas.style.height = rect.height + 'px'
-}
-
-function getVideoCoords(event: MouseEvent): { x: number; y: number } | null {
-  const video = webrtcVideoRef.value
-  if (!video || !video.videoWidth) return null
-  const videoRect = video.getBoundingClientRect()
-  return {
-    x: Math.round((event.clientX - videoRect.left) * video.videoWidth / videoRect.width),
-    y: Math.round((event.clientY - videoRect.top) * video.videoHeight / videoRect.height)
-  }
-}
-
-function sendControlCommand(cmd: any) {
-  if (dataChannel?.readyState === 'open') {
-    dataChannel.send(JSON.stringify({ type: 'control', ...cmd }))
-  } else if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'control', ...cmd }))
-  }
-}
-
-function onControlMouseDown(e: MouseEvent) {
-  const coords = getVideoCoords(e)
-  if (!coords) return
-  sendControlCommand({ action: 'click', x: coords.x, y: coords.y, button: e.button })
-}
-
-function onControlDblClick(e: MouseEvent) {
-  const coords = getVideoCoords(e)
-  if (!coords) return
-  sendControlCommand({ action: 'dblclick', x: coords.x, y: coords.y })
-}
-
-function onControlContextMenu(e: MouseEvent) {
-  const coords = getVideoCoords(e)
-  if (!coords) return
-  sendControlCommand({ action: 'contextmenu', x: coords.x, y: coords.y })
-}
-
-function onControlWheel(e: WheelEvent) {
-  sendControlCommand({ action: 'scroll', deltaX: Math.round(e.deltaX), deltaY: Math.round(e.deltaY) })
-}
-
-function setupKeyboardListeners() {
-  keydownHandler = (e: KeyboardEvent) => {
-    if (!controlMode.value || !webrtcActive.value) return
-    if (e.ctrlKey || e.metaKey || e.altKey) return
-    sendControlCommand({ action: 'keydown', key: e.key })
-  }
-  keyupHandler = (e: KeyboardEvent) => {
-    if (!controlMode.value || !webrtcActive.value) return
-    if (e.ctrlKey || e.metaKey || e.altKey) return
-    sendControlCommand({ action: 'keyup', key: e.key })
-  }
-  document.addEventListener('keydown', keydownHandler)
-  document.addEventListener('keyup', keyupHandler)
-}
-
-// ==================== Zoom & Fullscreen ====================
-
-function zoomIn() { zoomLevel.value = Math.min(zoomLevel.value + 25, 300) }
-function zoomOut() { zoomLevel.value = Math.max(zoomLevel.value - 25, 50) }
-function zoomReset() { zoomLevel.value = 100 }
-
-function toggleFullscreen() {
-  if (isFullscreen.value) {
-    document.exitFullscreen()
-  } else {
-    liveViewerRef.value?.requestFullscreen()
-  }
-}
-
-function onFullscreenChange() {
-  isFullscreen.value = !!document.fullscreenElement
 }
 
 // ==================== Helpers ====================
 
-function openOriginalPage() {
-  if (selectedSession.value?.url) window.open(selectedSession.value.url, '_blank')
-}
-
-function formatUrl(url: string): string {
-  try { return new URL(url).pathname + new URL(url).search } catch { return url }
-}
-
+function openOriginalPage() { if (selectedSession.value?.url) window.open(selectedSession.value.url, '_blank') }
+function formatUrl(url: string): string { try { return new URL(url).pathname + new URL(url).search } catch { return url } }
 function formatUA(ua: string): string {
   if (ua.includes('Edg')) return 'Edge'
   if (ua.includes('Chrome')) return 'Chrome'
   if (ua.includes('Firefox')) return 'Firefox'
   return 'Other'
 }
-
 function formatDuration(startMs: number): string {
   const d = Date.now() - startMs
   return `${Math.floor(d / 60000)}m ${Math.floor((d % 60000) / 1000)}s`
@@ -716,7 +557,7 @@ function formatDuration(startMs: number): string {
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 .btn-primary { background: #6366f1; color: white; border-color: #6366f1; }
 .btn-danger { background: #ef4444; color: white; border-color: #ef4444; }
-.btn-warning { background: #f59e0b; color: white; border-color: #f59e0b; }
+.btn-warning { background: #f59e0b; color: white; border-border: #f59e0b; }
 .btn-default { background: var(--color-bg); color: var(--color-text); }
 
 .zoom-controls { display: flex; align-items: center; gap: 4px; }
