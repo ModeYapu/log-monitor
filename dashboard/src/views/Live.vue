@@ -188,6 +188,27 @@ function loadRRWebReplayer() {
   }).catch(err => LOG_ERR('rrweb load failed:', err))
 }
 
+function appendEvents(events: any[]) {
+  if (!events.length || webrtcActive.value) return
+
+  // If replayer exists, use incremental addEvent
+  if (replayer) {
+    try {
+      for (const event of events) {
+        ;(replayer as any).addEvent(event)
+      }
+      return
+    } catch (err) {
+      LOG('addEvent failed, falling back to rebuild:', err)
+    }
+  }
+
+  // Fallback: schedule a full rebuild (throttled)
+  if (!rebuildTimer) {
+    rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 1000)
+  }
+}
+
 function rebuildReplayer() {
   const container = replayContainerRef.value
   if (!container || allEvents.length < 2) return
@@ -300,15 +321,17 @@ function handleWSMessage(msg: any) {
     allEvents = [msg.data]
     eventCount.value = 1
     if (rebuildTimer) clearTimeout(rebuildTimer)
+    rebuildTimer = null
     if (!webrtcActive.value) {
-      rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
+      // Full snapshot = rebuild replayer
+      rebuildReplayer()
     }
   } else if (msg.type === 'rrweb-event') {
     const newEvents = Array.isArray(msg.data) ? msg.data : [msg.data]
     allEvents.push(...newEvents)
     eventCount.value = allEvents.length
-    if (!rebuildTimer && !webrtcActive.value) {
-      rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
+    if (!webrtcActive.value) {
+      appendEvents(newEvents)
     }
   }
 }
@@ -352,7 +375,21 @@ async function handleWebRTCOffer(sdp: RTCSessionDescriptionInit) {
     peerConnection.onconnectionstatechange = () => {
       const s = peerConnection?.connectionState
       LOG('PC state:', s)
-      if (s === 'disconnected' || s === 'failed' || s === 'closed') cleanupWebRTC()
+      if (s === 'disconnected' || s === 'failed' || s === 'closed') {
+        if (s === 'disconnected' && webrtcState.value === 'connected') {
+          // Brief disconnect — wait 5s before giving up
+          LOG('ICE disconnected, waiting 5s...')
+          webrtcState.value = 'connecting'
+          setTimeout(() => {
+            if (peerConnection?.connectionState === 'disconnected') {
+              LOG('ICE still disconnected, cleaning up')
+              cleanupWebRTC()
+            }
+          }, 5000)
+        } else {
+          cleanupWebRTC()
+        }
+      }
     }
 
     peerConnection.onicecandidate = (e) => {

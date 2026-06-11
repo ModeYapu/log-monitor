@@ -340,7 +340,8 @@ func (hub *SessionHub) pingUser(conn *websocket.Conn) {
 			hub.mu.RUnlock()
 
 			if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping"}`)); err != nil {
-				slog.Error("[CoBrowse] Ping failed", "error", err)
+				slog.Warn("[CoBrowse] User ping failed, closing session", "error", err, "session", hub.sessionID)
+				hub.close()
 				return
 			}
 		case <-hub.stopCh:
@@ -365,6 +366,10 @@ func (hub *SessionHub) pingViewer(conn *websocket.Conn) {
 			hub.mu.RUnlock()
 
 			if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping"}`)); err != nil {
+				slog.Debug("[CoBrowse] Viewer ping failed, removing", "error", err)
+				hub.mu.Lock()
+				delete(hub.viewerConns, conn)
+				hub.mu.Unlock()
 				return
 			}
 		case <-hub.stopCh:
