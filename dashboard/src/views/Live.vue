@@ -212,7 +212,7 @@ function removeKeyboardListeners() {
 
 function cleanup() {
   destroyReplayer()
-  cleanupWebRTC()
+  // Don't kill WebRTC on WS disconnect — WebRTC is independent P2P
   if (ws) { ws.close(); ws = null }
   wsConnected.value = false
   connecting.value = false
@@ -238,12 +238,12 @@ async function refreshSessions() {
 
 function selectSession(session: LiveSession) {
   if (selectedSessionId.value === session.sessionId) return
+  cleanupWebRTC()
   selectedSessionId.value = session.sessionId
   selectedSession.value = session
   allEvents = []
   eventCount.value = 0
   destroyReplayer()
-  cleanupWebRTC()
   connectToSession(session.sessionId)
 }
 
@@ -313,11 +313,13 @@ function connectToSession(sessionId: string) {
         allEvents = [msg.data]
         eventCount.value = 1
         if (rebuildTimer) clearTimeout(rebuildTimer)
-        rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
+        if (!webrtcActive.value) {
+          rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
+        }
       } else if (msg.type === 'rrweb-event') {
         allEvents.push(msg.data)
         eventCount.value = allEvents.length
-        if (!rebuildTimer) {
+        if (!rebuildTimer && !webrtcActive.value) {
           rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
         }
       }
@@ -348,11 +350,14 @@ function rebuildReplayer() {
   const container = replayContainerRef.value
   if (!container || allEvents.length < 2) return
 
-  const rrwebLib = (window as any).rrweb
-  if (!rrwebLib?.Replayer) return
-
   if (replayer) { try { replayer.pause() } catch {}; replayer = null }
   container.innerHTML = ''
+
+  const rrwebLib = (window as any).rrweb
+  if (!rrwebLib?.Replayer) {
+    LOG('rrweb Replayer not available')
+    return
+  }
 
   try {
     replayer = new rrwebLib.Replayer(allEvents, {
@@ -368,6 +373,7 @@ function rebuildReplayer() {
 }
 
 function disconnect() {
+  cleanupWebRTC()
   cleanup()
   selectedSessionId.value = ''
   selectedSession.value = null
