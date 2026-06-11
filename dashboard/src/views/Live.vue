@@ -265,6 +265,10 @@ function connectToSession(sessionId: string) {
     connecting.value = false
     reconnecting.value = false
     reconnectAttempts.value = 0
+    // Reset WebRTC state on new connection — don't auto-request
+    if (webrtcState.value !== 'connected') {
+      webrtcState.value = 'idle'
+    }
     heartbeatTimer = setInterval(() => {
       if (ws?.readyState === WebSocket.OPEN) ws.send('{"type":"pong"}')
     }, 25000)

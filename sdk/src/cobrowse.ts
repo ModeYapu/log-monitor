@@ -76,6 +76,8 @@ const rtcConfig: RTCConfiguration = {
 	]
 };
 
+let connectedAt = 0;
+
 /**
  * Initialize cobrowsing module
  */
@@ -126,6 +128,7 @@ export function start(): Promise<void> {
 			ws.onopen = () => {
 				console.log('[CoBrowse] Connected to server');
 				reconnectAttempts = 0;
+				connectedAt = Date.now();
 				setStatus('connected');
 				startRecording();
 				showWidget();
@@ -784,7 +787,13 @@ function handleMessage(data: string): void {
 				break;
 
 			case 'webrtc-offer-request':
-				// Admin requests screen sharing
+				// Admin requests screen sharing — ignore stale requests from reconnect
+				const timeSinceConnect = Date.now() - connectedAt;
+				if (timeSinceConnect < 3000) {
+					console.log('[CoBrowse] Ignoring stale webrtc-offer-request (connected', timeSinceConnect, 'ms ago)');
+					sendMessage({ type: 'webrtc-rejected' });
+					break;
+				}
 				console.log('[CoBrowse] WebRTC offer request received! Showing dialog...');
 				handleWebRTCRequest();
 				break;
