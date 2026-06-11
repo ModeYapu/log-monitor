@@ -51,7 +51,7 @@ func (hub *SessionHub) handleUserMessages(db CoBrowseDB) {
 			continue
 		}
 
-		slog.Info("[CoBrowse] User message received", "type", msg.Type, "session", hub.sessionID, "length", len(message))
+		slog.Debug("[CoBrowse] User message", "type", msg.Type, "session", hub.sessionID, "bytes", len(message))
 
 		switch msg.Type {
 		case "rrweb-event":
@@ -316,6 +316,12 @@ func (hub *SessionHub) close() {
 	if hub.parentHub != nil {
 		hub.parentHub.removeSession(hub.sessionID)
 	}
+}
+
+// resetStopCh creates a new stop channel for reconnection
+func (hub *SessionHub) resetStopCh() {
+	hub.closed = false
+	hub.stopCh = make(chan struct{})
 }
 
 // pingUser sends periodic ping to user connection

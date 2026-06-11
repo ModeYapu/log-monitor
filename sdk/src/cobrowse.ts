@@ -18,6 +18,7 @@ interface CoBrowseConfig {
 		allowedDomains?: string[];
 		blockDomains?: string[];
 	};
+	turnServers?: RTCIceServer[];
 }
 
 type CoBrowseStatus = 'disconnected' | 'connecting' | 'connected' | 'controlling';
@@ -59,22 +60,26 @@ let connectedAt = 0;
 // Debug mode — set via localStorage or config
 let debugMode = false;
 
-const rtcConfig: RTCConfiguration = {
+const defaultRTCConfig: RTCConfiguration = {
 	iceServers: [
 		{ urls: 'stun:stun.l.google.com:19302' },
-		{ urls: 'stun:stun1.l.google.com:19302' },
-		{
-			urls: 'turn:14.103.85.111:3478?transport=udp',
-			username: 'logmon',
-			credential: 'logmon2024turn'
-		},
-		{
-			urls: 'turn:14.103.85.111:3478?transport=tcp',
-			username: 'logmon',
-			credential: 'logmon2024turn'
-		}
+		{ urls: 'stun:stun1.l.google.com:19302' }
 	]
 };
+
+function getRTCConfig(): RTCConfiguration {
+	if (config?.turnServers?.length) {
+		return { iceServers: [...defaultRTCConfig.iceServers!, ...config.turnServers] };
+	}
+	// Default: include TURN servers for NAT traversal
+	return {
+		iceServers: [
+			...defaultRTCConfig.iceServers!,
+			{ urls: 'turn:14.103.85.111:3478?transport=udp', username: 'logmon', credential: 'logmon2024turn' },
+			{ urls: 'turn:14.103.85.111:3478?transport=tcp', username: 'logmon', credential: 'logmon2024turn' }
+		]
+	};
+}
 
 // ==================== Logging ====================
 
@@ -334,7 +339,7 @@ async function handleWebRTCRequest(): Promise<void> {
 			sendMessage({ type: 'webrtc-stop' });
 		};
 
-		peerConnection = new RTCPeerConnection(rtcConfig);
+		peerConnection = new RTCPeerConnection(getRTCConfig());
 
 		localStream.getTracks().forEach(track => {
 			if (peerConnection) peerConnection.addTrack(track, localStream!);
@@ -619,3 +624,11 @@ function defaultControlHandler(command: ControlCommand): void {
 
 // Flush on unload
 window.addEventListener('beforeunload', flushEvents);
+
+// Reconnect on visibility change (mobile/tab switch)
+document.addEventListener('visibilitychange', () => {
+	if (document.visibilityState === 'visible' && status === 'disconnected' && config?.enabled) {
+		LOG('Page became visible, reconnecting...');
+		start().catch(err => LOG_ERR('Visibility reconnect failed:', err));
+	}
+});

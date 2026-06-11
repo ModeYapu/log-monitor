@@ -338,7 +338,10 @@ async function handleWebRTCOffer(sdp: RTCSessionDescriptionInit) {
     peerConnection.ondatachannel = (event) => { dataChannel = event.channel }
 
     peerConnection.onicecandidate = (e) => {
-      if (e.candidate) ws?.send(JSON.stringify({ type: 'webrtc-ice', candidate: e.candidate.toJSON() }))
+      if (e.candidate) {
+        LOG('Local ICE:', e.candidate.type, e.candidate.address || 'hidden')
+        ws?.send(JSON.stringify({ type: 'webrtc-ice', candidate: e.candidate.toJSON() }))
+      }
     }
 
     peerConnection.onconnectionstatechange = () => {
@@ -346,6 +349,31 @@ async function handleWebRTCOffer(sdp: RTCSessionDescriptionInit) {
       LOG('PC state:', s)
       if (s === 'disconnected' || s === 'failed' || s === 'closed') cleanupWebRTC()
     }
+
+    peerConnection.onicecandidate = (e) => {
+      if (e.candidate) {
+        LOG('Local ICE:', e.candidate.type, e.candidate.address || 'hidden')
+        ws?.send(JSON.stringify({ type: 'webrtc-ice', candidate: e.candidate.toJSON() }))
+      }
+    }
+
+    peerConnection.oniceconnectionstatechange = () => {
+      LOG('ICE state:', peerConnection?.iceConnectionState)
+    }
+
+    // Log selected candidate pair to see if direct or relay
+    peerConnection.getStats().then(() => {
+      setInterval(async () => {
+        if (!peerConnection) return
+        const stats = await peerConnection.getStats()
+        stats.forEach((report) => {
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            LOG('ICE pair:', report.localCandidateId, '→', report.remoteCandidateId,
+              'type:', report.candidateType || 'unknown')
+          }
+        })
+      }, 5000)
+    })
 
     await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
     const answer = await peerConnection.createAnswer()

@@ -41,6 +41,11 @@ func (db *DB) CreateRecording(recording RecordingInfo) (int64, error) {
 	result, err := db.conn.Exec(`
 		INSERT INTO recordings (session_id, app_id, start_time, end_time, duration_ms, event_count, full_snapshot, url, ua, status, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(session_id) DO UPDATE SET
+			event_count = excluded.event_count,
+			duration_ms = excluded.duration_ms,
+			end_time = excluded.end_time,
+			status = excluded.status
 	`, recording.SessionID, recording.AppID, recording.StartTime, recording.EndTime,
 		recording.DurationMs, recording.EventCount, recording.FullSnapshot,
 		recording.URL, recording.UA, recording.Status, recording.CreatedAt)

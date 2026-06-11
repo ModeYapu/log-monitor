@@ -53,7 +53,34 @@ func (h *CoBrowseHub) HandleUserConnection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Create session hub
+	// Check for existing session (reconnect scenario)
+	h.mu.Lock()
+	existingHub, exists := h.sessions[sessionID]
+
+	if exists {
+		if existingHub.userConn != nil {
+			// Reconnect: replace old user connection
+			oldConn := existingHub.userConn
+			existingHub.userConn = conn
+			h.mu.Unlock()
+
+			go func() {
+				oldConn.WriteMessage(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseGoingAway, "replaced by new connection"))
+				oldConn.Close()
+			}()
+
+			slog.Info("[CoBrowse] User reconnected", "session", sessionID)
+			existingHub.resetStopCh()
+			go existingHub.handleUserMessages(h.db)
+			go existingHub.pingUser(conn)
+			return
+		}
+		// Old session closed — clean up and create new
+		delete(h.sessions, sessionID)
+	}
+
+	// Create new session hub
 	hub := &SessionHub{
 		sessionID:   sessionID,
 		appID:       appID,
