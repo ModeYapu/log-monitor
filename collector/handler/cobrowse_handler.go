@@ -204,6 +204,12 @@ func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Requ
 	hub.mu.RUnlock()
 	slog.Info("[CoBrowse] Sent events to viewer", "sentCount", sentCount, "eventCount", eventCount)
 
+	// Broadcast viewer count to all viewers
+	viewerCountMsg, _ := json.Marshal(map[string]interface{}{"type": "viewer-count", "count": viewerCount})
+	hub.mu.RLock()
+	for c := range hub.viewerConns { c.WriteMessage(websocket.TextMessage, viewerCountMsg) }
+	hub.mu.RUnlock()
+
 	// Handle viewer messages (control commands)
 	go hub.handleViewerMessages(conn, hub)
 

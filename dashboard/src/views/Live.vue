@@ -49,6 +49,10 @@
               <span v-if="webrtcActive && iceConnectionType" :class="['ice-badge', iceConnectionType === 'relay' ? 'ice-relay' : 'ice-direct']">
                 {{ iceConnectionType === 'direct-host' ? '🔗 直连(局域网)' : iceConnectionType === 'direct-srflx' ? '🔗 直连(公网)' : '🔁 中继' }}
               </span>
+              <span v-if="webrtcActive && controlRTT" class="rtt-badge" :class="{ 'rtt-high': controlRTT > 100 }">
+                {{ controlRTT }}ms
+              </span>
+              <span v-if="viewerCount > 0 && !webrtcActive" class="viewer-badge">👥 {{ viewerCount }}</span>
               <span v-if="!webrtcActive && eventCount > 0" class="event-badge">{{ eventCount }} events</span>
               <span v-if="webrtcState === 'requesting'" class="status-warn">⏳ 等待用户确认...</span>
               <span v-if="webrtcState === 'connecting'" class="status-warn">🔗 建立 WebRTC...</span>
@@ -62,6 +66,7 @@
               <button v-if="webrtcActive" :class="['btn', controlMode ? 'btn-warning' : 'btn-default']" @click="toggleControlMode">
                 {{ controlMode ? '🖱️ 控制中(点击关闭)' : '🖱️ 开始控制' }}
               </button>
+              <button v-if="controlMode" class="btn btn-sm" @click="showShortcuts = !showShortcuts" :title="'快捷键'">⌨️</button>
               <div v-if="webrtcActive" class="zoom-controls">
                 <button class="btn btn-sm" @click="zoomOut" :disabled="zoomLevel <= 50">−</button>
                 <span class="zoom-label">{{ zoomLevel }}%</span>
@@ -88,6 +93,16 @@
             </div>
             <div v-if="connecting" class="viewer-overlay"><span class="spinner"></span><span>连接中...</span></div>
             <div v-else-if="!wsConnected && eventCount === 0 && !webrtcActive" class="viewer-overlay"><span class="big-icon">📹</span><span>等待数据...</span></div>
+            <div v-if="showShortcuts" class="shortcut-panel">
+              <div class="shortcut-title">⌨️ 快捷键</div>
+              <div class="shortcut-item"><kbd>ESC</kbd> 退出控制模式</div>
+              <div class="shortcut-item"><kbd>F</kbd> 全屏切换</div>
+              <div class="shortcut-item"><kbd>滚轮</kbd> 滚动页面</div>
+              <div class="shortcut-item"><kbd>单击</kbd> 点击元素</div>
+              <div class="shortcut-item"><kbd>双击</kbd> 双击区域</div>
+              <div class="shortcut-item"><kbd>右键</kbd> 右键菜单</div>
+              <div class="shortcut-item"><kbd>字母/数字</kbd> 输入文字</div>
+            </div>
           </div>
         </div>
         <div v-else class="viewer-empty"><span class="big-icon">📹</span><p>请选择一个会话开始观看</p></div>
@@ -119,6 +134,9 @@ const webrtcActive = ref(false)
 const webrtcState = ref<'idle' | 'requesting' | 'connecting' | 'connected'>('idle')
 const iceConnectionType = ref('')  // host / srflx / relay
 const iceStatsTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const viewerCount = ref(0)
+const controlRTT = ref(0)  // ms
+const showShortcuts = ref(false)
 const controlMode = ref(false)
 const zoomLevel = ref(100)
 const isFullscreen = ref(false)
@@ -310,6 +328,9 @@ function connectToSession(sessionId: string) {
 }
 
 function handleWSMessage(msg: any) {
+  // Meta
+  if (msg.type === 'viewer-count') { viewerCount.value = msg.count; return }
+
   // WebRTC signaling
   if (msg.type === 'webrtc-offer') { handleWebRTCOffer(msg.sdp); return }
   if (msg.type === 'webrtc-ice') { handleICECandidate(msg.candidate); return }
@@ -363,7 +384,13 @@ async function handleWebRTCOffer(sdp: RTCSessionDescriptionInit) {
       nextTick(() => resizeControlCanvas())
     }
 
-    peerConnection.ondatachannel = (event) => { dataChannel = event.channel }
+    peerConnection.ondatachannel = (event) => {
+      dataChannel = event.channel
+      // RTT measurement via DataChannel
+      dataChannel.onopen = () => {
+        startRTTMeasurement()
+      }
+    }
 
     peerConnection.onicecandidate = (e) => {
       if (e.candidate) {
@@ -422,6 +449,25 @@ async function handleICECandidate(candidate: RTCIceCandidateInit) {
   try { await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)) } catch {}
 }
 
+let rttTimer: ReturnType<typeof setInterval> | null = null
+
+function startRTTMeasurement() {
+  if (rttTimer) clearInterval(rttTimer)
+  rttTimer = setInterval(async () => {
+    if (!peerConnection) return
+    try {
+      const stats = await peerConnection.getStats()
+      stats.forEach((report: any) => {
+        if (report.type === 'candidate-pair' && (report.state === 'succeeded' || report.selected)) {
+          if (report.currentRoundTripTime) {
+            controlRTT.value = Math.round(report.currentRoundTripTime * 1000)
+          }
+        }
+      })
+    } catch {}
+  }, 3000)
+}
+
 async function detectICEConnectionType() {
   if (!peerConnection) return
   try {
@@ -462,6 +508,7 @@ function stopIntervene() {
 }
 
 function cleanupWebRTC() {
+  if (rttTimer) { clearInterval(rttTimer); rttTimer = null }
   if (iceStatsTimer.value) { clearInterval(iceStatsTimer.value); iceStatsTimer.value = null }
   if (dataChannel) { try { dataChannel.close() } catch {} dataChannel = null }
   if (peerConnection) { try { peerConnection.close() } catch {} peerConnection = null }
@@ -518,6 +565,10 @@ function onControlWheel(e: WheelEvent) { sendControl({ action: 'scroll', deltaX:
 
 function setupKeyboardListeners() {
   keydownHandler = (e) => {
+    // Local shortcuts (not sent to remote)
+    if (e.key === 'Escape' && controlMode.value) { toggleControlMode(); return }
+    if (e.key === 'f' && controlMode.value) { toggleFullscreen(); return }
+
     if (!controlMode.value || !webrtcActive.value || e.ctrlKey || e.metaKey || e.altKey) return
     e.preventDefault()
     sendControl({ action: 'keydown', key: e.key })
@@ -648,6 +699,14 @@ function formatDuration(startMs: number): string {
 .ice-badge { font-size: 11px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
 .ice-direct { background: rgba(34,197,94,0.15); color: #22c55e; }
 .ice-relay { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.rtt-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(99,102,241,0.15); color: #6366f1; font-weight: 500; font-family: monospace; }
+.rtt-high { background: rgba(239,68,68,0.15); color: #ef4444; }
+.viewer-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(34,197,94,0.15); color: #22c55e; }
+
+.shortcut-panel { position: absolute; top: 50px; right: 16px; background: rgba(15,23,42,0.95); color: #e2e8f0; border-radius: 10px; padding: 14px 18px; z-index: 20; font-size: 13px; min-width: 200px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); }
+.shortcut-title { font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+.shortcut-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #94a3b8; }
+.shortcut-item kbd { background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: monospace; color: #e2e8f0; min-width: 60px; text-align: center; }
 .status-warn { font-size: 13px; color: #f59e0b; }
 
 .btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--color-bg); color: var(--color-text); transition: all 0.15s; }
