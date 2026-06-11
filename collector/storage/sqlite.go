@@ -11,8 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-		"time"
+	"time"
 
+	"github.com/logmonitor/collector/migrate"
+	migrun "github.com/logmonitor/collector/migrate"
 	_ "modernc.org/sqlite"
 )
 
@@ -54,10 +56,13 @@ func NewDB(cfg Config) (*DB, error) {
 		stopCh: make(chan struct{}),
 	}
 
-	// Initialize schema
-	if err := db.initSchema(); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	// Initialize schema via migration tool (with inline fallback)
+	if err := migrun.RunEmbedded(conn, migrate.MigrationsFS, "."); err != nil {
+		slog.Warn("Schema migration failed, using inline fallback", "error", err)
+		if err := db.initSchema(); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+		}
 	}
 
 	// Start retention cleanup goroutine
@@ -249,6 +254,29 @@ func (db *DB) initSchema() error {
 		}
 	}
 
+	// Migration: Create webhook_deliveries table for persistent retry
+	webhookTableMigrations := []string{
+		`CREATE TABLE IF NOT EXISTS webhook_deliveries (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			webhook_id INTEGER NOT NULL,
+			payload TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			attempts INTEGER NOT NULL DEFAULT 0,
+			max_attempts INTEGER NOT NULL DEFAULT 5,
+			next_retry_at INTEGER NOT NULL,
+			last_error TEXT DEFAULT '',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status, next_retry_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id)`,
+	}
+	for _, m := range webhookTableMigrations {
+		if _, mErr := db.conn.Exec(m); mErr != nil {
+			slog.Info("Migration notice", "error", mErr)
+		}
+	}
+
 	return nil
 }
 
@@ -266,6 +294,13 @@ func (db *DB) Close() error {
 func (db *DB) Conn() *sql.DB {
 	return db.conn
 }
+
+// Closed returns whether the database has been closed.
+func (db *DB) Closed() bool {
+	return db.closed.Load()
+}
+
+// Closed returns whether the database has been closed.
 
 // retentionCleanup periodically deletes old events (runs daily at midnight)
 func (db *DB) retentionCleanup(retentionDays int) {

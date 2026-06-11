@@ -74,14 +74,12 @@ func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert to response format
-	response := map[string]interface{}{
-		"total": result.Total,
-		"page":  result.Page,
-		"size":  result.Size,
-		"data":  dataWithScreenshots,
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.LogsResponse{
+		Total: result.Total,
+		Page:  result.Page,
+		Size:  result.Size,
+		Data:  dataWithScreenshots,
+	})
 }
 
 // QueryStats returns statistics for an app
@@ -104,16 +102,14 @@ func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
 	// Generate 24h error trend
 	trend := h.generateErrorTrend(appID, 24*time.Hour)
 
-	response := map[string]interface{}{
-		"totalEvents": stats.TotalEvents,
-		"errorCount":  stats.ErrorCount,
-		"warnCount":   stats.WarnCount,
-		"infoCount":   stats.InfoCount,
-		"topErrors":   stats.TopErrors,
-		"errorTrend":  trend,
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.StatsResponse{
+		TotalEvents: stats.TotalEvents,
+		ErrorCount:  stats.ErrorCount,
+		WarnCount:   stats.WarnCount,
+		InfoCount:   stats.InfoCount,
+		TopErrors:   stats.TopErrors,
+		ErrorTrend:  trend,
+	})
 }
 
 // QueryApps returns list of all apps
@@ -187,14 +183,11 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to response format
-	response := map[string]interface{}{
-		"type":  result.Type,
-		"data":  result.Items,
-		"total": result.Total,
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.TopResponse{
+		Type:  result.Type,
+		Data:  result.Items,
+		Total: result.Total,
+	})
 }
 
 // QuerySimilar handles similar error queries
@@ -225,12 +218,10 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := map[string]interface{}{
-		"query":    message,
-		"clusters": clusters,
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.SimilarResponse{
+		Query:    message,
+		Clusters: clusters,
+	})
 }
 
 // QueryExport handles event export requests

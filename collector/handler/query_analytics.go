@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/logmonitor/collector/storage"
 )
 
 // QueryHandler handles log query requests
@@ -61,13 +62,11 @@ func (h *QueryHandler) QueryPerformanceTrend(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	response := map[string]interface{}{
-		"metric":   metric,
-		"granularity": granularity,
-		"data":     trend,
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.PerformanceTrendResponse{
+		Metric:      metric,
+		Granularity: granularity,
+		Data:        trend,
+	})
 }
 
 // QueryPerformancePages handles page performance ranking queries
@@ -92,12 +91,10 @@ func (h *QueryHandler) QueryPerformancePages(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	response := map[string]interface{}{
-		"time_range": timeRange,
-		"data":       pages,
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.PerformancePagesResponse{
+		TimeRange: timeRange,
+		Data:      pages,
+	})
 }
 
 // QueryPerformanceRegression handles performance regression queries
@@ -117,12 +114,10 @@ func (h *QueryHandler) QueryPerformanceRegression(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := map[string]interface{}{
-		"regressions": regressions,
-		"count":       len(regressions),
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.PerformanceRegressionResponse{
+		Regressions: regressions,
+		Count:       len(regressions),
+	})
 }
 
 // QueryNewErrors handles new errors queries
@@ -144,13 +139,11 @@ func (h *QueryHandler) QueryNewErrors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := map[string]interface{}{
-		"data":       newErrors,
-		"count":      len(newErrors),
-		"since_minutes": since,
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.NewErrorsResponse{
+		Data:         newErrors,
+		Count:        len(newErrors),
+		SinceMinutes: since,
+	})
 }
 
 // QueryAlertTriggers handles recent alert trigger queries
@@ -166,12 +159,10 @@ func (h *QueryHandler) QueryAlertTriggers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	response := map[string]interface{}{
-		"data":  triggers,
-		"count": len(triggers),
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.AlertTriggersResponse{
+		Data:  triggers,
+		Count: len(triggers),
+	})
 }
 
 // QueryActiveSessions handles active sessions queries
@@ -193,12 +184,10 @@ func (h *QueryHandler) QueryActiveSessions(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	response := map[string]interface{}{
-		"data":  sessions,
-		"count": len(sessions),
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(storage.ActiveSessionsResponse{
+		Data:  sessions,
+		Count: len(sessions),
+	})
 }
 
 // QueryStatsComparison handles today vs yesterday statistics comparison

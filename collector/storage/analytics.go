@@ -94,7 +94,8 @@ func (db *DB) GetTopN(appID, topType, orderBy string, limit int, filters Analyti
 		LIMIT ?
 	`, selectField, whereClause, groupField, orderClause)
 
-	args = append(args, regressionThreshold, limit)
+	args = append([]interface{}{regressionThreshold}, args...)
+	args = append(args, limit)
 
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
@@ -237,26 +238,26 @@ func (db *DB) GetPerformanceSummary(appID string, timeRange string) (*Performanc
 			continue
 		}
 
-		var perfData map[string]interface{}
+		var perfData PerformanceData
 		if err := json.Unmarshal([]byte(performanceJSON), &perfData); err != nil {
 			continue
 		}
 
 		// Extract metric values
-		if v, ok := perfData["fcp"].(float64); ok && v > 0 {
-			fcpValues = append(fcpValues, v)
+		if perfData.FCP > 0 {
+			fcpValues = append(fcpValues, perfData.FCP)
 		}
-		if v, ok := perfData["lcp"].(float64); ok && v > 0 {
-			lcpValues = append(lcpValues, v)
+		if perfData.LCP > 0 {
+			lcpValues = append(lcpValues, perfData.LCP)
 		}
-		if v, ok := perfData["cls"].(float64); ok && v > 0 {
-			clsValues = append(clsValues, v)
+		if perfData.CLS > 0 {
+			clsValues = append(clsValues, perfData.CLS)
 		}
-		if v, ok := perfData["inp"].(float64); ok && v > 0 {
-			inpValues = append(inpValues, v)
+		if perfData.INP > 0 {
+			inpValues = append(inpValues, perfData.INP)
 		}
-		if v, ok := perfData["ttfb"].(float64); ok && v > 0 {
-			ttfbValues = append(ttfbValues, v)
+		if perfData.TTFB > 0 {
+			ttfbValues = append(ttfbValues, perfData.TTFB)
 		}
 	}
 
@@ -335,12 +336,12 @@ func (db *DB) GetPerformanceTrend(appID, metric, granularity string) ([]Performa
 				continue
 			}
 
-			var perfData map[string]interface{}
+			var perfData PerformanceData
 			if err := json.Unmarshal([]byte(performanceJSON), &perfData); err != nil {
 				continue
 			}
 
-			if v, ok := perfData[metric].(float64); ok && v > 0 {
+			if v := perfData.GetMetric(metric); v > 0 {
 				values = append(values, v)
 			}
 		}
@@ -400,7 +401,7 @@ func (db *DB) GetPagePerformanceRanking(appID, timeRange string) ([]PagePerforma
 			continue
 		}
 
-		var perfData map[string]interface{}
+		var perfData PerformanceData
 		if err := json.Unmarshal([]byte(performanceJSON), &perfData); err != nil {
 			continue
 		}
@@ -440,7 +441,7 @@ func (db *DB) GetPagePerformanceRanking(appID, timeRange string) ([]PagePerforma
 			continue
 		}
 
-		var perfData map[string]interface{}
+		var perfData PerformanceData
 		if err := json.Unmarshal([]byte(performanceJSON), &perfData); err != nil {
 			continue
 		}
@@ -450,8 +451,8 @@ func (db *DB) GetPagePerformanceRanking(appID, timeRange string) ([]PagePerforma
 		}
 
 		// Store LCP values for comparison
-		if v, ok := perfData["lcp"].(float64); ok && v > 0 {
-			previousPageMetrics[url] = append(previousPageMetrics[url], v)
+		if perfData.LCP > 0 {
+			previousPageMetrics[url] = append(previousPageMetrics[url], perfData.LCP)
 		}
 	}
 
@@ -481,25 +482,25 @@ func (db *DB) GetPagePerformanceRanking(appID, timeRange string) ([]PagePerforma
 				continue
 			}
 
-			var perfData map[string]interface{}
+			var perfData PerformanceData
 			if err := json.Unmarshal([]byte(performanceJSON), &perfData); err != nil {
 				continue
 			}
 
-			if v, ok := perfData["fcp"].(float64); ok && v > 0 {
-				fcpValues = append(fcpValues, v)
+			if perfData.FCP > 0 {
+				fcpValues = append(fcpValues, perfData.FCP)
 			}
-			if v, ok := perfData["lcp"].(float64); ok && v > 0 {
-				lcpValues = append(lcpValues, v)
+			if perfData.LCP > 0 {
+				lcpValues = append(lcpValues, perfData.LCP)
 			}
-			if v, ok := perfData["cls"].(float64); ok && v > 0 {
-				clsValues = append(clsValues, v)
+			if perfData.CLS > 0 {
+				clsValues = append(clsValues, perfData.CLS)
 			}
-			if v, ok := perfData["inp"].(float64); ok && v > 0 {
-				inpValues = append(inpValues, v)
+			if perfData.INP > 0 {
+				inpValues = append(inpValues, perfData.INP)
 			}
-			if v, ok := perfData["ttfb"].(float64); ok && v > 0 {
-				ttfbValues = append(ttfbValues, v)
+			if perfData.TTFB > 0 {
+				ttfbValues = append(ttfbValues, perfData.TTFB)
 			}
 		}
 		pageRows.Close()
@@ -567,7 +568,7 @@ func (db *DB) GetPerformanceRegressions(appID string) ([]PerformanceRegression, 
 			continue
 		}
 
-		var perfData map[string]interface{}
+		var perfData PerformanceData
 		if err := json.Unmarshal([]byte(performanceJSON), &perfData); err != nil {
 			continue
 		}
@@ -580,7 +581,7 @@ func (db *DB) GetPerformanceRegressions(appID string) ([]PerformanceRegression, 
 
 		metrics := []string{"fcp", "lcp", "cls", "inp", "ttfb"}
 		for _, metric := range metrics {
-			if v, ok := perfData[metric].(float64); ok && v > 0 {
+			if v := perfData.GetMetric(metric); v > 0 {
 				currentMetrics[url][metric] = append(currentMetrics[url][metric], v)
 			}
 		}
@@ -609,7 +610,7 @@ func (db *DB) GetPerformanceRegressions(appID string) ([]PerformanceRegression, 
 			continue
 		}
 
-		var perfData map[string]interface{}
+		var perfData PerformanceData
 		if err := json.Unmarshal([]byte(performanceJSON), &perfData); err != nil {
 			continue
 		}
@@ -622,7 +623,7 @@ func (db *DB) GetPerformanceRegressions(appID string) ([]PerformanceRegression, 
 
 		metrics := []string{"fcp", "lcp", "cls", "inp", "ttfb"}
 		for _, metric := range metrics {
-			if v, ok := perfData[metric].(float64); ok && v > 0 {
+			if v := perfData.GetMetric(metric); v > 0 {
 				previousMetrics[url][metric] = append(previousMetrics[url][metric], v)
 			}
 		}

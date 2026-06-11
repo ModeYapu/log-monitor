@@ -70,8 +70,8 @@ func (h *QueryHandler) Health(w http.ResponseWriter, r *http.Request) {
 
 // generateErrorTrend generates error trend data for the specified duration
 
-func (h *QueryHandler) generateErrorTrend(appID string, duration time.Duration) []map[string]interface{} {
-	points := make([]map[string]interface{}, 0)
+func (h *QueryHandler) generateErrorTrend(appID string, duration time.Duration) []storage.ErrorTrendPoint {
+	points := make([]storage.ErrorTrendPoint, 0)
 
 	now := time.Now()
 	bucketSize := duration / 24 // Divide into 24 buckets
@@ -95,10 +95,10 @@ func (h *QueryHandler) generateErrorTrend(appID string, duration time.Duration) 
 			count = result.Total
 		}
 
-		points = append([]map[string]interface{}{
+		points = append([]storage.ErrorTrendPoint{
 			{
-				"timestamp": startTime.UnixMilli(),
-				"count":     count,
+				Timestamp: startTime.UnixMilli(),
+				Count:     count,
 			},
 		}, points...)
 	}

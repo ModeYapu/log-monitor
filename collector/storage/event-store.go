@@ -785,9 +785,9 @@ func (db *DB) GetClusterStats(appID, fingerprint string) (ClusterStats, error) {
 			var hour int64
 			var count int64
 			if rows.Scan(&hour, &count) == nil {
-				stats.TimeSeries = append(stats.TimeSeries, map[string]interface{}{
-					"timestamp": hour,
-					"count":     count,
+				stats.TimeSeries = append(stats.TimeSeries, TimeSeriesPoint{
+					Timestamp: hour,
+					Count:     count,
 				})
 			}
 		}

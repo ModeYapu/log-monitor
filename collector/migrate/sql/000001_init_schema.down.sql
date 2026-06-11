@@ -1,0 +1,27 @@
+-- Down migration: drop all tables in reverse dependency order
+DROP INDEX IF EXISTS idx_webhook_deliveries_status;
+DROP INDEX IF EXISTS idx_webhook_deliveries_webhook;
+DROP INDEX IF EXISTS idx_project_members_project;
+DROP INDEX IF EXISTS idx_project_members_user;
+DROP INDEX IF EXISTS idx_issues_fingerprint;
+DROP INDEX IF EXISTS idx_issues_status;
+DROP INDEX IF EXISTS idx_alert_logs_created;
+DROP INDEX IF EXISTS idx_events_app_created;
+DROP INDEX IF EXISTS idx_events_type;
+DROP INDEX IF EXISTS idx_events_level;
+DROP INDEX IF EXISTS idx_events_appid;
+DROP INDEX IF EXISTS idx_events_level_only;
+DROP INDEX IF EXISTS idx_events_timestamp;
+DROP INDEX IF EXISTS idx_events_release;
+DROP INDEX IF EXISTS idx_events_env;
+DROP INDEX IF EXISTS idx_events_session_id;
+DROP INDEX IF EXISTS idx_events_user_id;
+DROP INDEX IF EXISTS idx_events_fingerprint;
+DROP TABLE IF EXISTS webhook_deliveries;
+DROP TABLE IF EXISTS project_members;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS issues;
+DROP TABLE IF EXISTS system_meta;
+DROP TABLE IF EXISTS alert_logs;
+DROP TABLE IF EXISTS alert_rules;
+DROP TABLE IF EXISTS events;

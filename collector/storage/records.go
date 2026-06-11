@@ -198,7 +198,7 @@ type ClusterStats struct {
 	LastSeen            int64                  `json:"lastSeen"`
 	ReleaseDistribution map[string]int64       `json:"releaseDistribution"`
 	EnvDistribution     map[string]int64       `json:"envDistribution"`
-	TimeSeries          []map[string]interface{} `json:"timeSeries"`
+	TimeSeries          []TimeSeriesPoint       `json:"timeSeries"`
 }
 
 // ErrorCluster represents a cluster of similar errors
