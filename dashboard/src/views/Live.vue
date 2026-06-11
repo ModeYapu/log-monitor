@@ -46,6 +46,9 @@
                 <span v-if="wsConnected" class="live-dot"></span>
                 {{ wsConnected ? (webrtcActive ? '🔴 实时共享' : '🟢 观看中') : (connecting ? '⏳ 连接中' : (reconnecting ? '🔄 重连中' : '⚫ 断开')) }}
               </span>
+              <span v-if="webrtcActive && iceConnectionType" :class="['ice-badge', iceConnectionType === 'relay' ? 'ice-relay' : 'ice-direct']">
+                {{ iceConnectionType === 'direct-host' ? '🔗 直连(局域网)' : iceConnectionType === 'direct-srflx' ? '🔗 直连(公网)' : '🔁 中继' }}
+              </span>
               <span v-if="!webrtcActive && eventCount > 0" class="event-badge">{{ eventCount }} events</span>
               <span v-if="webrtcState === 'requesting'" class="status-warn">⏳ 等待用户确认...</span>
               <span v-if="webrtcState === 'connecting'" class="status-warn">🔗 建立 WebRTC...</span>
@@ -114,6 +117,8 @@ const maxReconnectAttempts = 10
 
 const webrtcActive = ref(false)
 const webrtcState = ref<'idle' | 'requesting' | 'connecting' | 'connected'>('idle')
+const iceConnectionType = ref('')  // host / srflx / relay
+const iceStatsTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const controlMode = ref(false)
 const zoomLevel = ref(100)
 const isFullscreen = ref(false)
@@ -359,21 +364,11 @@ async function handleWebRTCOffer(sdp: RTCSessionDescriptionInit) {
 
     peerConnection.oniceconnectionstatechange = () => {
       LOG('ICE state:', peerConnection?.iceConnectionState)
+      detectICEConnectionType()
     }
 
-    // Log selected candidate pair to see if direct or relay
-    peerConnection.getStats().then(() => {
-      setInterval(async () => {
-        if (!peerConnection) return
-        const stats = await peerConnection.getStats()
-        stats.forEach((report) => {
-          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-            LOG('ICE pair:', report.localCandidateId, '→', report.remoteCandidateId,
-              'type:', report.candidateType || 'unknown')
-          }
-        })
-      }, 5000)
-    })
+    // Monitor ICE connection type periodically
+    iceStatsTimer.value = setInterval(detectICEConnectionType, 3000)
 
     await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
     const answer = await peerConnection.createAnswer()
@@ -390,18 +385,54 @@ async function handleICECandidate(candidate: RTCIceCandidateInit) {
   try { await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)) } catch {}
 }
 
+async function detectICEConnectionType() {
+  if (!peerConnection) return
+  try {
+    const stats = await peerConnection.getStats()
+    let localType = ''
+    let remoteType = ''
+    let localAddr = ''
+    let remoteAddr = ''
+
+    stats.forEach((report: any) => {
+      if (report.type === 'candidate-pair' && (report.state === 'succeeded' || report.selected === true)) {
+        // Find the actual candidate details
+        stats.forEach((c: any) => {
+          if (c.id === report.localCandidateId) { localType = c.candidateType; localAddr = c.address || c.ip || '' }
+          if (c.id === report.remoteCandidateId) { remoteType = c.candidateType; remoteAddr = c.address || c.ip || '' }
+        })
+      }
+    })
+
+    if (localType || remoteType) {
+      // Determine connection path
+      // host = same machine, srflx = STUN direct, relay = TURN
+      if (localType === 'host' && remoteType === 'host') {
+        iceConnectionType.value = 'direct-host'
+      } else if (remoteType === 'relay' || localType === 'relay') {
+        iceConnectionType.value = 'relay'
+      } else {
+        iceConnectionType.value = 'direct-srflx'
+      }
+      LOG('ICE:', localType, '/', remoteType, localAddr, '→', remoteAddr, '→', iceConnectionType.value)
+    }
+  } catch {}
+}
+
 function stopIntervene() {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'webrtc-stop' }))
   cleanupWebRTC()
 }
 
 function cleanupWebRTC() {
+  if (iceStatsTimer.value) { clearInterval(iceStatsTimer.value); iceStatsTimer.value = null }
   if (dataChannel) { try { dataChannel.close() } catch {} dataChannel = null }
   if (peerConnection) { try { peerConnection.close() } catch {} peerConnection = null }
   if (webrtcVideoRef.value) webrtcVideoRef.value.srcObject = null
   webrtcActive.value = false
   webrtcState.value = 'idle'
   controlMode.value = false
+  iceConnectionType.value = ''
   removeKeyboardListeners()
 }
 
@@ -577,6 +608,9 @@ function formatDuration(startMs: number): string {
 .ws-status.disconnected { color: #ef4444; }
 .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; display: inline-block; animation: pulse 1.5s infinite; }
 .event-badge { font-size: 11px; color: var(--color-text-secondary); background: var(--color-bg-tertiary); padding: 2px 8px; border-radius: 10px; }
+.ice-badge { font-size: 11px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
+.ice-direct { background: rgba(34,197,94,0.15); color: #22c55e; }
+.ice-relay { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .status-warn { font-size: 13px; color: #f59e0b; }
 
 .btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--color-bg); color: var(--color-text); transition: all 0.15s; }
