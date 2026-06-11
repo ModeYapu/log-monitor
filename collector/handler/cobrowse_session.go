@@ -60,6 +60,14 @@ func (hub *SessionHub) handleUserMessages(db CoBrowseDB) {
 			hub.handleFullSnapshot(&msg, db)
 		case "pong":
 			// Keep alive response, ignore
+		case "webrtc-offer-request":
+			// Admin requests intervention — forward to all viewers
+			// Actually this comes FROM viewer, forward TO user (but user initiated the request)
+			// This case shouldn't happen from user side, but handle gracefully
+			slog.Warn("[CoBrowse] Unexpected webrtc-offer-request from user", "session", hub.sessionID)
+		case "webrtc-offer", "webrtc-answer", "webrtc-ice", "webrtc-stop", "webrtc-rejected":
+			// WebRTC signaling — forward to all viewers
+			hub.forwardToViewers(message)
 		default:
 			slog.Error("[CoBrowse] Unknown message type", "type", msg.Type)
 		}
@@ -92,8 +100,9 @@ func (hub *SessionHub) handleViewerMessages(conn *websocket.Conn, sessionHub *Se
 			continue
 		}
 
-		// Forward control command to user
-		if msg.Type == "control" {
+		switch msg.Type {
+		case "control":
+			// Forward control command to user
 			hub.mu.RLock()
 			userConn := hub.userConn
 			hub.mu.RUnlock()
@@ -103,6 +112,32 @@ func (hub *SessionHub) handleViewerMessages(conn *websocket.Conn, sessionHub *Se
 					slog.Error("[CoBrowse] Failed to send control to user", "error", err)
 				} else {
 					slog.Info("[CoBrowse] Control sent", "session", hub.sessionID, "action", msg.Action)
+				}
+			}
+		case "webrtc-offer-request":
+			// Admin requests intervention — forward to user
+			hub.mu.RLock()
+			userConn := hub.userConn
+			hub.mu.RUnlock()
+
+			if userConn != nil {
+				if err := userConn.WriteMessage(websocket.TextMessage, message); err != nil {
+					slog.Error("[CoBrowse] Failed to send webrtc-offer-request to user", "error", err)
+				} else {
+					slog.Info("[CoBrowse] WebRTC offer request forwarded", "session", hub.sessionID)
+				}
+			}
+		case "webrtc-offer", "webrtc-answer", "webrtc-ice", "webrtc-stop", "webrtc-rejected":
+			// WebRTC signaling — forward to user
+			hub.mu.RLock()
+			userConn := hub.userConn
+			hub.mu.RUnlock()
+
+			if userConn != nil {
+				if err := userConn.WriteMessage(websocket.TextMessage, message); err != nil {
+					slog.Error("[CoBrowse] Failed to forward WebRTC signaling to user", "type", msg.Type, "error", err)
+				} else {
+					slog.Info("[CoBrowse] WebRTC signaling forwarded to user", "type", msg.Type, "session", hub.sessionID)
 				}
 			}
 		}
@@ -220,6 +255,19 @@ func (hub *SessionHub) handleFullSnapshot(msg *model.CoBrowseMessage, db CoBrows
 	}
 
 	slog.Info("[CoBrowse] Full snapshot received", "session", hub.sessionID)
+}
+
+// forwardToViewers forwards a raw message to all connected viewers
+func (hub *SessionHub) forwardToViewers(message []byte) {
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+
+	for viewerConn := range hub.viewerConns {
+		if err := viewerConn.WriteMessage(websocket.TextMessage, message); err != nil {
+			slog.Error("[CoBrowse] Failed to forward to viewer", "error", err)
+			delete(hub.viewerConns, viewerConn)
+		}
+	}
 }
 
 // close closes the session and cleans up resources
