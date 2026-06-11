@@ -321,7 +321,9 @@ function connectToSession(sessionId: string) {
           rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)
         }
       } else if (msg.type === 'rrweb-event') {
-        allEvents.push(msg.data)
+        // Data may be a single event or array of events
+        const newEvents = Array.isArray(msg.data) ? msg.data : [msg.data]
+        allEvents.push(...newEvents)
         eventCount.value = allEvents.length
         if (!rebuildTimer && !webrtcActive.value) {
           rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 500)

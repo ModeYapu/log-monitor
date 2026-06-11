@@ -131,7 +131,7 @@ export function start(): Promise<void> {
 				connectedAt = Date.now();
 				setStatus('connected');
 				startRecording();
-				showWidget();
+				// Don't show widget during normal monitoring — only when WebRTC active
 				resolve();
 			};
 
@@ -220,12 +220,24 @@ async function handleWebRTCRequest(): Promise<void> {
 		const displayMediaOptions: any = {
 			video: {
 				cursor: 'always',
-				displaySurface: 'browser' // Prefer tab capture
+				displaySurface: 'browser',
+				selfBrowserSurface: 'include' // Allow sharing own tab
 			},
 			audio: false,
-			preferCurrentTab: true // Chrome hint to show current tab first
+			preferCurrentTab: true,
+			systemAudio: 'exclude'
 		};
-		localStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+
+		// Try with preferCurrentTab first, fallback without
+		try {
+			localStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+		} catch {
+			// Fallback for browsers that don't support preferCurrentTab
+			localStream = await navigator.mediaDevices.getDisplayMedia({
+				video: { cursor: 'always' },
+				audio: false
+			});
+		}
 
 		// Handle stream ending (user stops sharing from browser UI)
 		localStream.getVideoTracks()[0].onended = () => {
@@ -356,6 +368,8 @@ function cleanupWebRTC(): void {
 		adminCursor.remove();
 		adminCursor = null;
 	}
+	webrtcActive = false;
+	hideWidget();
 }
 
 // ==================== Intervention Dialog ====================
@@ -568,6 +582,7 @@ async function createAndSendOffer(): Promise<void> {
 		});
 
 		webrtcActive = true;
+		showWidget();
 		updateWidgetStatus();
 		console.log('[CoBrowse] WebRTC offer sent successfully');
 	} catch (err) {
@@ -738,10 +753,7 @@ function emitEvent(event: any, isCheckout?: boolean): void {
 			data: event
 		});
 	} else {
-		eventBuffer.push({
-			timestamp: Date.now(),
-			data: event
-		});
+		eventBuffer.push(event);
 
 		if (eventBuffer.length >= 10) {
 			flushEvents();
