@@ -13,6 +13,23 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 		return nil
 	}
 
+	// Insert events under lock
+	if err := db.insertEventsLocked(events); err != nil {
+		return err
+	}
+
+	// Create or update Issues outside the event lock to avoid deadlock
+	// (CreateOrUpdateIssues acquires its own lock)
+	if err := db.CreateOrUpdateIssues(events); err != nil {
+		// Log error but don't fail the event insertion
+		fmt.Printf("Warning: Failed to create/update issues: %v\n", err)
+	}
+
+	return nil
+}
+
+// insertEventsLocked inserts events under the DB mutex
+func (db *DB) insertEventsLocked(events []EventRecord) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -56,12 +73,6 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	// Create or update Issues for events with fingerprints
-	if err := db.CreateOrUpdateIssues(events); err != nil {
-		// Log error but don't fail the event insertion
-		fmt.Printf("Warning: Failed to create/update issues: %v\n", err)
 	}
 
 	return nil

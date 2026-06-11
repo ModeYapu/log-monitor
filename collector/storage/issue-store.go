@@ -79,7 +79,7 @@ func (db *DB) CreateOrUpdateIssues(events []EventRecord) error {
 			_, err = db.conn.Exec(`
 				INSERT INTO issues (fingerprint, app_id, title, type, status, priority, assignee,
 				                  first_seen_at, last_seen_at, event_count, user_count, resolved_at, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`, k.Fingerprint, k.AppID, title, IssueTypeError, IssueStatusOpen, IssuePriorityMedium, "",
 				now, now, int64(len(groupEvents)), int64(countDistinctUsers(groupEvents)), 0, now, now)
 
