@@ -735,7 +735,7 @@ function emitEvent(event: any, isCheckout?: boolean): void {
 			data: event
 		});
 
-		if (eventBuffer.length >= 5) {
+		if (eventBuffer.length >= 10) {
 			flushEvents();
 		}
 	}
@@ -958,9 +958,9 @@ window.addEventListener('beforeunload', () => {
 	flushEvents();
 });
 
-// Auto-flush events every 100ms
+// Auto-flush events every 500ms (reduced frequency to avoid WS overload)
 setInterval(() => {
 	if (status === 'connected') {
 		flushEvents();
 	}
-}, 100);
+}, 500);

@@ -290,6 +290,12 @@ func (hub *SessionHub) close() {
 	// Signal all goroutines to stop
 	close(hub.stopCh)
 
+	// Notify viewers that session is ending
+	sessionRemovedMsg, _ := json.Marshal(map[string]string{"type": "session-removed"})
+	for viewerConn := range hub.viewerConns {
+		viewerConn.WriteMessage(websocket.TextMessage, sessionRemovedMsg)
+	}
+
 	// Close user connection
 	if hub.userConn != nil {
 		hub.userConn.Close()

@@ -275,6 +275,15 @@ function connectToSession(sessionId: string) {
       const msg = JSON.parse(event.data)
       if (msg.type === 'ping') { ws?.send('{"type":"pong"}'); return }
 
+      // Session removed by server — stop reconnecting
+      if (msg.type === 'session-removed') {
+        LOG('Session removed by server, stopping reconnect')
+        cleanup()
+        selectedSessionId.value = ''
+        selectedSession.value = null
+        return
+      }
+
       LOG('WS message:', msg.type, msg.type?.startsWith('webrtc') ? JSON.stringify(msg).substring(0, 200) : '')
 
       // WebRTC signaling from USER
@@ -322,7 +331,11 @@ function connectToSession(sessionId: string) {
     wsConnected.value = false
     connecting.value = false
     if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
-    scheduleReconnect()
+    // Only reconnect for abnormal closures, not for intentional disconnects
+    // Code 1005 = no status (session likely removed), 1000 = normal close
+    if (e.code !== 1000) {
+      scheduleReconnect()
+    }
   }
 
   ws.onerror = (e) => {
@@ -365,14 +378,28 @@ function scheduleReconnect() {
   if (reconnectAttempts.value >= maxReconnectAttempts) {
     reconnecting.value = false
     reconnectAttempts.value = 0
+    LOG('Max reconnect attempts reached, giving up')
     return
   }
   reconnectAttempts.value++
   reconnecting.value = true
-  const delay = Math.min(Math.pow(2, reconnectAttempts.value - 1) * 1000, 30000)
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value - 1), 30000) // 1s, 2s, 4s, 8s...
+  LOG('Scheduling reconnect in', delay, 'ms, attempt', reconnectAttempts.value)
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null
-    if (selectedSession.value) connectToSession(selectedSession.value.sessionId)
+    if (selectedSession.value) {
+      // Check if session still exists in live list before reconnecting
+      const stillAlive = liveSessions.value.some(s => s.sessionId === selectedSession.value!.sessionId)
+      if (stillAlive) {
+        connectToSession(selectedSession.value.sessionId)
+      } else {
+        LOG('Session no longer in live list, stopping reconnect')
+        reconnecting.value = false
+        cleanup()
+        selectedSessionId.value = ''
+        selectedSession.value = null
+      }
+    }
   }, delay)
 }
 
