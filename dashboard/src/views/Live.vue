@@ -196,6 +196,15 @@ onMounted(() => {
   refreshSessions()
   refreshTimer = setInterval(refreshSessions, 5000)
   document.addEventListener('fullscreenchange', onFullscreenChange)
+
+  // Load rrweb if not already available
+  if (!(window as any).rrweb?.Replayer) {
+    LOG('Loading rrweb via dynamic import...')
+    import('rrweb/lib/replay/rrweb-replay.js').then(mod => {
+      LOG('rrweb loaded, Replayer:', typeof mod.Replayer)
+      ;(window as any).rrweb = { Replayer: mod.Replayer }
+    }).catch(err => LOG('Failed to load rrweb:', err))
+  }
 })
 
 onUnmounted(() => {
@@ -361,7 +370,9 @@ function rebuildReplayer() {
 
   const rrwebLib = (window as any).rrweb
   if (!rrwebLib?.Replayer) {
-    LOG('rrweb Replayer not available')
+    LOG('rrweb Replayer not available, retrying in 2s...')
+    if (rebuildTimer) clearTimeout(rebuildTimer)
+    rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildReplayer() }, 2000)
     return
   }
 
