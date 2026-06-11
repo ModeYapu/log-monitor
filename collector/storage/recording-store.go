@@ -40,7 +40,7 @@ func (db *DB) CreateRecording(recording RecordingInfo) (int64, error) {
 
 	result, err := db.conn.Exec(`
 		INSERT INTO recordings (session_id, app_id, start_time, end_time, duration_ms, event_count, full_snapshot, url, ua, status, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, recording.SessionID, recording.AppID, recording.StartTime, recording.EndTime,
 		recording.DurationMs, recording.EventCount, recording.FullSnapshot,
 		recording.URL, recording.UA, recording.Status, recording.CreatedAt)
@@ -164,7 +164,7 @@ func (db *DB) AddRecordingEvent(sessionID string, seq int, timestamp int64, even
 
 	_, err := db.conn.Exec(`
 		INSERT INTO recording_events (session_id, seq, timestamp, event_data, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?)
 	`, sessionID, seq, timestamp, string(eventData), time.Now().UnixMilli())
 
 	if err != nil {

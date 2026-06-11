@@ -608,6 +608,11 @@ function scheduleReconnect(): void {
 	}, delay);
 }
 
+function setStatus(newStatus: CoBrowseStatus): void {
+	status = newStatus;
+	config?.onStatusChange?.(newStatus);
+}
+
 function defaultControlHandler(command: ControlCommand): void {
 	LOG('Control:', command.action);
 }

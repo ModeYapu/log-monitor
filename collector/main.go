@@ -83,12 +83,13 @@ func main() {
 	db.EnsureSourceMapsTable()
 
 	// Initialize source map storage
-	smStorage, err := storage.NewSourceMapStorage("./data")
+	smStorage, err := storage.NewSourceMapStorage("/opt/logmonitor/data")
 	if err != nil {
-		slog.Error("Failed to initialize source map storage", "error", err)
-		os.Exit(1)
+		slog.Warn("Source map storage unavailable, using DB only", "error", err)
+		smStorage = nil // source map file storage is optional
+	} else {
+		slog.Info("Source map storage initialized")
 	}
-	slog.Info("Source map storage initialized")
 
 	// Initialize user storage and create users table
 	userStorage := storage.NewUserStorage(db)
