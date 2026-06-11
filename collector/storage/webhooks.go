@@ -35,10 +35,8 @@ type WebhookStore interface {
 
 // GetWebhooks retrieves all webhooks for a project
 func (db *DB) GetWebhooks(projectID int64) ([]Webhook, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -103,10 +101,8 @@ func (db *DB) GetWebhooks(projectID int64) ([]Webhook, error) {
 
 // GetWebhook retrieves a single webhook by ID
 func (db *DB) GetWebhook(id int64) (*Webhook, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -149,10 +145,8 @@ func (db *DB) GetWebhook(id int64) (*Webhook, error) {
 
 // CreateWebhook creates a new webhook
 func (db *DB) CreateWebhook(webhook *Webhook) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -187,10 +181,8 @@ func (db *DB) CreateWebhook(webhook *Webhook) error {
 
 // UpdateWebhook updates an existing webhook
 func (db *DB) UpdateWebhook(webhook *Webhook) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -217,10 +209,8 @@ func (db *DB) UpdateWebhook(webhook *Webhook) error {
 
 // DeleteWebhook deletes a webhook
 func (db *DB) DeleteWebhook(id int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -234,10 +224,8 @@ func (db *DB) DeleteWebhook(id int64) error {
 
 // UpdateWebhookTriggerInfo updates the last triggered time and failure count for a webhook
 func (db *DB) UpdateWebhookTriggerInfo(id int64, lastTriggeredAt int64, failureCount int) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 

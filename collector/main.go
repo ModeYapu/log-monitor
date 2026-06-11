@@ -458,7 +458,7 @@ func seedAdminUser(userStorage *storage.UserStorage, authCfg *config.AuthConfig)
 		password = "admin123"
 	}
 
-	slog.Info("Creating default admin user", "username", "admin", "password", password)
+	slog.Info("Creating default admin user", "username", "admin", "note", "change default password after first login")
 
 	// Hash password
 	hashedPassword, err := hashPassword(password)

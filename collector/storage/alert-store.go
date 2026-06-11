@@ -33,10 +33,8 @@ type AlertLog struct {
 
 // CreateAlertRule creates a new alert rule
 func (db *DB) CreateAlertRule(rule AlertRule) (int64, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return 0, fmt.Errorf("database is closed")
 	}
 
@@ -54,10 +52,8 @@ func (db *DB) CreateAlertRule(rule AlertRule) (int64, error) {
 
 // GetAlertRules retrieves alert rules for an app
 func (db *DB) GetAlertRules(appID string) ([]AlertRule, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -92,10 +88,8 @@ func (db *DB) GetAlertRules(appID string) ([]AlertRule, error) {
 
 // GetAllAlertRules retrieves all enabled alert rules
 func (db *DB) GetAllAlertRules() ([]AlertRule, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -130,10 +124,8 @@ func (db *DB) GetAllAlertRules() ([]AlertRule, error) {
 
 // UpdateAlertRuleLastTriggered updates the last triggered timestamp
 func (db *DB) UpdateAlertRuleLastTriggered(id int64, timestamp int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -150,10 +142,8 @@ func (db *DB) UpdateAlertRuleLastTriggered(id int64, timestamp int64) error {
 
 // DeleteAlertRule deletes an alert rule
 func (db *DB) DeleteAlertRule(id int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -167,10 +157,8 @@ func (db *DB) DeleteAlertRule(id int64) error {
 
 // SilenceAlertRule silences an alert rule until a specified time
 func (db *DB) SilenceAlertRule(id int64, until int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -187,10 +175,8 @@ func (db *DB) SilenceAlertRule(id int64, until int64) error {
 
 // UnsilenceAlertRule unsilences an alert rule
 func (db *DB) UnsilenceAlertRule(id int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -204,10 +190,8 @@ func (db *DB) UnsilenceAlertRule(id int64) error {
 
 // CreateAlertLog creates an alert log entry
 func (db *DB) CreateAlertLog(log AlertLog) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -225,10 +209,8 @@ func (db *DB) CreateAlertLog(log AlertLog) error {
 
 // GetAlertLogs retrieves alert logs for an app
 func (db *DB) GetAlertLogs(appID string, limit int) ([]AlertLog, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 

@@ -10,10 +10,8 @@ import (
 
 // GetStorageStats returns storage statistics
 func (db *DB) GetStorageStats() (*StorageStats, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -56,10 +54,8 @@ func (db *DB) GetStorageStats() (*StorageStats, error) {
 
 // GetRetentionPolicySimple returns the retention policy in days
 func (db *DB) GetRetentionPolicySimple() (int, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return 0, fmt.Errorf("database is closed")
 	}
 
@@ -77,10 +73,8 @@ func (db *DB) GetRetentionPolicySimple() (int, error) {
 
 // SetRetentionPolicySimple sets the retention policy in days
 func (db *DB) SetRetentionPolicySimple(days int) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -98,10 +92,8 @@ func (db *DB) SetRetentionPolicySimple(days int) error {
 
 // TriggerManualCleanup triggers a manual cleanup operation
 func (db *DB) TriggerManualCleanup() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -130,10 +122,8 @@ func (db *DB) TriggerManualCleanup() error {
 
 // GetLastCleanupTime returns the timestamp of the last cleanup
 func (db *DB) GetLastCleanupTime() int64 {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return 0
 	}
 
@@ -148,10 +138,8 @@ func (db *DB) GetLastCleanupTime() int64 {
 
 // SetLastCleanupTime sets the timestamp of the last cleanup
 func (db *DB) SetLastCleanupTime(timestamp int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 

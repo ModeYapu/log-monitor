@@ -25,10 +25,8 @@ type SourceMapRecord struct {
 
 // EnsureSourceMapsTable creates the source_maps table if it doesn't exist
 func (db *DB) EnsureSourceMapsTable() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -56,10 +54,8 @@ func (db *DB) EnsureSourceMapsTable() error {
 
 // CreateSourceMap creates a new source map record
 func (db *DB) CreateSourceMap(record SourceMapRecord) (int64, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return 0, fmt.Errorf("database is closed")
 	}
 
@@ -78,10 +74,8 @@ func (db *DB) CreateSourceMap(record SourceMapRecord) (int64, error) {
 
 // GetSourceMap retrieves a source map by app_id, release, env, and build_id
 func (db *DB) GetSourceMap(appID, release, env, buildID string) (*SourceMapRecord, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -107,10 +101,8 @@ func (db *DB) GetSourceMap(appID, release, env, buildID string) (*SourceMapRecor
 
 // GetSourceMapByBuildID retrieves a source map by build_id only
 func (db *DB) GetSourceMapByBuildID(buildID string) (*SourceMapRecord, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -136,10 +128,8 @@ func (db *DB) GetSourceMapByBuildID(buildID string) (*SourceMapRecord, error) {
 
 // ListSourceMaps retrieves all source maps for an app
 func (db *DB) ListSourceMaps(appID string, limit int) ([]SourceMapRecord, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -178,10 +168,8 @@ func (db *DB) ListSourceMaps(appID string, limit int) ([]SourceMapRecord, error)
 
 // DeleteSourceMap deletes a source map by ID
 func (db *DB) DeleteSourceMap(id int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 

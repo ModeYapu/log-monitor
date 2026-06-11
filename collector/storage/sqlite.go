@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
+	"sync/atomic"
 	mathRand "math/rand"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
-	"time"
+		"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -20,8 +20,7 @@ import (
 type DB struct {
 	conn   *sql.DB
 	path   string
-	mu     sync.RWMutex
-	closed bool
+	closed atomic.Bool
 	stopCh chan struct{} // Channel to signal goroutines to stop
 }
 
@@ -169,7 +168,7 @@ func (db *DB) initSchema() error {
 	// Migration: Add message_template column if it doesn't exist
 	_, err = db.conn.Exec(`ALTER TABLE alert_rules ADD COLUMN message_template TEXT DEFAULT ''`)
 	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
-		log.Printf("Migration notice: %v", err)
+		slog.Info("Migration notice", "error", err)
 	}
 
 	// Migration: Add new event fields for P0 release/session tracking
@@ -189,7 +188,7 @@ func (db *DB) initSchema() error {
 	for _, m := range migrations {
 		_, mErr := db.conn.Exec(m)
 		if mErr != nil && !strings.Contains(mErr.Error(), "duplicate column") {
-			log.Printf("Migration notice: %v", mErr)
+			slog.Info("Migration notice", "error", mErr)
 		}
 	}
 
@@ -204,7 +203,7 @@ func (db *DB) initSchema() error {
 	}
 	for _, m := range indexMigrations {
 		if _, mErr := db.conn.Exec(m); mErr != nil {
-			log.Printf("Migration notice: %v", mErr)
+			slog.Info("Migration notice", "error", mErr)
 		}
 	}
 
@@ -234,7 +233,7 @@ func (db *DB) initSchema() error {
 	}
 	for _, m := range projectTablesMigrations {
 		if _, mErr := db.conn.Exec(m); mErr != nil {
-			log.Printf("Migration notice: %v", mErr)
+			slog.Info("Migration notice", "error", mErr)
 		}
 	}
 
@@ -246,7 +245,7 @@ func (db *DB) initSchema() error {
 	}
 	for _, m := range projectIdMigrations {
 		if _, mErr := db.conn.Exec(m); mErr != nil && !strings.Contains(mErr.Error(), "duplicate column") {
-			log.Printf("Migration notice: %v", mErr)
+			slog.Info("Migration notice", "error", mErr)
 		}
 	}
 
@@ -255,14 +254,10 @@ func (db *DB) initSchema() error {
 
 // Close closes the database connection
 func (db *DB) Close() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if db.closed {
+	if db.closed.Swap(true) {
 		return nil
 	}
 
-	db.closed = true
 	close(db.stopCh) // Signal goroutines to stop
 	return db.conn.Close()
 }
@@ -290,7 +285,7 @@ func (db *DB) retentionCleanup(retentionDays int) {
 	timer := time.NewTimer(initialDelay)
 	defer timer.Stop()
 
-	log.Printf("[cleanup] Scheduled daily cleanup at midnight (first run in %v)", initialDelay)
+	slog.Info("Scheduled daily cleanup", "firstRun", initialDelay)
 
 	for {
 		select {
@@ -310,9 +305,6 @@ func (db *DB) retentionCleanup(retentionDays int) {
 func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	result := CleanupResult{
 		DeletedEvents:      0,
 		DeletedScreenshots: 0,
@@ -324,10 +316,10 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 	// Delete old events
 	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
 	if err != nil {
-		log.Printf("Failed to delete old events: %v", err)
+		slog.Error("Failed to delete old events", "error", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
 		result.DeletedEvents = rowsAffected
-		log.Printf("Deleted %d old events (older than %d days)", rowsAffected, retentionDays)
+		slog.Info("Deleted old events", "count", rowsAffected, "olderThan", retentionDays)
 	}
 
 	// Clean orphaned recording_events
@@ -336,22 +328,22 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 		WHERE session_id NOT IN (SELECT session_id FROM recordings)
 	`)
 	if err != nil {
-		log.Printf("Failed to delete orphaned recording_events: %v", err)
+		slog.Error("Failed to delete orphaned recording_events", "error", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
 		orphanDeleted := rowsAffected
 		result.TotalFilesFreed += orphanDeleted
-		log.Printf("Deleted %d orphaned recording_events", orphanDeleted)
+		slog.Info("Deleted orphaned recording_events", "count", orphanDeleted)
 	}
 
 	// Delete old alert logs
 	alertsCutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
 	if err != nil {
-		log.Printf("Failed to delete old alert_logs: %v", err)
+		slog.Error("Failed to delete old alert_logs", "error", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
 		alertDeleted := rowsAffected
 		result.TotalFilesFreed += alertDeleted
-		log.Printf("Deleted %d old alert_logs (older than %d days)", alertDeleted, retentionDays)
+		slog.Info("Deleted old alert_logs", "count", alertDeleted, "olderThan", retentionDays)
 	}
 
 	return result
@@ -361,10 +353,7 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 func (db *DB) cleanupOldDataInternal(retentionDays int) cleanupResultInternal {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if db.closed {
+	if db.closed.Load() {
 		return cleanupResultInternal{}
 	}
 
@@ -373,10 +362,10 @@ func (db *DB) cleanupOldDataInternal(retentionDays int) cleanupResultInternal {
 	// Delete old events
 	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
 	if err != nil {
-		log.Printf("Failed to delete old events: %v", err)
+		slog.Error("Failed to delete old events", "error", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
 		result.EventsDeleted = rowsAffected
-		log.Printf("Deleted %d old events (older than %d days)", rowsAffected, retentionDays)
+		slog.Info("Deleted old events", "count", rowsAffected, "olderThan", retentionDays)
 	}
 
 	// Clean orphaned recording_events (events without a corresponding recording)
@@ -385,21 +374,21 @@ func (db *DB) cleanupOldDataInternal(retentionDays int) cleanupResultInternal {
 		WHERE session_id NOT IN (SELECT session_id FROM recordings)
 	`)
 	if err != nil {
-		log.Printf("Failed to delete orphaned recording_events: %v", err)
+		slog.Error("Failed to delete orphaned recording_events", "error", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
 		orphanDeleted := rowsAffected
 		result.RecordingEventsDeleted += orphanDeleted
-		log.Printf("Deleted %d orphaned recording_events", orphanDeleted)
+		slog.Info("Deleted orphaned recording_events", "count", orphanDeleted)
 	}
 
 	// Delete old alert logs
 	alertsCutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
 	if err != nil {
-		log.Printf("Failed to delete old alert_logs: %v", err)
+		slog.Error("Failed to delete old alert_logs", "error", err)
 	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
 		result.AlertLogsDeleted = rowsAffected
-		log.Printf("Deleted %d old alert_logs (older than %d days)", rowsAffected, retentionDays)
+		slog.Info("Deleted old alert_logs", "count", rowsAffected, "olderThan", retentionDays)
 	}
 
 	return result
@@ -560,10 +549,8 @@ func generateUUID() string {
 // EnsureCobrowseTables creates the cobrowsing tables if they don't exist
 // This is called separately to support adding new tables to existing databases
 func (db *DB) EnsureCobrowseTables() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 

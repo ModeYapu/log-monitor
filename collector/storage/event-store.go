@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"log/slog"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -22,7 +23,7 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 	// (CreateOrUpdateIssues acquires its own lock)
 	if err := db.CreateOrUpdateIssues(events); err != nil {
 		// Log error but don't fail the event insertion
-		fmt.Printf("Warning: Failed to create/update issues: %v\n", err)
+		slog.Warn("Failed to create/update issues", "error", err)
 	}
 
 	return nil
@@ -30,10 +31,8 @@ func (db *DB) InsertEvents(events []EventRecord) error {
 
 // insertEventsLocked inserts events under the DB mutex
 func (db *DB) insertEventsLocked(events []EventRecord) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -80,10 +79,8 @@ func (db *DB) insertEventsLocked(events []EventRecord) error {
 
 // QueryEvents retrieves events with pagination and filters
 func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -174,10 +171,8 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 
 // GetApps returns list of all apps with basic stats
 func (db *DB) GetApps() ([]AppStats, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -215,10 +210,8 @@ func (db *DB) GetApps() ([]AppStats, error) {
 
 // GetStats returns statistics for an app
 func (db *DB) GetStats(appID string) (*Stats, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -287,10 +280,8 @@ func (db *DB) GetStats(appID string) (*Stats, error) {
 
 // GetSessionEvents retrieves events associated with a session
 func (db *DB) GetSessionEvents(sessionID string, limit int) ([]EventRecord, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -333,10 +324,8 @@ func (db *DB) GetSessionEvents(sessionID string, limit int) ([]EventRecord, erro
 
 // GetSessionErrorCount returns the count of errors for a session
 func (db *DB) GetSessionErrorCount(sessionID string) (int64, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return 0, fmt.Errorf("database is closed")
 	}
 
@@ -355,9 +344,7 @@ func (db *DB) GetSessionErrorCount(sessionID string) (int64, error) {
 
 // GetTopErrors retrieves top errors for an app
 func (db *DB) GetTopErrors(params TopListParams) ([]TopError, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 	limit := params.Limit
@@ -412,9 +399,7 @@ func (db *DB) GetTopErrors(params TopListParams) ([]TopError, error) {
 
 // GetTopPages retrieves top pages for an app
 func (db *DB) GetTopPages(params TopListParams) ([]TopPage, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 	limit := params.Limit
@@ -460,9 +445,7 @@ func (db *DB) GetTopPages(params TopListParams) ([]TopPage, error) {
 
 // GetTopReleases retrieves top releases for an app
 func (db *DB) GetTopReleases(params TopListParams) ([]TopRelease, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 	limit := params.Limit
@@ -535,9 +518,7 @@ func (db *DB) GetTopReleases(params TopListParams) ([]TopRelease, error) {
 
 // GetTopBrowsers retrieves top browsers for an app
 func (db *DB) GetTopBrowsers(params TopListParams) ([]TopBrowser, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 	limit := params.Limit
@@ -584,10 +565,8 @@ func (db *DB) GetTopBrowsers(params TopListParams) ([]TopBrowser, error) {
 
 // GetErrorClustersByTime retrieves error clusters grouped by fingerprint within time range
 func (db *DB) GetErrorClustersByTime(appID string, startTime, endTime int64, limit int) ([]ErrorClusterResult, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -663,10 +642,8 @@ func (db *DB) GetErrorClustersByTime(appID string, startTime, endTime int64, lim
 
 // GetClusterEvents retrieves events for a specific fingerprint
 func (db *DB) GetClusterEvents(appID, fingerprint string, page, pageSize int) ([]EventRecord, int64, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, 0, fmt.Errorf("database is closed")
 	}
 
@@ -727,10 +704,8 @@ func (db *DB) GetClusterEvents(appID, fingerprint string, page, pageSize int) ([
 
 // GetClusterStats retrieves detailed statistics for a specific fingerprint
 func (db *DB) GetClusterStats(appID, fingerprint string) (ClusterStats, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return ClusterStats{}, fmt.Errorf("database is closed")
 	}
 
@@ -823,9 +798,7 @@ func (db *DB) GetClusterStats(appID, fingerprint string) (ClusterStats, error) {
 
 // GetErrorClusters retrieves error clusters based on similarity
 func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, limit int) ([]ErrorCluster, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 	if limit <= 0 || limit > 50 {
@@ -897,10 +870,8 @@ func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, li
 
 // GetRecentEvents retrieves recent events for issue processing
 func (db *DB) GetRecentEvents(limit int) ([]EventRecord, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 

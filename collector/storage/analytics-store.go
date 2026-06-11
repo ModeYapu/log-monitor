@@ -8,10 +8,8 @@ import (
 
 // GetReleaseHealth retrieves crash-free rate and error count grouped by release
 func (db *DB) GetReleaseHealth(appID string, startTime, endTime int64) (*ReleaseHealthResult, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -96,10 +94,8 @@ func (db *DB) GetReleaseHealth(appID string, startTime, endTime int64) (*Release
 
 // GetSessionStats retrieves overall session statistics
 func (db *DB) GetSessionStats(appID string, startTime, endTime int64) (*SessionStatsResult, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 

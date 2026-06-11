@@ -8,10 +8,8 @@ import (
 
 // CreateProject creates a new project with auto-generated API key
 func (db *DB) CreateProject(name, slug, description string) (*Project, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -48,10 +46,8 @@ func (db *DB) CreateProject(name, slug, description string) (*Project, error) {
 
 // GetProject retrieves a project by ID or slug
 func (db *DB) GetProject(idOrSlug interface{}) (*Project, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -84,10 +80,8 @@ func (db *DB) GetProject(idOrSlug interface{}) (*Project, error) {
 
 // ListProjects returns all projects the user has access to
 func (db *DB) ListProjects(userID int64) ([]Project, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -133,10 +127,8 @@ func (db *DB) ListProjects(userID int64) ([]Project, error) {
 
 // UpdateProject updates project details
 func (db *DB) UpdateProject(id int64, updates map[string]interface{}) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -175,10 +167,8 @@ func (db *DB) UpdateProject(id int64, updates map[string]interface{}) error {
 
 // DeleteProject soft deletes a project
 func (db *DB) DeleteProject(id int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -195,10 +185,8 @@ func (db *DB) DeleteProject(id int64) error {
 
 // RegenerateApiKey generates a new API key for a project
 func (db *DB) RegenerateApiKey(projectID int64) (string, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return "", fmt.Errorf("database is closed")
 	}
 
@@ -217,10 +205,8 @@ func (db *DB) RegenerateApiKey(projectID int64) (string, error) {
 
 // AddProjectMember adds a user to a project
 func (db *DB) AddProjectMember(projectID, userID int64, role string) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -240,10 +226,8 @@ func (db *DB) AddProjectMember(projectID, userID int64, role string) error {
 
 // RemoveProjectMember removes a user from a project
 func (db *DB) RemoveProjectMember(projectID, userID int64) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -260,10 +244,8 @@ func (db *DB) RemoveProjectMember(projectID, userID int64) error {
 
 // UpdateProjectMemberRole updates a member's role
 func (db *DB) UpdateProjectMemberRole(projectID, userID int64, newRole string) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -280,10 +262,8 @@ func (db *DB) UpdateProjectMemberRole(projectID, userID int64, newRole string) e
 
 // GetProjectMembers returns all members of a project
 func (db *DB) GetProjectMembers(projectID int64) ([]ProjectMember, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -313,10 +293,8 @@ func (db *DB) GetProjectMembers(projectID int64) ([]ProjectMember, error) {
 
 // GetUserRole returns the user's role in a project
 func (db *DB) GetUserRole(projectID, userID int64) (string, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return "", fmt.Errorf("database is closed")
 	}
 
@@ -334,10 +312,8 @@ func (db *DB) GetUserRole(projectID, userID int64) (string, error) {
 
 // GetProjectByAPIKey retrieves a project by its API key
 func (db *DB) GetProjectByAPIKey(apiKey string) (*Project, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -357,10 +333,8 @@ func (db *DB) GetProjectByAPIKey(apiKey string) (*Project, error) {
 
 // AutoCreateDefaultProject creates a default project if none exist
 func (db *DB) AutoCreateDefaultProject() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 

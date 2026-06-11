@@ -1,0 +1,222 @@
+package handler
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+
+)
+
+// QueryHandler handles log query requests
+
+func (h *QueryHandler) QueryPerformanceSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	timeRange := r.URL.Query().Get("range")
+	if timeRange == "" {
+		timeRange = "24h"
+	}
+
+	summary, err := h.db.GetPerformanceSummary(appID, timeRange)
+	if err != nil {
+		slog.Error("Failed to get performance summary", "error", err)
+		http.Error(w, "Failed to get performance summary", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(summary)
+}
+
+// QueryPerformanceTrend handles performance trend queries
+func (h *QueryHandler) QueryPerformanceTrend(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	metric := r.URL.Query().Get("metric")
+	if metric == "" {
+		http.Error(w, "Missing metric parameter", http.StatusBadRequest)
+		return
+	}
+
+	granularity := r.URL.Query().Get("granularity")
+	if granularity == "" {
+		granularity = "1h"
+	}
+
+	trend, err := h.db.GetPerformanceTrend(appID, metric, granularity)
+	if err != nil {
+		slog.Error("Failed to get performance trend", "error", err)
+		http.Error(w, "Failed to get performance trend", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"metric":   metric,
+		"granularity": granularity,
+		"data":     trend,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryPerformancePages handles page performance ranking queries
+func (h *QueryHandler) QueryPerformancePages(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	timeRange := r.URL.Query().Get("range")
+	if timeRange == "" {
+		timeRange = "7d"
+	}
+
+	pages, err := h.db.GetPagePerformanceRanking(appID, timeRange)
+	if err != nil {
+		slog.Error("Failed to get page performance ranking", "error", err)
+		http.Error(w, "Failed to get page performance ranking", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"time_range": timeRange,
+		"data":       pages,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryPerformanceRegression handles performance regression queries
+func (h *QueryHandler) QueryPerformanceRegression(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	regressions, err := h.db.GetPerformanceRegressions(appID)
+	if err != nil {
+		slog.Error("Failed to get performance regressions", "error", err)
+		http.Error(w, "Failed to get performance regressions", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"regressions": regressions,
+		"count":       len(regressions),
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryNewErrors handles new errors queries
+func (h *QueryHandler) QueryNewErrors(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	since := parseIntParam(r.URL.Query().Get("since"), 60) // Default 60 minutes
+
+	newErrors, err := h.db.GetNewErrors(appID, since)
+	if err != nil {
+		slog.Error("Failed to get new errors", "error", err)
+		http.Error(w, "Failed to get new errors", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"data":       newErrors,
+		"count":      len(newErrors),
+		"since_minutes": since,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryAlertTriggers handles recent alert trigger queries
+func (h *QueryHandler) QueryAlertTriggers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	limit := parseIntParam(r.URL.Query().Get("limit"), 5) // Default 5 triggers
+
+	triggers, err := h.db.GetRecentAlertTriggers(limit)
+	if err != nil {
+		slog.Error("Failed to get alert triggers", "error", err)
+		http.Error(w, "Failed to get alert triggers", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"data":  triggers,
+		"count": len(triggers),
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryActiveSessions handles active sessions queries
+func (h *QueryHandler) QueryActiveSessions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	limit := parseIntParam(r.URL.Query().Get("limit"), 5) // Default 5 sessions
+
+	sessions, err := h.db.GetActiveSessions(appID, limit)
+	if err != nil {
+		slog.Error("Failed to get active sessions", "error", err)
+		http.Error(w, "Failed to get active sessions", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"data":  sessions,
+		"count": len(sessions),
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// QueryStatsComparison handles today vs yesterday statistics comparison
+func (h *QueryHandler) QueryStatsComparison(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appID := r.URL.Query().Get("app_id")
+	if appID == "" {
+		http.Error(w, "Missing app_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	comparison, err := h.db.GetStatsComparison(appID)
+	if err != nil {
+		slog.Error("Failed to get stats comparison", "error", err)
+		http.Error(w, "Failed to get stats comparison", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(comparison)
+}

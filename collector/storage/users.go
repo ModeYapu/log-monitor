@@ -21,10 +21,8 @@ func NewUserStorage(db *DB) *UserStorage {
 
 // EnsureUsersTable creates the users table if it doesn't exist
 func (s *UserStorage) EnsureUsersTable() error {
-	s.db.mu.Lock()
-	defer s.db.mu.Unlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -50,10 +48,8 @@ func (s *UserStorage) EnsureUsersTable() error {
 
 // CreateUser creates a new user with hashed password
 func (s *UserStorage) CreateUser(username, passwordHash, displayName, role string) (int64, error) {
-	s.db.mu.Lock()
-	defer s.db.mu.Unlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return 0, fmt.Errorf("database is closed")
 	}
 
@@ -72,10 +68,8 @@ func (s *UserStorage) CreateUser(username, passwordHash, displayName, role strin
 
 // GetUserByUsername retrieves a user by username
 func (s *UserStorage) GetUserByUsername(username string) (*model.User, string, error) {
-	s.db.mu.RLock()
-	defer s.db.mu.RUnlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return nil, "", fmt.Errorf("database is closed")
 	}
 
@@ -101,10 +95,8 @@ func (s *UserStorage) GetUserByUsername(username string) (*model.User, string, e
 
 // GetUserByID retrieves a user by ID
 func (s *UserStorage) GetUserByID(id int64) (*model.User, error) {
-	s.db.mu.RLock()
-	defer s.db.mu.RUnlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -129,10 +121,8 @@ func (s *UserStorage) GetUserByID(id int64) (*model.User, error) {
 
 // ListUsers retrieves all users
 func (s *UserStorage) ListUsers() ([]model.User, error) {
-	s.db.mu.RLock()
-	defer s.db.mu.RUnlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -164,10 +154,8 @@ func (s *UserStorage) ListUsers() ([]model.User, error) {
 
 // UpdateUser updates a user's display name, role, and enabled status
 func (s *UserStorage) UpdateUser(id int64, displayName, role string, enabled bool) error {
-	s.db.mu.Lock()
-	defer s.db.mu.Unlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -191,10 +179,8 @@ func (s *UserStorage) UpdateUser(id int64, displayName, role string, enabled boo
 
 // UpdatePassword updates a user's password
 func (s *UserStorage) UpdatePassword(id int64, passwordHash string) error {
-	s.db.mu.Lock()
-	defer s.db.mu.Unlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -212,10 +198,8 @@ func (s *UserStorage) UpdatePassword(id int64, passwordHash string) error {
 
 // UpdateLastLogin updates the last login timestamp
 func (s *UserStorage) UpdateLastLogin(id int64) error {
-	s.db.mu.Lock()
-	defer s.db.mu.Unlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -233,10 +217,8 @@ func (s *UserStorage) UpdateLastLogin(id int64) error {
 
 // DeleteUser deletes a user by ID
 func (s *UserStorage) DeleteUser(id int64) error {
-	s.db.mu.Lock()
-	defer s.db.mu.Unlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -250,10 +232,8 @@ func (s *UserStorage) DeleteUser(id int64) error {
 
 // CountUsers returns the total number of users
 func (s *UserStorage) CountUsers() (int64, error) {
-	s.db.mu.RLock()
-	defer s.db.mu.RUnlock()
 
-	if s.db.closed {
+	if s.db.closed.Load() {
 		return 0, fmt.Errorf("database is closed")
 	}
 

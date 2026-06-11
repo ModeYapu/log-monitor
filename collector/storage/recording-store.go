@@ -33,10 +33,8 @@ type RecordingEventData struct {
 
 // CreateRecording creates a new recording session
 func (db *DB) CreateRecording(recording RecordingInfo) (int64, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return 0, fmt.Errorf("database is closed")
 	}
 
@@ -56,10 +54,8 @@ func (db *DB) CreateRecording(recording RecordingInfo) (int64, error) {
 
 // GetRecording retrieves a recording by session ID
 func (db *DB) GetRecording(sessionID string) (*RecordingInfo, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -83,10 +79,8 @@ func (db *DB) GetRecording(sessionID string) (*RecordingInfo, error) {
 
 // GetRecordings retrieves recordings with pagination and filters
 func (db *DB) GetRecordings(limit, offset int, filters map[string]interface{}) ([]RecordingInfo, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -163,10 +157,8 @@ func (db *DB) GetRecordings(limit, offset int, filters map[string]interface{}) (
 
 // AddRecordingEvent adds an event to a recording session
 func (db *DB) AddRecordingEvent(sessionID string, seq int, timestamp int64, eventData []byte) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -184,10 +176,8 @@ func (db *DB) AddRecordingEvent(sessionID string, seq int, timestamp int64, even
 
 // GetRecordingEvents retrieves events for a recording session
 func (db *DB) GetRecordingEvents(sessionID string, limit, offset int) ([]RecordingEventData, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -219,10 +209,8 @@ func (db *DB) GetRecordingEvents(sessionID string, limit, offset int) ([]Recordi
 
 // DeleteRecording deletes a recording and its events
 func (db *DB) DeleteRecording(sessionID string) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -243,10 +231,8 @@ func (db *DB) DeleteRecording(sessionID string) error {
 
 // UpdateRecording updates a recording's status and metadata
 func (db *DB) UpdateRecording(sessionID string, endTime int64, durationMs int64, eventCount int, status string) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -265,10 +251,8 @@ func (db *DB) UpdateRecording(sessionID string, endTime int64, durationMs int64,
 
 // GetRecordingStats returns statistics for a recording session
 func (db *DB) GetRecordingStats(sessionID string) (interface{}, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 

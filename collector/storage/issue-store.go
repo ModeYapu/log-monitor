@@ -29,10 +29,8 @@ func (db *DB) CreateOrUpdateIssues(events []EventRecord) error {
 		return nil
 	}
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -124,10 +122,8 @@ func (db *DB) CreateOrUpdateIssues(events []EventRecord) error {
 
 // GetIssues retrieves issues with pagination and filters
 func (db *DB) GetIssues(filter IssueFilter) ([]Issue, int64, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, 0, fmt.Errorf("database is closed")
 	}
 
@@ -217,10 +213,8 @@ func (db *DB) GetIssues(filter IssueFilter) ([]Issue, int64, error) {
 
 // GetIssue retrieves a single issue by ID
 func (db *DB) GetIssue(id int64) (*Issue, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -245,10 +239,8 @@ func (db *DB) GetIssue(id int64) (*Issue, error) {
 
 // GetIssueEvents retrieves events associated with an issue
 func (db *DB) GetIssueEvents(issueID int64, page, pageSize int) ([]EventRecord, int64, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, 0, fmt.Errorf("database is closed")
 	}
 
@@ -315,10 +307,8 @@ func (db *DB) GetIssueEvents(issueID int64, page, pageSize int) ([]EventRecord, 
 
 // UpdateIssue updates an issue's fields
 func (db *DB) UpdateIssue(id int64, updates map[string]interface{}) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return fmt.Errorf("database is closed")
 	}
 
@@ -367,10 +357,8 @@ func (db *DB) UpdateIssue(id int64, updates map[string]interface{}) error {
 
 // GetIssueStats retrieves statistics for issues
 func (db *DB) GetIssueStats(appID string) (*IssueStats, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 

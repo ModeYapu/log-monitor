@@ -44,7 +44,7 @@ func TestDB_Close(t *testing.T) {
 	}
 
 	// Verify database is closed
-	if !db.closed {
+	if !db.closed.Load() {
 		t.Error("Database should be marked as closed")
 	}
 }

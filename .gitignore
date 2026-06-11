@@ -69,3 +69,5 @@ data/
 screenshots/
 collector/logmonitor-collector
 collector/collector
+dashboard/dist_new/
+dashboard/dist_new/

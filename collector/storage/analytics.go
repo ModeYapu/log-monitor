@@ -11,10 +11,8 @@ import (
 
 // GetTopN retrieves top N items grouped by type (errors/pages/releases/browsers)
 func (db *DB) GetTopN(appID, topType, orderBy string, limit int, filters AnalyticsFilters) (*TopNResult, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -196,10 +194,8 @@ type PerformanceRegression struct {
 
 // GetPerformanceSummary returns Web Vitals P75 metrics with grades
 func (db *DB) GetPerformanceSummary(appID string, timeRange string) (*PerformanceMetricsSummary, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -291,10 +287,8 @@ func (db *DB) GetPerformanceSummary(appID string, timeRange string) (*Performanc
 
 // GetPerformanceTrend returns time-series performance data for a specific metric
 func (db *DB) GetPerformanceTrend(appID, metric, granularity string) ([]PerformanceTrendData, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -366,10 +360,8 @@ func (db *DB) GetPerformanceTrend(appID, metric, granularity string) ([]Performa
 
 // GetPagePerformanceRanking returns page-level performance ranking
 func (db *DB) GetPagePerformanceRanking(appID, timeRange string) ([]PagePerformanceData, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -542,10 +534,8 @@ func (db *DB) GetPagePerformanceRanking(appID, timeRange string) ([]PagePerforma
 
 // GetPerformanceRegressions detects pages where metrics worsened >20%
 func (db *DB) GetPerformanceRegressions(appID string) ([]PerformanceRegression, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -741,10 +731,8 @@ type NewError struct {
 
 // GetNewErrors returns errors that first appeared in the last N minutes
 func (db *DB) GetNewErrors(appID string, sinceMinutes int) ([]NewError, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -791,10 +779,8 @@ type AlertTrigger struct {
 
 // GetRecentAlertTriggers returns the last N triggered alerts
 func (db *DB) GetRecentAlertTriggers(limit int) ([]AlertTrigger, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -852,10 +838,8 @@ type ActiveSession struct {
 
 // GetActiveSessions returns recent active sessions
 func (db *DB) GetActiveSessions(appID string, limit int) ([]ActiveSession, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
@@ -921,10 +905,8 @@ type StatsComparison struct {
 
 // GetStatsComparison returns today vs yesterday statistics comparison
 func (db *DB) GetStatsComparison(appID string) (*StatsComparison, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
 
-	if db.closed {
+	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 
