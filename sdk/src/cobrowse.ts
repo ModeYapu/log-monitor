@@ -216,11 +216,16 @@ async function handleWebRTCRequest(): Promise<void> {
 			return;
 		}
 
-		// Get screen stream
-		localStream = await navigator.mediaDevices.getDisplayMedia({
-			video: { cursor: 'always' },
-			audio: false
-		});
+		// Get screen stream — prefer current tab
+		const displayMediaOptions: any = {
+			video: {
+				cursor: 'always',
+				displaySurface: 'browser' // Prefer tab capture
+			},
+			audio: false,
+			preferCurrentTab: true // Chrome hint to show current tab first
+		};
+		localStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
 
 		// Handle stream ending (user stops sharing from browser UI)
 		localStream.getVideoTracks()[0].onended = () => {
