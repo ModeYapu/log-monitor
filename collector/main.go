@@ -260,17 +260,17 @@ func main() {
 			{"GET /api/admin/projects/", projectsHandler.GetProject},
 			{"PUT /api/admin/projects/", projectsHandler.UpdateProject},
 			{"DELETE /api/admin/projects/", projectsHandler.DeleteProject},
-			{"POST /api/admin/projects//api-key", projectsHandler.RegenerateApiKey},
-			{"GET /api/admin/projects//members", projectsHandler.ListMembers},
-			{"POST /api/admin/projects//members", projectsHandler.AddMember},
-			{"PUT /api/admin/projects//members/", projectsHandler.UpdateMemberRole},
-			{"DELETE /api/admin/projects//members/", projectsHandler.RemoveMember},
+			{"POST /api/admin/projects/api-key", projectsHandler.RegenerateApiKey},
+			{"GET /api/admin/projects/members", projectsHandler.ListMembers},
+			{"POST /api/admin/projects/members", projectsHandler.AddMember},
+			{"PUT /api/admin/projects/members/", projectsHandler.UpdateMemberRole},
+			{"DELETE /api/admin/projects/members/", projectsHandler.RemoveMember},
 			// Slice 4: Webhook management endpoints
 			{"GET /api/admin/webhooks", webhooksHandler.GetWebhooks},
 			{"POST /api/admin/webhooks", webhooksHandler.CreateWebhook},
 			{"PUT /api/admin/webhooks/", webhooksHandler.UpdateWebhook},
 			{"DELETE /api/admin/webhooks/", webhooksHandler.DeleteWebhook},
-			{"POST /api/admin/webhooks//test", webhooksHandler.TestWebhook},
+			{"POST /api/admin/webhooks/test", webhooksHandler.TestWebhook},
 	}
 
 	for _, route := range authRoutes {

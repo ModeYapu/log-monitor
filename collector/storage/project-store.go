@@ -22,7 +22,7 @@ func (db *DB) CreateProject(name, slug, description string) (*Project, error) {
 
 	result, err := db.conn.Exec(`
 		INSERT INTO projects (name, slug, description, api_key, retention_days, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, name, slug, description, apiKey, 30, now, now)
 
 	if err != nil {
@@ -381,7 +381,7 @@ func (db *DB) AutoCreateDefaultProject() error {
 
 	_, err = db.conn.Exec(`
 		INSERT INTO projects (name, slug, description, api_key, retention_days, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, "Default Project", "default", "Default project for existing events", apiKey, 30, now, now)
 
 	if err != nil {
