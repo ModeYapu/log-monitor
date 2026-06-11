@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/logmonitor/collector/storage"
 )
 
 // EventStats represents event statistics
@@ -24,7 +26,7 @@ type EventQuery struct {
 // EventResult represents event query results
 type EventResult struct {
 	Count  int64
-	Events []EventRecord
+	Events []storage.EventRecord
 }
 
 // EmailConfig represents email notification configuration
@@ -40,7 +42,7 @@ type EmailConfig struct {
 
 // Notifier handles alert notifications
 type Notifier interface {
-	SendAlert(alert AlertRule, context string) error
+	SendAlert(alert storage.AlertRule, context string) error
 }
 
 // ExtendedEventStore defines the interface for event operations in alert checker
@@ -129,7 +131,7 @@ func (w *AlertCheckerWorker) checkAlerts() {
 	triggeredCount := 0
 
 	for _, rule := range rules {
-		if !rule.Enabled || rule.SilencedUntil > now {
+		if rule.Enabled == 0 || rule.SilencedUntil > now {
 			continue
 		}
 
@@ -156,14 +158,14 @@ func (w *AlertCheckerWorker) checkAlerts() {
 }
 
 // evaluateRule evaluates if an alert rule should trigger
-func (w *AlertCheckerWorker) evaluateRule(rule AlertRule) (bool, string) {
+func (w *AlertCheckerWorker) evaluateRule(rule storage.AlertRule) (bool, string) {
 	// Simplified alert evaluation logic
 	// In real implementation, this would parse ConditionConfig and evaluate properly
 	return false, ""
 }
 
 // triggerAlert triggers an alert notification
-func (w *AlertCheckerWorker) triggerAlert(rule AlertRule, message string) error {
+func (w *AlertCheckerWorker) triggerAlert(rule storage.AlertRule, message string) error {
 	now := time.Now().UnixMilli()
 
 	// Update last triggered time
@@ -172,7 +174,7 @@ func (w *AlertCheckerWorker) triggerAlert(rule AlertRule, message string) error 
 	}
 
 	// Create alert log
-	alertLog := AlertLog{
+	alertLog := storage.AlertLog{
 		RuleID:    rule.ID,
 		AppID:     rule.AppID,
 		Message:   message,

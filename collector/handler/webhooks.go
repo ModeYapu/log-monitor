@@ -106,12 +106,12 @@ func (h *WebhooksHandler) CreateWebhook(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Create webhook
-	webhookObj := &webhook.Webhook{
+	webhookObj := &storage.Webhook{
 		ProjectID: req.ProjectID,
 		Name:      req.Name,
 		URL:       req.URL,
 		Secret:    req.Secret,
-		Events:    stringSliceToEventType(req.Events),
+		Events:    req.Events,
 		Enabled:   req.Enabled,
 	}
 
@@ -204,7 +204,7 @@ func (h *WebhooksHandler) UpdateWebhook(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		webhookObj.Events = stringSliceToEventType(req.Events)
+		webhookObj.Events = req.Events
 	}
 
 	if req.Enabled != nil {
@@ -314,18 +314,6 @@ func findSeparator(s, sep string) int {
 		}
 	}
 	return -1
-}
-
-// parseIntParam parses an integer parameter with a default value
-func parseIntParam(s string, defaultVal int) int {
-	if s == "" {
-		return defaultVal
-	}
-	val, err := strconv.Atoi(s)
-	if err != nil {
-		return defaultVal
-	}
-	return val
 }
 
 // stringSliceToEventType converts string slice to EventType slice

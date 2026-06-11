@@ -9,14 +9,6 @@ import (
 	"strings"
 )
 
-// Context keys for request context
-type contextKey string
-
-const (
-	ProjectIDKey  contextKey = "project_id"
-	APIKeyIDKey   contextKey = "api_key_id"
-)
-
 // APIKeyConfig holds API key authentication configuration
 type APIKeyConfig struct {
 	// Store is the interface to validate API keys
@@ -95,8 +87,8 @@ func isReadOnlyMethod(method string) bool {
 	return method == http.MethodGet || method == http.MethodHead
 }
 
-// GetProjectIDFromContext retrieves the project ID from the request context
-func GetProjectIDFromContext(r *http.Request) (int64, bool) {
+// GetProjectIDFromContextWithOK retrieves the project ID from the request context with ok flag
+func GetProjectIDFromContextWithOK(r *http.Request) (int64, bool) {
 	projectID, ok := r.Context().Value(ProjectIDKey).(int64)
 	return projectID, ok
 }

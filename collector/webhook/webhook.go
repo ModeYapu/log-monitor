@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/logmonitor/collector/storage"
 )
 
 // EventType represents the type of event that can trigger webhooks
@@ -42,10 +44,10 @@ type Webhook struct {
 
 // WebhookStore defines the interface for webhook storage
 type WebhookStore interface {
-	GetWebhooks(projectID int64) ([]Webhook, error)
-	GetWebhook(id int64) (*Webhook, error)
-	CreateWebhook(webhook *Webhook) error
-	UpdateWebhook(webhook *Webhook) error
+	GetWebhooks(projectID int64) ([]storage.Webhook, error)
+	GetWebhook(id int64) (*storage.Webhook, error)
+	CreateWebhook(webhook *storage.Webhook) error
+	UpdateWebhook(webhook *storage.Webhook) error
 	DeleteWebhook(id int64) error
 	UpdateWebhookTriggerInfo(id int64, lastTriggeredAt int64, failureCount int) error
 }
@@ -167,9 +169,9 @@ func (m *Manager) deliverPayloads(payloads []Payload) {
 }
 
 // webhookSubscribesTo checks if a webhook subscribes to a specific event type
-func (m *Manager) webhookSubscribesTo(webhook Webhook, eventType EventType) bool {
+func (m *Manager) webhookSubscribesTo(webhook storage.Webhook, eventType EventType) bool {
 	for _, e := range webhook.Events {
-		if e == eventType {
+		if EventType(e) == eventType {
 			return true
 		}
 	}
@@ -184,24 +186,24 @@ func (m *Manager) Stop() {
 }
 
 // GetWebhooks returns all webhooks for a project
-func (m *Manager) GetWebhooks(projectID int64) ([]Webhook, error) {
+func (m *Manager) GetWebhooks(projectID int64) ([]storage.Webhook, error) {
 	return m.store.GetWebhooks(projectID)
 }
 
 // GetWebhook returns a single webhook by ID
-func (m *Manager) GetWebhook(id int64) (*Webhook, error) {
+func (m *Manager) GetWebhook(id int64) (*storage.Webhook, error) {
 	return m.store.GetWebhook(id)
 }
 
 // CreateWebhook creates a new webhook
-func (m *Manager) CreateWebhook(webhook *Webhook) error {
+func (m *Manager) CreateWebhook(webhook *storage.Webhook) error {
 	webhook.CreatedAt = time.Now().Unix()
 	webhook.UpdatedAt = time.Now().Unix()
 	return m.store.CreateWebhook(webhook)
 }
 
 // UpdateWebhook updates an existing webhook
-func (m *Manager) UpdateWebhook(webhook *Webhook) error {
+func (m *Manager) UpdateWebhook(webhook *storage.Webhook) error {
 	webhook.UpdatedAt = time.Now().Unix()
 	return m.store.UpdateWebhook(webhook)
 }

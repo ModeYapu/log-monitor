@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/logmonitor/collector/storage"
 )
 
 // Deliverer handles webhook delivery with retry logic
@@ -37,7 +39,7 @@ func NewDeliverer() *Deliverer {
 }
 
 // Deliver delivers a webhook payload asynchronously
-func (d *Deliverer) Deliver(webhook Webhook, payload Payload) {
+func (d *Deliverer) Deliver(webhook storage.Webhook, payload Payload) {
 	// Track delivery attempts
 	d.mu.Lock()
 	d.attempts[webhook.ID]++
@@ -56,12 +58,12 @@ func (d *Deliverer) Deliver(webhook Webhook, payload Payload) {
 }
 
 // DeliverSync delivers a webhook payload synchronously (for testing)
-func (d *Deliverer) DeliverSync(webhook Webhook, payload Payload) error {
+func (d *Deliverer) DeliverSync(webhook storage.Webhook, payload Payload) error {
 	return d.deliverWithRetry(webhook, payload, 1)
 }
 
 // deliverWithRetry delivers a webhook with exponential backoff retry
-func (d *Deliverer) deliverWithRetry(webhook Webhook, payload Payload, attempt int) error {
+func (d *Deliverer) deliverWithRetry(webhook storage.Webhook, payload Payload, attempt int) error {
 	maxRetries := 3
 	baseDelay := 1 * time.Second
 
@@ -105,7 +107,7 @@ func (d *Deliverer) deliverWithRetry(webhook Webhook, payload Payload, attempt i
 }
 
 // deliverOnce delivers a webhook payload a single time
-func (d *Deliverer) deliverOnce(ctx context.Context, webhook Webhook, payload Payload) error {
+func (d *Deliverer) deliverOnce(ctx context.Context, webhook storage.Webhook, payload Payload) error {
 	// Marshal payload to JSON
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {

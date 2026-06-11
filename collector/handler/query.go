@@ -217,19 +217,12 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 		orderBy = "count"
 	}
 
-	// Build filters map
-	filters := make(map[string]interface{})
-	if env != "" {
-		filters["env"] = env
-	}
-	if release != "" {
-		filters["release"] = release
-	}
-	if startTime > 0 {
-		filters["startTime"] = startTime
-	}
-	if endTime > 0 {
-		filters["endTime"] = endTime
+	// Build filters
+	filters := storage.AnalyticsFilters{
+		Env:       env,
+		Release:   release,
+		StartTime: startTime,
+		EndTime:   endTime,
 	}
 
 	// Query database
@@ -242,8 +235,9 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 
 	// Convert to response format
 	response := map[string]interface{}{
-		"type": result.Type,
-		"data": result.Data,
+		"type":  result.Type,
+		"data":  result.Items,
+		"total": result.Total,
 	}
 
 	json.NewEncoder(w).Encode(response)

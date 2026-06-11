@@ -13,7 +13,7 @@ type CleanupResult = storage.CleanupResult
 
 // CleanupSystemStore defines the interface for cleanup operations
 type CleanupSystemStore interface {
-	GetRetentionPolicy() (int, error)
+	GetRetentionPolicySimple() (int, error)
 	CleanupOldDataWithDays(days int) CleanupResult
 	GetLastCleanupTime() int64
 	SetLastCleanupTime(timestamp int64) error
@@ -81,7 +81,7 @@ func (w *CleanupWorker) runCleanup() {
 	slog.Debug("Running cleanup operation")
 
 	// Get current retention policy from system store
-	retentionDays, err := w.systemStore.GetRetentionPolicy()
+	retentionDays, err := w.systemStore.GetRetentionPolicySimple()
 	if err != nil {
 		slog.Error("Failed to get retention policy, using default", "error", err)
 		retentionDays = w.retentionDays

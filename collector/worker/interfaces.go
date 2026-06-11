@@ -21,7 +21,7 @@ type AlertStore interface {
 
 // SystemStore defines the interface for system operations in workers
 type SystemStore interface {
-	GetRetentionPolicy() (int, error)
+	GetRetentionPolicySimple() (int, error)
 	CleanupOldDataWithDays(days int) storage.CleanupResult
 	GetLastCleanupTime() int64
 	SetLastCleanupTime(timestamp int64) error

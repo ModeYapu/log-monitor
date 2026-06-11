@@ -29,24 +29,6 @@ type EventRecord struct {
 	CreatedAt   int64                  `json:"created_at"`
 }
 
-// QueryParams represents parameters for querying events
-type QueryParams struct {
-	AppID       string
-	Type        string
-	Level       string
-	StartTime   int64
-	EndTime     int64
-	Keyword     string
-	Release     string
-	Env         string
-	UserID      string
-	SessionID   string
-	Page        int
-	PageSize    int
-	SortBy      string
-	SortOrder   string
-}
-
 // QueryResult represents the result of a query
 type QueryResult struct {
 	Total    int64         `json:"total"`
@@ -142,4 +124,114 @@ type cleanupResultInternal struct {
 	RecordingEventsDeleted int64
 	ScreenshotsDeleted     int64
 	AlertLogsDeleted       int64
+}
+
+// TopListParams represents parameters for top lists queries
+type TopListParams struct {
+	AppID     string
+	StartTime int64
+	EndTime   int64
+	Limit     int
+	SortBy    string
+}
+
+// TopError represents an error in the top errors list
+type TopError struct {
+	Message       string `json:"message"`
+	Count         int64  `json:"count"`
+	FirstSeen     int64  `json:"firstSeen"`
+	LastSeen      int64  `json:"lastSeen"`
+	AffectedUsers int64  `json:"affectedUsers"`
+	SampleStack   string `json:"sampleStack,omitempty"`
+}
+
+// TopPage represents a page in the top pages list
+type TopPage struct {
+	URL         string  `json:"url"`
+	ErrorCount  int64   `json:"errorCount"`
+	TotalEvents int64   `json:"totalEvents"`
+	ErrorRate   float64 `json:"errorRate"`
+	FirstSeen   int64   `json:"firstSeen"`
+	LastSeen    int64   `json:"lastSeen"`
+}
+
+// TopRelease represents a release in the top releases list
+type TopRelease struct {
+	Release     string  `json:"release"`
+	Env         string  `json:"env"`
+	ErrorCount  int64   `json:"errorCount"`
+	TotalEvents int64   `json:"totalEvents"`
+	ErrorRate   float64 `json:"errorRate"`
+	FirstSeen   int64   `json:"firstSeen"`
+	LastSeen    int64   `json:"lastSeen"`
+	NewErrors   int64   `json:"newErrors"`
+	IsLatest    bool    `json:"isLatest"`
+}
+
+// TopBrowser represents a browser in the top browsers list
+type TopBrowser struct {
+	Browser     string  `json:"browser"`
+	Version     string  `json:"version"`
+	ErrorCount  int64   `json:"errorCount"`
+	TotalEvents int64   `json:"totalEvents"`
+	ErrorRate   float64 `json:"errorRate"`
+}
+
+// ErrorClusterResult represents an error cluster from the database
+type ErrorClusterResult struct {
+	Fingerprint    string   `json:"fingerprint"`
+	Message        string   `json:"message"`
+	Count          int64    `json:"count"`
+	Users          int64    `json:"users"`
+	FirstSeen      int64    `json:"firstSeen"`
+	LastSeen       int64    `json:"lastSeen"`
+	URLs           []string `json:"urls"`
+	Releases       []string `json:"releases"`
+}
+
+// ClusterStats represents detailed statistics for a cluster
+type ClusterStats struct {
+	Fingerprint         string                 `json:"fingerprint"`
+	TotalCount          int64                  `json:"totalCount"`
+	UniqueUsers         int64                  `json:"uniqueUsers"`
+	FirstSeen           int64                  `json:"firstSeen"`
+	LastSeen            int64                  `json:"lastSeen"`
+	ReleaseDistribution map[string]int64       `json:"releaseDistribution"`
+	EnvDistribution     map[string]int64       `json:"envDistribution"`
+	TimeSeries          []map[string]interface{} `json:"timeSeries"`
+}
+
+// ErrorCluster represents a cluster of similar errors
+type ErrorCluster struct {
+	ClusterID    string        `json:"cluster_id"`
+	Pattern      string        `json:"pattern"`
+	Message      string        `json:"message"`
+	Count        int64         `json:"count"`
+	FirstSeen    int64         `json:"firstSeen"`
+	LastSeen     int64         `json:"lastSeen"`
+	AffectedUsers int64        `json:"affectedUsers"`
+	SampleEvents  []EventRecord `json:"sampleEvents"`
+	ID           string        `json:"id,omitempty"`
+	Users        int64         `json:"users,omitempty"`
+	Stack        string        `json:"stack,omitempty"`
+	AffectedURLs []string      `json:"affected_urls,omitempty"`
+	Releases     []string      `json:"releases,omitempty"`
+}
+
+// TopNItem represents an item in a top N list
+type TopNItem struct {
+	Key         string `json:"key"`
+	Count       int64  `json:"count"`
+	Users       int64  `json:"users"`
+	FirstSeen   int64  `json:"firstSeen"`
+	LastSeen    int64  `json:"lastSeen"`
+	IsNew       bool   `json:"isNew"`
+	ImpactScore int64  `json:"impactScore"`
+}
+
+// TopNResult represents the result of a top N query
+type TopNResult struct {
+	Type   string     `json:"type"`
+	Items  []TopNItem `json:"items"`
+	Total  int64      `json:"total"`
 }

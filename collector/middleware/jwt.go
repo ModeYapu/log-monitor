@@ -19,9 +19,11 @@ import (
 type contextKey string
 
 const (
-	UserIDKey   contextKey = "user_id"
-	UsernameKey contextKey = "username"
-	RoleKey     contextKey = "role"
+	UserIDKey    contextKey = "user_id"
+	UsernameKey  contextKey = "username"
+	RoleKey      contextKey = "role"
+	ProjectIDKey contextKey = "project_id"
+	APIKeyIDKey  contextKey = "api_key_id"
 )
 
 // JWT provides JWT authentication middleware

@@ -21,7 +21,7 @@ type EventStore interface {
 	QueryEvents(query QueryParams) (*QueryResult, error)
 	GetStats(appID string) (*Stats, error)
 	GetApps() ([]AppStats, error)
-	GetTopN(appID, topType, orderBy string, limit int, filters map[string]interface{}) (*TopNResult, error)
+	GetTopN(appID, topType, orderBy string, limit int, filters AnalyticsFilters) (*TopNResult, error)
 	GetSimilarErrors(appID, message string, threshold float64, limit int) ([]ErrorCluster, error)
 	GetSessionEvents(sessionID string, limit int) ([]EventRecord, error)
 	GetSessionErrorCount(sessionID string) (int64, error)
@@ -79,13 +79,13 @@ type AlertStore interface {
 type AnalyticsStore interface {
 	GetStats(appID string) (*Stats, error)
 	GetApps() ([]AppStats, error)
-	GetTopN(appID, topType, orderBy string, limit int, filters map[string]interface{}) (*TopNResult, error)
+	GetTopN(appID, topType, orderBy string, limit int, filters AnalyticsFilters) (*TopNResult, error)
 	GetTopErrors(params TopListParams) ([]TopError, error)
 	GetTopPages(params TopListParams) ([]TopPage, error)
 	GetTopReleases(params TopListParams) ([]TopRelease, error)
 	GetTopBrowsers(params TopListParams) ([]TopBrowser, error)
-	GetReleaseHealth(appID string, startTime, endTime int64) (map[string]interface{}, error)
-	GetSessionStats(appID string, startTime, endTime int64) (map[string]interface{}, error)
+	GetReleaseHealth(appID string, startTime, endTime int64) (*ReleaseHealthResult, error)
+	GetSessionStats(appID string, startTime, endTime int64) (*SessionStatsResult, error)
 	GetClusterStats(appID, fingerprint string) (ClusterStats, error)
 }
 

@@ -203,7 +203,7 @@ func (h *AdminHandler) SetRetentionPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	slog.Info("[admin] Retention policy updated", "events_days", policy.Events, "recordings_days", policy.RecordingEvents, "screenshots_days", policy.Screenshots, "alerts_days", policy.AlertLogs)
+	slog.Info("[admin] Retention policy updated", "events_days", policy.Events, "recordings_days", policy.RecordingsDays, "screenshots_days", policy.ScreenshotsDays, "alerts_days", policy.AlertLogs)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Retention policy updated successfully",

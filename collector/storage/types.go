@@ -1,36 +1,40 @@
 package storage
 
-// TopNItem represents a single item in top N results
-type TopNItem struct {
-	Key         string
-	Count       int64
-	Users       int64
-	LastSeen    int64
-	FirstSeen   int64
-	IsNew       bool
-	ImpactScore int64
+// Project represents a project in the system
+type Project struct {
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	Description   string `json:"description"`
+	APIKey        string `json:"api_key"`
+	RetentionDays int    `json:"retention_days"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+	DeletedAt     int64  `json:"deleted_at"`
 }
 
-// TopNResult represents the result of a top N query
-type TopNResult struct {
-	Type string
-	Data []TopNItem
+// ProjectMember represents a project member
+type ProjectMember struct {
+	ID        int64  `json:"id"`
+	ProjectID int64  `json:"project_id"`
+	UserID    int64  `json:"user_id"`
+	Role      string `json:"role"` // owner|developer|viewer
+	CreatedAt int64  `json:"created_at"`
 }
 
-// ErrorCluster represents a cluster of similar errors
-type ErrorCluster struct {
-	ClusterID     string        `json:"clusterId"`
-	Message       string        `json:"message"`
-	Count         int64         `json:"count"`
-	FirstSeen     int64         `json:"firstSeen"`
-	LastSeen      int64         `json:"lastSeen"`
-	AffectedUsers int64         `json:"affectedUsers"`
-	SampleEvents  []EventRecord `json:"sampleEvents"`
-	Pattern       string        `json:"pattern"`
-	// Additional fields for new API
-	ID           string
-	Users        int64
-	Stack        string
-	AffectedURLs []string
-	Releases     []string
+// StorageStats represents storage statistics
+type StorageStats struct {
+	DatabaseSize    int64 `json:"database_size"`
+	EventCount      int64 `json:"event_count"`
+	IssueCount      int64 `json:"issue_count"`
+	OldestEventTime int64 `json:"oldest_event_time"`
+	NewestEventTime int64 `json:"newest_event_time"`
+}
+
+// RetentionPolicy represents the retention policy
+type RetentionPolicy struct {
+	Events          int `json:"events"`
+	RecordingsDays  int `json:"recordings_days"`
+	ScreenshotsDays int `json:"screenshots_days"`
+	AlertLogs       int `json:"alert_logs"`
 }
