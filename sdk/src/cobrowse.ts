@@ -51,7 +51,7 @@ let fullSnapshotSent = false;
 /**
  * Initialize cobrowsing module
  */
-export function initCoBrowse(cfg: CoBrowseConfig): void {
+export function initCoBrowse(cfg: CoBrowseConfig, autoStart: boolean = true): void {
 	if (!cfg.enabled) {
 		return;
 	}
@@ -69,8 +69,11 @@ export function initCoBrowse(cfg: CoBrowseConfig): void {
 
 	loadRRWeb().then(() => {
 		console.log('[CoBrowse] Initialized');
+		if (autoStart) {
+			start().catch(err => console.warn('[CoBrowse] Auto-start failed:', err));
+		}
 	});
-}
+	}
 
 /**
  * Start cobrowsing session

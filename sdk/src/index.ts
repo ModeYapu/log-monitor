@@ -757,7 +757,7 @@ export function init(cfg: LogMonitorConfig): void {
         appId: config.appId,
         onControlCommand: config.cobrowse?.onControlCommand,
         onStatusChange: config.cobrowse?.onStatusChange,
-      });
+      }); // autoStart defaults to true
     });
   }
 
