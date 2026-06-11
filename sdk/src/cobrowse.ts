@@ -63,6 +63,16 @@ const rtcConfig: RTCConfiguration = {
 	iceServers: [
 		{ urls: 'stun:stun.l.google.com:19302' },
 		{ urls: 'stun:stun1.l.google.com:19302' },
+		{
+			urls: 'turn:14.103.85.111:3478?transport=udp',
+			username: 'logmon',
+			credential: 'logmon2024turn'
+		},
+		{
+			urls: 'turn:14.103.85.111:3478?transport=tcp',
+			username: 'logmon',
+			credential: 'logmon2024turn'
+		}
 	]
 };
 
@@ -265,18 +275,25 @@ async function handleWebRTCRequest(): Promise<void> {
 			}
 		};
 
-		// Create Offer
-		const offer = await peerConnection.createOffer();
-		await peerConnection.setLocalDescription(offer);
+		peerConnection.onnegotiationneeded = async () => {
+			console.log('[CoBrowse] Negotiation needed — creating offer');
+			try {
+				if (!peerConnection) return;
+				const offer = await peerConnection.createOffer();
+				await peerConnection.setLocalDescription(offer);
 
-		sendMessage({
-			type: 'webrtc-offer',
-			sdp: peerConnection.localDescription
-		});
+				sendMessage({
+					type: 'webrtc-offer',
+					sdp: peerConnection.localDescription
+				});
 
-		webrtcActive = true;
-		updateWidgetStatus();
-		console.log('[CoBrowse] WebRTC offer sent');
+				webrtcActive = true;
+				updateWidgetStatus();
+				console.log('[CoBrowse] WebRTC offer sent');
+			} catch (err) {
+				console.error('[CoBrowse] Failed to create offer:', err);
+			}
+		};
 
 	} catch (err: any) {
 		console.error('[CoBrowse] Failed to start WebRTC:', err);
@@ -715,11 +732,13 @@ function flushEvents(): void {
 
 function sendMessage(msg: any): void {
 	if (!ws || ws.readyState !== WebSocket.OPEN) {
+		console.warn('[CoBrowse] Cannot send, WS state:', ws?.readyState);
 		return;
 	}
 
 	try {
 		ws.send(JSON.stringify(msg));
+		console.log('[CoBrowse] Sent message type:', msg.type);
 	} catch (err) {
 		console.error('[CoBrowse] Failed to send message:', err);
 	}
@@ -728,6 +747,7 @@ function sendMessage(msg: any): void {
 function handleMessage(data: string): void {
 	try {
 		const msg = JSON.parse(data);
+		console.log('[CoBrowse] Received message type:', msg.type);
 
 		switch (msg.type) {
 			case 'ping':
@@ -741,11 +761,13 @@ function handleMessage(data: string): void {
 
 			case 'webrtc-offer-request':
 				// Admin requests screen sharing
+				console.log('[CoBrowse] WebRTC offer request received! Showing dialog...');
 				handleWebRTCRequest();
 				break;
 
 			case 'webrtc-answer':
 				// Admin sent SDP answer
+				console.log('[CoBrowse] WebRTC answer received, SDP type:', msg.sdp?.type);
 				if (msg.sdp) {
 					handleWebRTCAnswer(msg.sdp);
 				}
@@ -753,6 +775,7 @@ function handleMessage(data: string): void {
 
 			case 'webrtc-ice':
 				// ICE candidate from admin
+				console.log('[CoBrowse] ICE candidate received');
 				if (msg.candidate) {
 					handleICECandidate(msg.candidate);
 				}
@@ -760,7 +783,12 @@ function handleMessage(data: string): void {
 
 			case 'webrtc-stop':
 				// Admin stopped WebRTC
+				console.log('[CoBrowse] WebRTC stop received');
 				stopWebRTC();
+				break;
+
+			default:
+				console.log('[CoBrowse] Unknown message type:', msg.type);
 				break;
 		}
 
