@@ -2,6 +2,32 @@
   <div class="logs-page">
     <h1 class="sr-only">日志查询</h1>
 
+    <!-- Global Search Section -->
+    <div class="global-search-section">
+      <el-input
+        v-model="globalSearchQuery"
+        placeholder="全局搜索：错误消息、URL、用户 ID..."
+        size="large"
+        clearable
+        @keyup.enter="handleGlobalSearch"
+        @input="handleGlobalSearchInput"
+        class="search-input"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+        <template #append>
+          <el-button @click="handleGlobalSearch" :icon="Search">搜索</el-button>
+        </template>
+      </el-input>
+      <div v-if="globalSearchQuery && logs.length > 0" class="search-hint">
+        找到 {{ pagination.total }} 条匹配记录
+        <el-tag v-if="globalSearchQuery" size="small" closable @close="clearGlobalSearch" style="margin-left: 10px">
+          {{ globalSearchQuery }}
+        </el-tag>
+      </div>
+    </div>
+
     <LogTable
       :filters="filters"
       :logs="logs"
@@ -10,6 +36,7 @@
       :releases="releases"
       :loading="loading"
       :pagination="pagination"
+      :highlight-keyword="globalSearchQuery"
       @search="handleSearch"
       @reset="handleReset"
       @export="handleExport"
@@ -40,6 +67,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import { logApi } from '../api'
 import type { Event, QueryParams } from '../types'
 import LogTable from '../components/LogTable.vue'
@@ -47,6 +75,9 @@ import LogDetail from '../components/LogDetail.vue'
 import ClusterDetail from '../components/ClusterDetail.vue'
 
 const route = useRoute()
+
+// Global Search
+const globalSearchQuery = ref('')
 
 const filters = ref<QueryParams & { dateRange?: [number, number] }>({
   appId: route.params.appId as string || '',
@@ -269,6 +300,31 @@ const handleApplySavedView = (savedFilters: QueryParams & { dateRange?: [number,
   handleSearch()
 }
 
+// Global Search Handlers
+let searchTimeout: number
+
+const handleGlobalSearchInput = () => {
+  clearTimeout(searchTimeout)
+}
+
+const handleGlobalSearch = () => {
+  if (!globalSearchQuery.value.trim()) {
+    ElMessage.warning('请输入搜索关键词')
+    return
+  }
+
+  // Update filters keyword with global search query
+  filters.value.keyword = globalSearchQuery.value.trim()
+  pagination.value.page = 1
+  fetchLogs()
+}
+
+const clearGlobalSearch = () => {
+  globalSearchQuery.value = ''
+  filters.value.keyword = ''
+  handleSearch()
+}
+
 const formatTime = (timestamp: number) => {
   return new Date(timestamp).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -292,6 +348,27 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.global-search-section {
+  margin-bottom: 10px;
+}
+
+.search-input {
+  max-width: 800px;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  padding: 8px 15px;
+  border-radius: 8px;
+}
+
+.search-hint {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
 }
 
 .sr-only {

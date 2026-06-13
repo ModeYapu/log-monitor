@@ -77,7 +77,8 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item v-for="view in savedViews" :key="view.name" :command="`load-${view.name}`">
-                  {{ view.name }}
+                  <span class="view-name">{{ view.name }}</span>
+                  <el-icon @click.stop="deleteView(view.name)" class="delete-icon"><Delete /></el-icon>
                 </el-dropdown-item>
                 <el-dropdown-item v-if="savedViews.length === 0" disabled>
                   暂无保存的视图
@@ -148,7 +149,8 @@
         </el-table-column>
         <el-table-column prop="message" label="消息" min-width="300">
           <template #default="{ row }">
-            <span class="log-message">{{ truncateMessage(row.message, 100) }}</span>
+            <span v-if="!props.highlightKeyword" class="log-message">{{ truncateMessage(row.message, 100) }}</span>
+            <span v-else class="log-message" v-html="highlightText(truncateMessage(row.message, 100), props.highlightKeyword)"></span>
           </template>
         </el-table-column>
         <el-table-column prop="url" label="来源" width="150">
@@ -224,7 +226,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Search, Download } from '@element-plus/icons-vue'
+import { Search, Download, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { formatTime, truncateMessage, getLevelTag } from '../utils/formatters'
 import type { Event, QueryParams } from '../types'
@@ -237,9 +239,10 @@ interface Props {
   releases: string[]
   loading: boolean
   pagination: { page: number; pageSize: number; total: number }
+  highlightKeyword?: string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const viewMode = ref<'list' | 'clusters'>('list')
 
@@ -255,6 +258,14 @@ const emit = defineEmits<{
   'page-change': [params: { page: number; size: number }]
   'apply-saved-view': [filters: QueryParams & { dateRange?: [number, number] }]
 }>()
+
+// Highlight keyword in text
+const highlightText = (text: string, keyword: string) => {
+  if (!text || !keyword) return text
+
+  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  return text.replace(regex, '<mark class="highlight">$1</mark>')
+}
 
 // Saved Views
 interface SavedView {
@@ -339,6 +350,22 @@ const loadView = (viewName: string) => {
     emit('apply-saved-view', view.filters)
     ElMessage.success(`已加载视图 "${viewName}"`)
   }
+}
+
+const deleteView = (viewName: string) => {
+  ElMessageBox.confirm(
+    `确定要删除视图 "${viewName}" 吗？`,
+    '确认删除',
+    {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    savedViews.value = savedViews.value.filter(v => v.name !== viewName)
+    saveViewsToStorage()
+    ElMessage.success('视图已删除')
+  }).catch(() => {})
 }
 
 const showManageViewsDialog = () => {
@@ -452,5 +479,34 @@ onMounted(() => {
 
 .text-secondary {
   color: #94a3b8;
+}
+
+.highlight {
+  background-color: #f59e0b;
+  color: #fff;
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-weight: bold;
+}
+
+.view-name {
+  flex: 1;
+  margin-right: 10px;
+}
+
+:deep(.el-dropdown-menu__item) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delete-icon {
+  color: #f56c6c;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+:deep(.el-dropdown-menu__item:hover .delete-icon) {
+  opacity: 1;
 }
 </style>
