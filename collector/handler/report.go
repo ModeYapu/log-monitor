@@ -163,6 +163,60 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen]
 }
 
+// classifyEvent extracts additional context based on event type
+// This enables specialized handling for different event categories
+func classifyEvent(e model.Event) (string, map[string]interface{}) {
+	// Returns: (subType, extractedContext)
+	subType := ""
+	context := make(map[string]interface{})
+
+	switch e.Type {
+	case model.EventTypeResource:
+		// Extract resource URL, type, failure reason
+		subType = "resource_error"
+		if url, ok := e.Extra["url"].(string); ok {
+			context["resource_url"] = url
+		}
+		if resType, ok := e.Tags["resource_type"].(string); ok {
+			context["resource_type"] = resType
+		}
+		if reason, ok := e.Extra["reason"].(string); ok {
+			context["failure_reason"] = reason
+		}
+
+	case model.EventTypeAPIError:
+		// Extract API URL, status code, duration
+		subType = "api_failure"
+		if url, ok := e.Extra["url"].(string); ok {
+			context["api_url"] = url
+		}
+		if status, ok := e.Extra["status_code"].(float64); ok {
+			context["status_code"] = int(status)
+		}
+		if duration, ok := e.Extra["duration"].(float64); ok {
+			context["duration_ms"] = duration
+		}
+		if method, ok := e.Extra["method"].(string); ok {
+			context["method"] = method
+		}
+
+	case model.EventTypeUserAction:
+		// Extract action name, target element
+		subType = "user_behavior"
+		if action, ok := e.Extra["action"].(string); ok {
+			context["action_name"] = action
+		}
+		if target, ok := e.Extra["target"].(string); ok {
+			context["target_selector"] = target
+		}
+		if page, ok := e.Extra["page"].(string); ok {
+			context["page_url"] = page
+		}
+	}
+
+	return subType, context
+}
+
 // toJSON converts a map to JSON string
 func toJSON(m map[string]interface{}) string {
 	if m == nil {

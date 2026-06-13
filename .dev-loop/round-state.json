@@ -1,39 +1,41 @@
 {
   "schemaVersion": 1,
-  "roundId": "R005",
+  "roundId": "R006",
   "slice": {
-    "description": "API 职责分离：将路由分为 Write API (/api/report) 和 Read API (/api/query) 独立 handler group + 健康检查增强（各模块状态、SQLite 指标、worker 状态）+ 优雅关闭改进",
+    "description": "OpenAPI 文档自动生成 + E2E Verifier 联动 Webhook（发布前验证→发布后监控闭环）+ 事件类型细化（resource/api/user_action）",
     "sourceFiles": [
-      "collector/routes.go",
-      "collector/handler/health.go",
-      "collector/handler/health_test.go",
-      "collector/main.go",
-      "collector/worker/worker.go"
+      "collector/handler/openapi.go",
+      "collector/handler/webhooks.go",
+      "collector/model/event.go",
+      "collector/handler/report.go",
+      "collector/webhook/e2e_verifier.go"
     ],
     "acceptanceCriteria": [
       "cd collector && go build ./... exit 0",
-      "cd collector && go test ./handler/... ./worker/... exit 0",
-      "路由分为 writeGroup 和 readGroup，各有独立中间件链",
-      "writeGroup 只接受 POST，有 rate limit",
-      "health API 返回：db_status, db_size, worker_count, uptime, goroutine_count, memory_stats",
-      "优雅关闭：SIGTERM → 停止接收新请求 → drain 写缓冲 → 停止 workers → 退出"
+      "cd collector && go test ./handler/... exit 0",
+      "OpenAPI spec 包含所有 /api/query/* 和 /api/admin/* 端点的文档",
+      "Webhook 支持 e2e_verifier 类型：发布前触发验证→发布后接收结果",
+      "Event Type 新增 resource/api_error/user_action 三种类型常量",
+      "Report handler 根据 event type 路由到不同的处理逻辑"
     ],
     "maxFiles": 5,
     "estimatedComplexity": "medium"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T14:42:00+08:00",
+  "startedAt": "2026-06-13T14:50:00+08:00",
   "filesChanged": [
+    "collector/handler/openapi.go",
+    "collector/model/event.go",
+    "collector/handler/report.go",
+    "collector/webhook/e2e_verifier.go",
+    "collector/storage/verification-store.go",
     "collector/routes.go",
-    "collector/handler/health.go",
-    "collector/handler/health_test.go",
-    "collector/main.go",
-    "collector/worker/worker.go"
+    "collector/main.go"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
-  "verifySliceCmd": "cd collector && go test ./handler/... ./worker/...",
+  "verifySliceCmd": "cd collector && go test ./handler/...",
   "verifyBuildPassed": true,
   "verifySlicePassed": true,
-  "completedAt": "2026-06-13T14:46:30+08:00",
+  "completedAt": "2026-06-13T14:51:00+08:00",
   "commitSha": null
 }

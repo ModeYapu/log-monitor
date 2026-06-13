@@ -120,6 +120,23 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	mux.Handle("/api/docs", rc.CORS.Handler(http.HandlerFunc(openapiHandler.GetSpec)))
 	mux.Handle("/api/docs/ui", rc.CORS.Handler(http.HandlerFunc(openapiHandler.GetSwaggerUI)))
 
+	// E2E Verifier webhook (public, uses API key auth)
+	e2eVerifier := webhook.NewE2EVerifierHook("", rc.DB, nil)
+	mux.Handle("/api/webhooks/e2e-verifier", rc.CORS.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			e2eVerifier.HandleVerificationResult(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/webhooks/e2e-verifier/results", rc.CORS.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			e2eVerifier.GetVerificationResults(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+
 	// === Read API group (query APIs with JWT auth) ===
 	// - JWT auth required
 	// - CORS enabled

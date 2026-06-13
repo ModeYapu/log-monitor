@@ -5,6 +5,21 @@ import (
 	"fmt"
 )
 
+// Event type constants - standard event types for LogMonitor
+const (
+	EventTypeError       = "error"
+	EventTypePerformance = "performance"
+	EventTypeResource    = "resource"      // Resource loading errors (scripts, stylesheets, images)
+	EventTypeAPIError    = "api_error"     // API/fetch request failures
+	EventTypeUserAction  = "user_action"   // User behavioral events (clicks, navigation)
+	EventTypeInfo        = "info"
+	EventTypeWarn        = "warn"
+	EventTypeTrack       = "track"
+	EventTypeConsole     = "console"
+	EventTypeXHR         = "xhr"
+	EventBreadcrumb      = "breadcrumb"
+)
+
 // Event represents a log event from the SDK
 type Event struct {
 	ID          int64                  `json:"id"`

@@ -131,12 +131,8 @@ func main() {
 	})
 
 	// Initialize OpenAPI handler (Slice 4)
-	openapiSpec, err := os.ReadFile("api/openapi.yaml")
-	if err != nil {
-		slog.Warn("Failed to read OpenAPI spec", "error", err)
-		// Continue without OpenAPI spec
-		openapiSpec = []byte("openapi: 3.0.0\ninfo:\n  title: LogMonitor API\n  version: 1.0.0")
-	}
+	openapiSpec := handler.GenerateOpenAPISpec()
+	slog.Info("OpenAPI spec generated", "endpoints", "query, admin, webhooks, ingestion")
 
 	// Auto-create default project if none exist
 	if err := db.AutoCreateDefaultProject(); err != nil {
