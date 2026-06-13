@@ -23,6 +23,97 @@
       </el-form>
     </el-card>
 
+    <!-- 回归提示卡片 -->
+    <el-card class="mt-4 regression-alert-card" v-if="selectedAppId">
+      <template #header>
+        <div class="card-header">
+          <span>⚠️ 最近性能回归</span>
+          <el-tag size="small" :type="recentRegressions.length > 0 ? 'danger' : 'success'">
+            {{ recentRegressions.length > 0 ? `${recentRegressions.length} 个回归` : 'No regressions detected ✅' }}
+          </el-tag>
+        </div>
+      </template>
+      <div v-if="recentRegressions.length === 0" class="no-regressions-alert">
+        <el-empty description="最近版本相比前一版本无性能回归 ✅" :image-size="60" />
+      </div>
+      <el-table v-else :data="recentRegressions" stripe max-height="250" size="small">
+        <el-table-column type="index" label="#" width="50" />
+        <el-table-column prop="metric" label="指标" width="70" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="getRegressionMetricTagType(row.metric)">{{ row.metric.toUpperCase() }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="current_value" label="当前值" width="80" align="right">
+          <template #default="{ row }">
+            {{ formatValue(row.current_value, row.metric) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="变化" width="90" align="right">
+          <template #default="{ row }">
+            <span :class="getChangeClass(row.change_percent)">
+              {{ formatChange(row.change_percent) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="url" label="页面" min-width="150">
+          <template #default="{ row }">
+            {{ truncateUrl(row.url) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="release" label="版本" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">{{ row.release || '-' }}</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <!-- 版本对比区域 -->
+    <el-card class="mt-4">
+      <template #header>
+        <span>📊 版本性能对比</span>
+      </template>
+      <el-form :inline="true">
+        <el-form-item label="版本 A">
+          <el-select v-model="compareReleaseA" placeholder="选择版本 A" style="width: 150px" @change="fetchVersionComparison">
+            <el-option label="当前版本" value="" />
+            <el-option v-for="release in availableReleases" :key="release" :label="release" :value="release" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="版本 B">
+          <el-select v-model="compareReleaseB" placeholder="选择版本 B" style="width: 150px" @change="fetchVersionComparison">
+            <el-option label="前一版本" value="" />
+            <el-option v-for="release in availableReleases" :key="release" :label="release" :value="release" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <el-table :data="versionComparison" stripe size="small" class="comparison-table">
+        <el-table-column prop="metric" label="指标" width="80" align="center" />
+        <el-table-column label="版本 A" width="100" align="right">
+          <template #default="{ row }">
+            {{ formatValue(row.valueA, row.metric) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="版本 B" width="100" align="right">
+          <template #default="{ row }">
+            {{ formatValue(row.valueB, row.metric) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="变化" width="80" align="center">
+          <template #default="{ row }">
+            <span :class="getComparisonChangeClass(row.changePercent, row.metric)">
+              {{ formatChange(row.changePercent) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="趋势" width="60" align="center">
+          <template #default="{ row }">
+            <span :class="getComparisonTrendIcon(row.changePercent, row.metric)"></span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
     <!-- Web Vitals 指标卡片 -->
     <el-row :gutter="20" class="mt-4">
       <el-col :span="4" v-for="metric in webVitals" :key="metric.key">
@@ -242,6 +333,17 @@ const performanceTrends = ref<Record<string, any>>({})
 const pagePerformance = ref<any[]>([])
 const regressions = ref<any[]>([])
 
+// Version comparison state
+const compareReleaseA = ref('')
+const compareReleaseB = ref('')
+const availableReleases = ref<string[]>(['v1.0.0', 'v1.1.0', 'v1.2.0', 'v2.0.0'])
+const versionComparison = ref<any[]>([])
+const summaryA = ref<any>(null)
+const summaryB = ref<any>(null)
+
+// Recent regressions (for top alert card)
+const recentRegressions = ref<any[]>([])
+
 // Chart refs
 const fcpChartRef = ref<HTMLElement>()
 const lcpChartRef = ref<HTMLElement>()
@@ -401,6 +503,80 @@ const truncateUrl = (url: string) => {
   }
 }
 
+// Version comparison functions
+const fetchVersionComparison = async () => {
+  if (!selectedAppId.value) return
+
+  try {
+    // Fetch data for version A
+    if (compareReleaseA.value) {
+      const { data: dataA } = await logApi.getPerformanceSummary({
+        app_id: selectedAppId.value,
+        range: timeRange.value,
+        release: compareReleaseA.value
+      })
+      summaryA.value = dataA
+    } else {
+      summaryA.value = performanceSummary.value
+    }
+
+    // Fetch data for version B
+    if (compareReleaseB.value) {
+      const { data: dataB } = await logApi.getPerformanceSummary({
+        app_id: selectedAppId.value,
+        range: timeRange.value,
+        release: compareReleaseB.value
+      })
+      summaryB.value = dataB
+    } else {
+      summaryB.value = null
+    }
+
+    // Compute comparison
+    computeComparison()
+  } catch (error) {
+    console.error('Failed to fetch version comparison:', error)
+  }
+}
+
+const computeComparison = () => {
+  if (!summaryA.value) return
+
+  const metrics = ['fcp', 'lcp', 'cls', 'ttfb']
+  const comparison = metrics.map(metric => {
+    const valueA = summaryA.value[metric]?.p75 || 0
+    const valueB = summaryB.value?.[metric]?.p75 || 0
+
+    let changePercent = 0
+    if (valueB > 0) {
+      changePercent = ((valueA - valueB) / valueB) * 100
+    }
+
+    return {
+      metric,
+      valueA,
+      valueB,
+      changePercent
+    }
+  })
+
+  versionComparison.value = comparison
+}
+
+const getComparisonChangeClass = (change: number, metric: string): string => {
+  // For most metrics, lower is better (except CLS where lower is also better)
+  // So negative change = improvement
+  if (Math.abs(change) < 1) return 'change-neutral'
+  if (change < 0) return 'change-better'
+  return 'change-worse'
+}
+
+const getComparisonTrendIcon = (change: number, metric: string): string => {
+  if (Math.abs(change) < 1) return '<span class="text-muted">−</span>'
+  if (change < 0) return '<span class="trend-down">▼</span>'
+  return '<span class="trend-up">▲</span>'
+}
+
 const fetchData = async () => {
   if (!selectedAppId.value) return
 
@@ -444,6 +620,7 @@ const fetchData = async () => {
         app_id: selectedAppId.value
       })
       regressions.value = regressionData.regressions || []
+      recentRegressions.value = regressionData.regressions || []
     } catch (error) {
       console.error('Failed to fetch performance regressions:', error)
     }
@@ -769,5 +946,28 @@ onMounted(() => {
 
 .threshold-item.poor .threshold-value {
   color: #ef4444;
+}
+
+.regression-alert-card {
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, transparent 100%);
+}
+
+.no-regressions-alert {
+  padding: 10px 0;
+}
+
+.comparison-table {
+  margin-top: 12px;
+}
+
+.trend-down {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.trend-up {
+  color: #ef4444;
+  font-weight: bold;
 }
 </style>
