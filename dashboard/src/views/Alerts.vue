@@ -13,7 +13,34 @@
             </div>
           </template>
 
-          <el-table :data="alertRules" v-loading="loading" stripe>
+          <el-table :data="alertRules" v-loading="loading" stripe @row-click="toggleExpand" class="alerts-table">
+            <el-table-column type="expand">
+              <template #default="{ row }">
+                <div class="trigger-history-panel">
+                  <div class="history-header">
+                    <span class="history-title">触发历史（最近20条）</span>
+                    <el-tag v-if="rowTriggerCount[row.id]" size="small" type="info">
+                      累计触发 {{ rowTriggerCount[row.id] }} 次
+                    </el-tag>
+                  </div>
+                  <div v-if="rowTriggerHistory[row.id] && rowTriggerHistory[row.id].length > 0" class="history-list">
+                    <div v-for="log in rowTriggerHistory[row.id]" :key="log.id" class="history-item">
+                      <div class="history-icon">
+                        <el-icon><Bell /></el-icon>
+                      </div>
+                      <div class="history-content">
+                        <div class="history-message">{{ log.message }}</div>
+                        <div class="history-meta">
+                          <span class="history-time">{{ formatDateTime(log.created_at) }}</span>
+                          <el-tag size="small" type="success">已发送</el-tag>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <el-empty v-else description="暂无触发记录" :image-size="60" />
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="name" label="规则名称" width="180" />
             <el-table-column prop="condition_type" label="条件类型" width="110">
               <template #default="{ row }">
@@ -36,6 +63,15 @@
                 <span v-else class="text-secondary">-</span>
               </template>
             </el-table-column>
+            <el-table-column prop="trigger_count" label="触发次数" width="90" align="center">
+              <template #default="{ row }">
+                <el-badge :value="rowTriggerCount[row.id] || 0" type="danger" :max="999">
+                  <el-button size="small" circle @click.stop="toggleExpand(row)">
+                    <el-icon><DataAnalysis /></el-icon>
+                  </el-button>
+                </el-badge>
+              </template>
+            </el-table-column>
             <el-table-column prop="status" label="状态" width="90">
               <template #default="{ row }">
                 <el-switch
@@ -43,6 +79,7 @@
                   @change="toggleRule(row)"
                   :loading="row._toggling"
                   size="small"
+                  @click.stop
                 />
                 <div v-if="isSilenced(row)" class="text-warning mt-1" style="font-size: 11px;">
                   <el-tooltip :content="`静默至 ${formatDateTime(row.silenced_until)}`" placement="top">
@@ -51,14 +88,23 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" align="center">
+            <el-table-column label="操作" width="220" align="center">
               <template #default="{ row }">
+                <el-button
+                  type="primary"
+                  size="small"
+                  link
+                  @click.stop="handleTestRule(row)"
+                  :loading="row._testing"
+                >
+                  测试
+                </el-button>
                 <el-button
                   v-if="isSilenced(row)"
                   type="success"
                   size="small"
                   link
-                  @click="handleUnsilence(row)"
+                  @click.stop="handleUnsilence(row)"
                   :loading="row._unsilencing"
                 >
                   取消静默
@@ -67,12 +113,12 @@
                   v-else
                   size="small"
                   link
-                  @click="handleSilence(row)"
+                  @click.stop="handleSilence(row)"
                   :loading="row._silencing"
                 >
                   静默
                 </el-button>
-                <el-button type="danger" size="small" link @click="handleDelete(row)">
+                <el-button type="danger" size="small" link @click.stop="handleDelete(row)">
                   删除
                 </el-button>
               </template>
@@ -268,9 +314,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, Bell } from '@element-plus/icons-vue'
+import { Plus, Bell, DataAnalysis } from '@element-plus/icons-vue'
 import { logApi } from '../api'
 import { formatRelativeTime } from '../utils/formatters'
 import type { AlertRule, AlertLog } from '../types'
@@ -285,6 +331,21 @@ const apps = ref<any[]>([])
 const selectedAppId = ref('')
 const alertRules = ref<any[]>([])
 const alertLogs = ref<AlertLog[]>([])
+
+// Store trigger history per rule
+const rowTriggerHistory = ref<Record<number, AlertLog[]>>({})
+const expandedRows = ref<Set<number>>(new Set())
+
+// Calculate trigger count per rule from alert logs
+const rowTriggerCount = computed(() => {
+  const counts: Record<number, number> = {}
+  alertLogs.value.forEach(log => {
+    if (log.rule_id) {
+      counts[log.rule_id] = (counts[log.rule_id] || 0) + 1
+    }
+  })
+  return counts
+})
 
 const alertForm = reactive<AlertRule>({
   app_id: '',
@@ -367,14 +428,50 @@ const handleNotifyTypeChange = (type: string) => {
   alertForm.notify_config = { url: '', email: '', bot_token: '', chat_id: '' }
 }
 
+// Toggle expand for trigger history
+const toggleExpand = (row: any) => {
+  const ruleId = row.id
+  if (!ruleId) return
+
+  if (expandedRows.value.has(ruleId)) {
+    expandedRows.value.delete(ruleId)
+  } else {
+    expandedRows.value.add(ruleId)
+    // Load trigger history for this rule
+    loadRuleTriggerHistory(ruleId)
+  }
+}
+
+// Load trigger history for a specific rule
+const loadRuleTriggerHistory = (ruleId: number) => {
+  const history = alertLogs.value
+    .filter(log => log.rule_id === ruleId)
+    .sort((a, b) => b.created_at - a.created_at)
+    .slice(0, 20)
+  rowTriggerHistory.value[ruleId] = history
+}
+
 const fetchData = async () => {
   if (!selectedAppId.value) return
 
   loading.value = true
   try {
     const { data } = await logApi.getAlerts(selectedAppId.value)
-    alertRules.value = (data.rules || []).map(r => ({ ...r, _toggling: false }))
+    alertRules.value = (data.rules || []).map(r => ({
+      ...r,
+      _toggling: false,
+      _testing: false,
+      _silencing: false,
+      _unsilencing: false
+    }))
     alertLogs.value = data.logs || []
+
+    // Pre-load trigger counts for all rules
+    alertRules.value.forEach(rule => {
+      if (rule.id) {
+        loadRuleTriggerHistory(rule.id)
+      }
+    })
   } catch (error) {
     console.error('Failed to fetch alerts:', error)
   } finally {
@@ -552,6 +649,26 @@ const handleTestNotification = async () => {
   }
 }
 
+// Test notification for an existing rule
+const handleTestRule = async (rule: any) => {
+  rule._testing = true
+  try {
+    const testData = {
+      notify_type: rule.notify_type,
+      notify_config: typeof rule.notify_config === 'string' ? rule.notify_config : JSON.stringify(rule.notify_config),
+      message: `[测试] 规则 "${rule.name}" 的测试消息 - 如果您收到此消息，说明通知配置正确！`
+    }
+
+    await logApi.testAlert(testData)
+    ElMessage.success('测试消息发送成功，请检查对应平台是否收到消息')
+  } catch (error) {
+    console.error('Failed to send test notification:', error)
+    ElMessage.error('测试消息发送失败，请检查配置是否正确')
+  } finally {
+    rule._testing = false
+  }
+}
+
 onMounted(() => {
   fetchApps()
 })
@@ -566,6 +683,83 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.alerts-table {
+  cursor: pointer;
+}
+
+.alerts-table :deep(.el-table__expanded-cell) {
+  padding: 0;
+}
+
+.trigger-history-panel {
+  padding: 16px 20px;
+  background: #1a1e2e;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.history-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e6ed;
+}
+
+.history-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #2d3748;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.history-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-message {
+  color: #e0e6ed;
+  font-size: 13px;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.history-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-time {
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 .alert-logs {
