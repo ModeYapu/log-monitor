@@ -27,6 +27,49 @@ type RouterConfig struct {
 	PerformanceHandler *handler.PerformanceHandler
 }
 
+// Route represents a single HTTP route.
+type Route struct {
+	Pattern string
+	Handler http.Handler
+}
+
+// RouteGroup manages a group of routes with common middleware.
+type RouteGroup struct {
+	mux       *http.ServeMux
+	prefix    string
+	middleware []func(http.Handler) http.Handler
+}
+
+// NewRouteGroup creates a new route group.
+func NewRouteGroup(mux *http.ServeMux, prefix string) *RouteGroup {
+	return &RouteGroup{
+		mux:    mux,
+		prefix: prefix,
+	}
+}
+
+// Use adds middleware to the group.
+func (g *RouteGroup) Use(middleware func(http.Handler) http.Handler) *RouteGroup {
+	g.middleware = append(g.middleware, middleware)
+	return g
+}
+
+// Handle registers a route with the group's middleware chain.
+func (g *RouteGroup) Handle(pattern string, handler http.Handler) {
+	fullPattern := g.prefix + pattern
+	h := handler
+	// Apply middleware in reverse order (last added is first to execute)
+	for i := len(g.middleware) - 1; i >= 0; i-- {
+		h = g.middleware[i](h)
+	}
+	g.mux.Handle(fullPattern, h)
+}
+
+// HandleFunc registers a route with an HTTP handler function.
+func (g *RouteGroup) HandleFunc(pattern string, handler http.HandlerFunc) {
+	g.Handle(pattern, handler)
+}
+
 // SetupRoutes configures all HTTP routes and returns the serve mux.
 func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	mux := http.NewServeMux()
@@ -55,151 +98,149 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 
 	sourceMapHandler.SetAllowedOrigins(rc.Config.Server.AllowedOrigins)
 
-	// === Public routes (no auth) ===
-	mux.Handle("/api/report", reportHandler)
-	mux.Handle("/api/events", reportHandler)
-	mux.Handle("/api/report/screenshot", screenshotHandler)
+	// === Write API group (SDK data ingestion) ===
+	// - Rate limit: 100 req/s
+	// - CORS enabled
+	// - No auth required (SDK uses API key in request body)
+	writeGroup := NewRouteGroup(mux, "")
+	writeGroup.Use(rc.CORS.Handler)
+	writeGroup.Use(middleware.NewRateLimiter(100, time.Second).Handler)
+	writeGroup.Handle("/api/report", reportHandler)
+	writeGroup.Handle("/api/events", reportHandler)
+	writeGroup.Handle("/api/report/screenshot", screenshotHandler)
+
+	// === Public routes (no auth, special cases) ===
 	mux.Handle("/api/screenshots/", rc.CORS.Handler(rc.JWT.Handler(screenshotFileHandler)))
 	mux.Handle("/api/auth/login", rc.CORS.Handler(middleware.NewRateLimiter(5, time.Minute).Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHandler.Login(w, r)
 	}))))
 	mux.Handle("/api/health", rc.CORS.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		queryHandler.Health(w, r)
+		healthHandler.Health(w, r)
 	})))
 	mux.Handle("/api/docs", rc.CORS.Handler(http.HandlerFunc(openapiHandler.GetSpec)))
 	mux.Handle("/api/docs/ui", rc.CORS.Handler(http.HandlerFunc(openapiHandler.GetSwaggerUI)))
 
-	// === Authenticated routes ===
-	authRoutes := []struct {
-		pattern string
-		handler http.HandlerFunc
-	}{
-		// Auth
-		{"GET /api/auth/me", authHandler.Me},
-		{"PUT /api/auth/password", authHandler.ChangePassword},
+	// === Read API group (query APIs with JWT auth) ===
+	// - JWT auth required
+	// - CORS enabled
+	readGroup := NewRouteGroup(mux, "")
+	readGroup.Use(rc.CORS.Handler)
+	readGroup.Use(rc.JWT.Handler)
 
-		// Query - logs & stats
-		{"GET /api/query/logs", queryHandler.QueryLogs},
-		{"GET /api/query/stats", queryHandler.QueryStats},
-		{"GET /api/query/apps", queryHandler.QueryApps},
-		{"GET /api/query/top", queryHandler.QueryTop},
-		{"GET /api/query/similar", queryHandler.QuerySimilar},
-		{"GET /api/query/export", queryHandler.QueryExport},
+	// Auth endpoints
+	readGroup.HandleFunc("GET /api/auth/me", authHandler.Me)
+	readGroup.HandleFunc("PUT /api/auth/password", authHandler.ChangePassword)
 
-		// Query - performance
-		{"GET /api/query/performance/summary", queryHandler.QueryPerformanceSummary},
-		{"GET /api/query/performance/trend", queryHandler.QueryPerformanceTrend},
-		{"GET /api/query/performance/pages", queryHandler.QueryPerformancePages},
-		{"GET /api/query/performance/regression", queryHandler.QueryPerformanceRegression},
+	// Query - logs & stats
+	readGroup.HandleFunc("GET /api/query/logs", queryHandler.QueryLogs)
+	readGroup.HandleFunc("GET /api/query/stats", queryHandler.QueryStats)
+	readGroup.HandleFunc("GET /api/query/apps", queryHandler.QueryApps)
+	readGroup.HandleFunc("GET /api/query/top", queryHandler.QueryTop)
+	readGroup.HandleFunc("GET /api/query/similar", queryHandler.QuerySimilar)
+	readGroup.HandleFunc("GET /api/query/export", queryHandler.QueryExport)
 
-		// Performance metrics - Web Vitals (R003)
-		{"GET /api/query/performance/summary-by-page", performanceHandler.GetPerformanceSummary},
-		{"GET /api/query/performance/trend-by-page", performanceHandler.GetPerformanceTrend},
-		{"GET /api/query/performance/compare-releases", performanceHandler.GetPerformanceComparison},
+	// Query - performance
+	readGroup.HandleFunc("GET /api/query/performance/summary", queryHandler.QueryPerformanceSummary)
+	readGroup.HandleFunc("GET /api/query/performance/trend", queryHandler.QueryPerformanceTrend)
+	readGroup.HandleFunc("GET /api/query/performance/pages", queryHandler.QueryPerformancePages)
+	readGroup.HandleFunc("GET /api/query/performance/regression", queryHandler.QueryPerformanceRegression)
 
-		// Query - anomaly
-		{"GET /api/query/anomaly/new-errors", queryHandler.QueryNewErrors},
-		{"GET /api/query/anomaly/alert-triggers", queryHandler.QueryAlertTriggers},
-		{"GET /api/query/anomaly/active-sessions", queryHandler.QueryActiveSessions},
-		{"GET /api/query/stats/comparison", queryHandler.QueryStatsComparison},
+	// Performance metrics - Web Vitals (R003)
+	readGroup.HandleFunc("GET /api/query/performance/summary-by-page", performanceHandler.GetPerformanceSummary)
+	readGroup.HandleFunc("GET /api/query/performance/trend-by-page", performanceHandler.GetPerformanceTrend)
+	readGroup.HandleFunc("GET /api/query/performance/compare-releases", performanceHandler.GetPerformanceComparison)
 
-		// Issues
-		{"GET /api/query/issues", issuesHandler.GetIssues},
-		{"GET /api/query/issues/", issuesHandler.GetIssue},
-		{"PUT /api/query/issues/", issuesHandler.UpdateIssue},
-		{"POST /api/query/issues/", func(w http.ResponseWriter, r *http.Request) {
-			action := r.URL.Query().Get("action")
-			if action == "resolve" {
-				issuesHandler.ResolveIssue(w, r)
-			} else if action == "ignore" {
-				issuesHandler.IgnoreIssue(w, r)
-			} else {
-				http.Error(w, "Invalid action", http.StatusBadRequest)
-			}
-		}},
-		{"GET /api/query/issues/stats", issuesHandler.GetIssueStats},
+	// Query - anomaly
+	readGroup.HandleFunc("GET /api/query/anomaly/new-errors", queryHandler.QueryNewErrors)
+	readGroup.HandleFunc("GET /api/query/anomaly/alert-triggers", queryHandler.QueryAlertTriggers)
+	readGroup.HandleFunc("GET /api/query/anomaly/active-sessions", queryHandler.QueryActiveSessions)
+	readGroup.HandleFunc("GET /api/query/stats/comparison", queryHandler.QueryStatsComparison)
 
-		// Clusters
-		{"GET /api/query/clusters", clustersHandler.GetClusters},
+	// Issues
+	readGroup.HandleFunc("GET /api/query/issues", issuesHandler.GetIssues)
+	readGroup.HandleFunc("GET /api/query/issues/", issuesHandler.GetIssue)
+	readGroup.HandleFunc("PUT /api/query/issues/", issuesHandler.UpdateIssue)
+	readGroup.HandleFunc("POST /api/query/issues/", func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("action")
+		if action == "resolve" {
+			issuesHandler.ResolveIssue(w, r)
+		} else if action == "ignore" {
+			issuesHandler.IgnoreIssue(w, r)
+		} else {
+			http.Error(w, "Invalid action", http.StatusBadRequest)
+		}
+	})
+	readGroup.HandleFunc("GET /api/query/issues/stats", issuesHandler.GetIssueStats)
 
-		// Health & analytics
-		{"GET /api/query/release-health", healthHandler.GetReleaseHealth},
-		{"GET /api/query/session-stats", healthHandler.GetSessionStats},
+	// Clusters
+	readGroup.HandleFunc("GET /api/query/clusters", clustersHandler.GetClusters)
 
-		// Alerts
-		{"GET /api/query/alerts", alertsHandler.GetAlerts},
-		{"POST /api/query/alerts", alertsHandler.CreateAlert},
-		{"DELETE /api/query/alerts/", alertsHandler.DeleteAlert},
-		{"POST /api/alerts/test", alertsHandler.TestAlert},
+	// Health & analytics
+	readGroup.HandleFunc("GET /api/query/release-health", healthHandler.GetReleaseHealth)
+	readGroup.HandleFunc("GET /api/query/session-stats", healthHandler.GetSessionStats)
 
-		// System
-		{"GET /api/system/info", systemHandler.GetSystemInfo},
-		{"POST /api/system/cleanup", systemHandler.TriggerCleanup},
+	// Alerts
+	readGroup.HandleFunc("GET /api/query/alerts", alertsHandler.GetAlerts)
+	readGroup.HandleFunc("POST /api/query/alerts", alertsHandler.CreateAlert)
+	readGroup.HandleFunc("DELETE /api/query/alerts/", alertsHandler.DeleteAlert)
+	readGroup.HandleFunc("POST /api/alerts/test", alertsHandler.TestAlert)
 
-		// Source maps (read)
-		{"GET /api/sourcemaps", sourceMapHandler.List},
-		{"GET /api/sourcemaps/download", sourceMapHandler.Download},
-		{"DELETE /api/sourcemaps/", sourceMapHandler.Delete},
-		{"POST /api/sourcemaps/deobfuscate", sourceMapHandler.Deobfuscate},
-		{"POST /api/sourcemaps/resolve", sourceMapHandler.Resolve},
-	}
+	// System
+	readGroup.HandleFunc("GET /api/system/info", systemHandler.GetSystemInfo)
+	readGroup.HandleFunc("POST /api/system/cleanup", systemHandler.TriggerCleanup)
 
-	for _, route := range authRoutes {
-		h := rc.CORS.Handler(rc.JWT.Handler(http.HandlerFunc(route.handler)))
-		mux.HandleFunc(route.pattern, func(w http.ResponseWriter, r *http.Request) {
-			h.ServeHTTP(w, r)
-		})
-	}
+	// Source maps (read)
+	readGroup.HandleFunc("GET /api/sourcemaps", sourceMapHandler.List)
+	readGroup.HandleFunc("GET /api/sourcemaps/download", sourceMapHandler.Download)
+	readGroup.HandleFunc("DELETE /api/sourcemaps/", sourceMapHandler.Delete)
+	readGroup.HandleFunc("POST /api/sourcemaps/deobfuscate", sourceMapHandler.Deobfuscate)
+	readGroup.HandleFunc("POST /api/sourcemaps/resolve", sourceMapHandler.Resolve)
 
-	// === Admin-only routes ===
-	adminRoutes := []struct {
-		pattern string
-		handler http.HandlerFunc
-	}{
-		// Source map upload
-		{"POST /api/sourcemaps/upload", sourceMapHandler.Upload},
+	// === Admin API group (admin operations with JWT + admin role) ===
+	// - JWT auth required
+	// - Admin role required
+	// - CORS enabled
+	adminGroup := NewRouteGroup(mux, "")
+	adminGroup.Use(rc.CORS.Handler)
+	adminGroup.Use(rc.JWT.Handler)
+	adminGroup.Use(middleware.RequireAdmin)
 
-		// User management
-		{"GET /api/users", authHandler.ListUsers},
-		{"POST /api/users", authHandler.CreateUser},
-		{"PUT /api/users/", authHandler.UpdateUser},
-		{"DELETE /api/users/", authHandler.DeleteUser},
+	// Source map upload
+	adminGroup.HandleFunc("POST /api/sourcemaps/upload", sourceMapHandler.Upload)
 
-		// Storage governance
-		{"GET /api/admin/storage/stats", adminHandler.GetStorageStats},
-		{"GET /api/admin/retention/policy", adminHandler.GetRetentionPolicy},
-		{"PUT /api/admin/retention/policy", adminHandler.SetRetentionPolicy},
-		{"POST /api/admin/cleanup/manual", adminHandler.TriggerManualCleanup},
+	// User management
+	adminGroup.HandleFunc("GET /api/users", authHandler.ListUsers)
+	adminGroup.HandleFunc("POST /api/users", authHandler.CreateUser)
+	adminGroup.HandleFunc("PUT /api/users/", authHandler.UpdateUser)
+	adminGroup.HandleFunc("DELETE /api/users/", authHandler.DeleteUser)
 
-		// Projects
-		{"POST /api/admin/projects", projectsHandler.CreateProject},
-		{"GET /api/admin/projects", projectsHandler.ListProjects},
-		{"GET /api/admin/projects/", projectsHandler.GetProject},
-		{"PUT /api/admin/projects/", projectsHandler.UpdateProject},
-		{"DELETE /api/admin/projects/", projectsHandler.DeleteProject},
-		{"POST /api/admin/projects/api-key", projectsHandler.RegenerateApiKey},
-		{"GET /api/admin/projects/members", projectsHandler.ListMembers},
-		{"POST /api/admin/projects/members", projectsHandler.AddMember},
-		{"PUT /api/admin/projects/members/", projectsHandler.UpdateMemberRole},
-		{"DELETE /api/admin/projects/members/", projectsHandler.RemoveMember},
+	// Storage governance
+	adminGroup.HandleFunc("GET /api/admin/storage/stats", adminHandler.GetStorageStats)
+	adminGroup.HandleFunc("GET /api/admin/retention/policy", adminHandler.GetRetentionPolicy)
+	adminGroup.HandleFunc("PUT /api/admin/retention/policy", adminHandler.SetRetentionPolicy)
+	adminGroup.HandleFunc("POST /api/admin/cleanup/manual", adminHandler.TriggerManualCleanup)
 
-		// Webhooks
-		{"GET /api/admin/webhooks", webhooksHandler.GetWebhooks},
-		{"POST /api/admin/webhooks", webhooksHandler.CreateWebhook},
-		{"PUT /api/admin/webhooks/", webhooksHandler.UpdateWebhook},
-		{"DELETE /api/admin/webhooks/", webhooksHandler.DeleteWebhook},
-		{"POST /api/admin/webhooks/test", webhooksHandler.TestWebhook},
+	// Projects
+	adminGroup.HandleFunc("POST /api/admin/projects", projectsHandler.CreateProject)
+	adminGroup.HandleFunc("GET /api/admin/projects", projectsHandler.ListProjects)
+	adminGroup.HandleFunc("GET /api/admin/projects/", projectsHandler.GetProject)
+	adminGroup.HandleFunc("PUT /api/admin/projects/", projectsHandler.UpdateProject)
+	adminGroup.HandleFunc("DELETE /api/admin/projects/", projectsHandler.DeleteProject)
+	adminGroup.HandleFunc("POST /api/admin/projects/api-key", projectsHandler.RegenerateApiKey)
+	adminGroup.HandleFunc("GET /api/admin/projects/members", projectsHandler.ListMembers)
+	adminGroup.HandleFunc("POST /api/admin/projects/members", projectsHandler.AddMember)
+	adminGroup.HandleFunc("PUT /api/admin/projects/members/", projectsHandler.UpdateMemberRole)
+	adminGroup.HandleFunc("DELETE /api/admin/projects/members/", projectsHandler.RemoveMember)
 
-		// Audit logs
-		{"GET /api/admin/audit-logs", auditHandler.GetAuditLogs},
-	}
+	// Webhooks
+	adminGroup.HandleFunc("GET /api/admin/webhooks", webhooksHandler.GetWebhooks)
+	adminGroup.HandleFunc("POST /api/admin/webhooks", webhooksHandler.CreateWebhook)
+	adminGroup.HandleFunc("PUT /api/admin/webhooks/", webhooksHandler.UpdateWebhook)
+	adminGroup.HandleFunc("DELETE /api/admin/webhooks/", webhooksHandler.DeleteWebhook)
+	adminGroup.HandleFunc("POST /api/admin/webhooks/test", webhooksHandler.TestWebhook)
 
-	for _, route := range adminRoutes {
-		h := rc.CORS.Handler(rc.JWT.Handler(middleware.RequireAdmin(http.HandlerFunc(route.handler))))
-		mux.HandleFunc(route.pattern, func(w http.ResponseWriter, r *http.Request) {
-			h.ServeHTTP(w, r)
-		})
-	}
+	// Audit logs
+	adminGroup.HandleFunc("GET /api/admin/audit-logs", auditHandler.GetAuditLogs)
 
 	return mux
 }

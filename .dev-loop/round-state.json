@@ -1,39 +1,39 @@
 {
   "schemaVersion": 1,
-  "roundId": "R004",
+  "roundId": "R005",
   "slice": {
-    "description": "SDK 增强：白屏检测 + 接口失败追踪(XHR/fetch) + 资源加载异常监控 + 后端回归检测 API",
+    "description": "API 职责分离：将路由分为 Write API (/api/report) 和 Read API (/api/query) 独立 handler group + 健康检查增强（各模块状态、SQLite 指标、worker 状态）+ 优雅关闭改进",
     "sourceFiles": [
-      "sdk/src/index.ts",
-      "collector/storage/performance-store.go",
-      "collector/handler/performance_handler.go",
-      "collector/model/performance.go",
-      "collector/storage/performance-store_test.go"
+      "collector/routes.go",
+      "collector/handler/health.go",
+      "collector/handler/health_test.go",
+      "collector/main.go",
+      "collector/worker/worker.go"
     ],
     "acceptanceCriteria": [
       "cd collector && go build ./... exit 0",
-      "cd collector && go test ./storage/... ./handler/... exit 0",
-      "SDK 白屏检测：DOM ready 后 3s 内 body 无可见内容 → 上报 blank_page 事件",
-      "SDK 接口追踪：拦截 fetch/XHR，记录失败请求（status>=400 或网络错误）",
-      "SDK 资源监控：PerformanceObserver entryTypes=['resource']，捕获 transferSize=0 或失败资源",
-      "后端 API: GET /api/query/performance/regressions — 自动检测版本间性能退化（P75 恶化>20%）"
+      "cd collector && go test ./handler/... ./worker/... exit 0",
+      "路由分为 writeGroup 和 readGroup，各有独立中间件链",
+      "writeGroup 只接受 POST，有 rate limit",
+      "health API 返回：db_status, db_size, worker_count, uptime, goroutine_count, memory_stats",
+      "优雅关闭：SIGTERM → 停止接收新请求 → drain 写缓冲 → 停止 workers → 退出"
     ],
     "maxFiles": 5,
     "estimatedComplexity": "medium"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T14:35:00+08:00",
+  "startedAt": "2026-06-13T14:42:00+08:00",
   "filesChanged": [
-    "sdk/src/index.ts",
-    "collector/storage/performance-store.go",
-    "collector/handler/performance_handler.go",
-    "collector/model/performance.go",
-    "collector/storage/performance-store_test.go"
+    "collector/routes.go",
+    "collector/handler/health.go",
+    "collector/handler/health_test.go",
+    "collector/main.go",
+    "collector/worker/worker.go"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
-  "verifySliceCmd": "cd collector && go test ./storage/... ./handler/...",
+  "verifySliceCmd": "cd collector && go test ./handler/... ./worker/...",
   "verifyBuildPassed": true,
   "verifySlicePassed": true,
-  "completedAt": "2026-06-13T15:15:00+08:00",
+  "completedAt": "2026-06-13T14:46:30+08:00",
   "commitSha": null
 }

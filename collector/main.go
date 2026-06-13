@@ -56,11 +56,6 @@ func main() {
 		slog.Error("Failed to initialize database", "error", err)
 		os.Exit(1)
 	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			slog.Error("Failed to close database", "error", err)
-		}
-	}()
 
 	slog.Info("Database initialized successfully")
 
@@ -77,7 +72,6 @@ func main() {
 		slog.Error("Failed to initialize legacy DB", "error", err)
 		os.Exit(1)
 	}
-	defer db.Close()
 
 	// Ensure cobrowsing tables exist
 	db.EnsureCobrowseTables()
@@ -158,11 +152,6 @@ func main() {
 		FlushInterval: time.Duration(cfg.Buffer.FlushInterval) * time.Millisecond,
 		BatchSize:     cfg.Buffer.FlushBatchSize,
 	})
-	defer func() {
-		if err = writer.Close(); err != nil {
-			slog.Error("Failed to close writer", "error", err)
-		}
-	}()
 
 	slog.Info("Buffer writer initialized", "size", cfg.Buffer.Size, "intervalMs", cfg.Buffer.FlushInterval, "batch", cfg.Buffer.FlushBatchSize)
 
@@ -233,20 +222,17 @@ func main() {
 		slog.Error("Failed to start worker manager", "error", err)
 		os.Exit(1)
 	}
-	defer workerManager.Stop()
 
 	slog.Info("Worker manager started", "workers", workerManager.WorkerCount())
 
 	// Start webhook manager (Slice 4)
 	// Note: Webhook manager runs in background goroutines, no need to start explicitly
-	defer webhookManager.Stop()
 	slog.Info("Webhook manager initialized")
 
 	// Start persistent webhook retry worker
 	persistentQueue := webhook.NewPersistentQueue(db)
 	retryWorker := webhook.NewRetryWorker(persistentQueue, db)
 	go retryWorker.Start(30 * time.Second)
-	defer retryWorker.Stop()
 	slog.Info("Webhook persistent retry worker started")
 
 	// Initialize config watcher
@@ -275,7 +261,6 @@ func main() {
 	if err := configWatcher.Start(cfg); err != nil {
 		slog.Warn("Failed to start config watcher, continuing without hot reload", "error", err)
 	}
-	defer configWatcher.Stop()
 
 	// Initialize cobrowse hub
 	cobrowseHub := handler.NewCoBrowseHub(db)
@@ -304,7 +289,6 @@ func main() {
 		slog.Info("Cobrowse admin access requires JWT login (no legacy admin_tokens configured)")
 	}
 	cobrowseHub.SetAllowedOrigins(cfg.Server.AllowedOrigins)
-	defer cobrowseHub.Close()
 
 	// Register cobrowse WebSocket routes (with JWT auth support)
 	cobrowseHub.RegisterRoutes(mux)
@@ -343,15 +327,59 @@ func main() {
 
 	slog.Info("Shutting down server...")
 
-	// Graceful shutdown
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	// Graceful shutdown sequence:
+	// 1. Stop receiving new HTTP requests (10s timeout)
+	slog.Info("Stopping HTTP server...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("Server shutdown error", "error", err)
+	} else {
+		slog.Info("HTTP server stopped")
 	}
 
-	slog.Info("Server stopped")
+	// 2. Flush write buffer to ensure all data is persisted
+	slog.Info("Flushing buffer writer...")
+	if err := writer.Close(); err != nil {
+		slog.Error("Failed to close writer", "error", err)
+	} else {
+		slog.Info("Buffer writer flushed and closed")
+	}
+
+	// 3. Stop all background workers
+	slog.Info("Stopping workers...")
+	if err := workerManager.Stop(); err != nil {
+		slog.Error("Worker manager stop error", "error", err)
+	} else {
+		slog.Info("Workers stopped")
+	}
+
+	// 4. Close database connections
+	slog.Info("Closing database connections...")
+	if err := store.Close(); err != nil {
+		slog.Error("Failed to close store", "error", err)
+	}
+	if err := db.Close(); err != nil {
+		slog.Error("Failed to close database", "error", err)
+	} else {
+		slog.Info("Database closed")
+	}
+
+	// 5. Stop other services
+	slog.Info("Stopping webhook manager...")
+	webhookManager.Stop()
+
+	slog.Info("Stopping config watcher...")
+	configWatcher.Stop()
+
+	slog.Info("Stopping cobrowse hub...")
+	cobrowseHub.Close()
+
+	slog.Info("Stopping webhook retry worker...")
+	retryWorker.Stop()
+
+	slog.Info("Shutdown complete")
 }
 
 // seedAdminUser creates the default admin user if no users exist
