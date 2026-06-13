@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/storage"
 )
 
@@ -577,28 +578,18 @@ func (h *ProjectsHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 
 // Helper functions
 
+// getUserIDFromContext extracts the user ID from the request context.
+// It first tries to get the user ID from JWT context set by the JWT middleware.
+// If not found, it returns 0 indicating no authenticated user.
 func getUserIDFromContext(r *http.Request) int64 {
-	// This should be extracted from JWT context
-	// For now, return 0 (no user)
-	// TODO: Implement proper JWT context extraction
-	if userID := r.Context().Value("user_id"); userID != nil {
-		if id, ok := userID.(int64); ok {
-			return id
-		}
-	}
-	return 0
+	return middleware.GetUserID(r)
 }
 
+// getUserRoleFromContext extracts the user role from the request context.
+// It first tries to get the role from JWT context set by the JWT middleware.
+// If not found, it returns empty string indicating no role.
 func getUserRoleFromContext(r *http.Request) string {
-	// This should be extracted from JWT context
-	// For now, return empty string (no role)
-	// TODO: Implement proper JWT context extraction
-	if role := r.Context().Value("user_role"); role != nil {
-		if r, ok := role.(string); ok {
-			return r
-		}
-	}
-	return ""
+	return middleware.GetRole(r)
 }
 
 func respondJSON(w http.ResponseWriter, data interface{}) {

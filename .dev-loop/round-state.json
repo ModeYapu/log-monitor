@@ -1,32 +1,38 @@
 {
   "schemaVersion": 1,
-  "roundId": "R008",
+  "roundId": "R009",
   "slice": {
-    "description": "Vue 3 CDN + Element Plus Dashboard SPA — 7 pages with full API integration",
+    "description": "Architecture fix — handler layer interface decoupling + code review fixes",
     "sourceFiles": [
-      "dashboard/index.html",
-      "collector/routes.go"
+      "collector/handler/service.go",
+      "collector/handler/projects.go",
+      "collector/worker/worker_test.go"
     ],
     "acceptanceCriteria": [
-      "dashboard/index.html exists as standalone Vue 3 CDN SPA",
-      "Includes 7 pages: Dashboard, Events, Issues, Alerts, Performance, Audit Logs, Settings",
-      "Uses Vue 3 + Element Plus + Chart.js + Day.js from CDN",
-      "All API calls use fetch with error handling",
-      "Collector serves dashboard as static files at /",
-      "go build ./collector/... exit 0"
+      "handler/service.go defines service interfaces for handler layer",
+      "handler/projects.go JWT context extraction TODO removed",
+      "collector/worker/worker_test.go covers Manager methods",
+      "go build ./... exit 0",
+      "go test ./... exit 0",
+      "go vet ./... exit 0"
     ],
-    "maxFiles": 2,
-    "estimatedComplexity": "medium"
+    "maxFiles": 3,
+    "estimatedComplexity": "low"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T16:18:00+08:00",
+  "startedAt": "2026-06-13T16:34:00+08:00",
   "filesChanged": [
-    "dashboard/index.html",
-    "collector/routes.go",
-    "R008_TASK.md"
+    "collector/handler/service.go",
+    "collector/handler/projects.go",
+    "collector/worker/worker_test.go",
+    ".dev-loop/round-state.json"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
   "verifyBuildPassed": true,
-  "completedAt": "2026-06-13T16:22:00+08:00",
-  "commitSha": "cccdd4d94320b6703d285d6712aea1dda6df0748"
+  "verifyTestCmd": "cd collector && go test ./...",
+  "verifyTestPassed": true,
+  "verifyVetCmd": "cd collector && go vet ./...",
+  "verifyVetPassed": true,
+  "completedAt": "2026-06-13T16:37:00+08:00",
+  "commitSha": "75125436a3b1235d9fe8c1ad4d2fa95491a7b6cc"
 }
