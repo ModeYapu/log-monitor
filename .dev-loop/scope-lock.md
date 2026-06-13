@@ -1,21 +1,20 @@
-# Scope Lock — LogMonitor P4: 多租户与权限
+# Scope Lock — LogMonitor P5: 性能监控增强
 
 ## Original Requirement
-实现 LogMonitor 的多租户与权限系统，支持多项目隔离、角色管理、API Token、审计日志。
+实现 LogMonitor 的 Web Vitals 性能监控增强，包括 Core Web Vitals 指标采集、白屏检测、长任务监控、接口失败追踪、资源加载异常、页面性能趋势图和版本对比。
 
 ## In Scope
-- [ ] 项目(Project)数据模型 + CRUD API
-- [ ] API Key / Token 认证中间件（替代当前的硬编码认证）
-- [ ] 角色：admin / developer / readonly
-- [ ] 项目级数据隔离（日志、告警、录屏、issue 按项目过滤）
-- [ ] 审计日志（谁在什么时候做了什么操作）
+- [ ] Web Vitals 指标采集（FCP/LCP/CLS/INP/TTFB）
+- [ ] Performance Event 模型和存储
+- [ ] 性能数据查询 API（聚合+趋势+对比）
+- [ ] SDK 采集 Web Vitals 数据
+- [ ] 性能 Dashboard 后端 API（Top pages/performance trends/version comparison）
 
 ## Explicitly Out of Scope
-- P5 性能监控增强（Web Vitals 等）
+- 前端 Dashboard UI（先做后端 API + SDK）
+- 多浏览器兼容性测试
 - P6 后端职责拆分
-- 前端用户管理 UI（先做后端 API）
-- OAuth / SSO 外部认证集成
-- 多数据库支持
+- AI 自动分析
 
-## Locked At: 2026-06-13T14:01:00+08:00
-## Locked By: Round R001
+## Locked At: 2026-06-13T14:24:00+08:00
+## Locked By: Round R003

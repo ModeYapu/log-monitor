@@ -113,6 +113,11 @@ func (s *SQLiteStore) AuditLogs() AuditStore {
 	return s.db
 }
 
+// PerformanceMetrics returns the performance store
+func (s *SQLiteStore) PerformanceMetrics() PerformanceStore {
+	return s.db
+}
+
 // Close closes the database connection
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

@@ -1,44 +1,44 @@
 {
   "schemaVersion": 1,
-  "roundId": "R002",
+  "roundId": "R003",
   "slice": {
-    "description": "实现审计日志系统：记录谁在什么时候对哪个项目做了什么操作，提供查询 API",
+    "description": "补齐 SDK Web Vitals 采集（FCP/LCP/CLS）+ 后端性能分析 API（聚合查询+趋势+版本对比）",
     "sourceFiles": [
-      "collector/model/audit.go",
-      "collector/storage/audit-store.go",
-      "collector/storage/audit-store_test.go",
-      "collector/middleware/audit.go",
-      "collector/handler/audit_handler.go"
+      "sdk/src/index.ts",
+      "collector/handler/performance_handler.go",
+      "collector/storage/performance-store.go",
+      "collector/storage/performance-store_test.go",
+      "collector/model/performance.go"
     ],
     "acceptanceCriteria": [
-      "go build ./collector/... exit 0",
-      "go test ./collector/storage/... exit 0",
-      "AuditLog 模型包含 id, project_id, user_id, action, resource, detail, ip, user_agent, created_at",
-      "AuditMiddleware 自动记录写操作",
-      "查询 API 支持分页和过滤",
-      "SQLite 自动建表 audit_logs"
+      "cd collector && go build ./... exit 0",
+      "cd collector && go test ./storage/... ./handler/... exit 0",
+      "SDK 新增 FCP/LCP/CLS 采集（PerformanceObserver）",
+      "PerformanceMetric 模型：page_url, metric_name, value, rating(good/needs-improvement/poor), project_id",
+      "后端 API: GET /api/query/performance/summary — 按 page 聚合 Web Vitals P75",
+      "后端 API: GET /api/query/performance/trend — 时间趋势",
+      "后端 API: GET /api/query/performance/compare — 版本对比"
     ],
     "maxFiles": 5,
     "estimatedComplexity": "medium"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T14:20:00+08:00",
+  "startedAt": "2026-06-13T14:25:00+08:00",
   "filesChanged": [
-    "collector/model/audit.go",
-    "collector/storage/audit-store.go",
-    "collector/storage/audit-store_test.go",
-    "collector/middleware/audit.go",
-    "collector/handler/audit_handler.go",
+    "sdk/src/index.ts",
+    "collector/model/performance.go",
+    "collector/storage/performance-store.go",
+    "collector/storage/performance-store_test.go",
     "collector/storage/interfaces.go",
     "collector/storage/sqlite_store.go",
+    "collector/handler/performance_handler.go",
     "collector/routes.go",
-    "collector/main.go",
-    "collector/storage/event-store_test.go"
+    "collector/main.go"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
-  "verifySliceCmd": "cd collector && go test ./storage/... ./middleware/... ./handler/...",
+  "verifySliceCmd": "cd collector && go test ./storage/... ./handler/...",
   "verifyBuildPassed": true,
   "verifySlicePassed": true,
-  "completedAt": "2026-06-13T14:25:00+08:00",
+  "completedAt": "2026-06-13T14:31:00+08:00",
   "commitSha": null
 }

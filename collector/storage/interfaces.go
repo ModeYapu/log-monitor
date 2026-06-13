@@ -143,6 +143,14 @@ type AuditStore interface {
 	QueryAuditLogs(filter model.AuditFilter) ([]*model.AuditLog, int64, error)
 }
 
+// PerformanceStore handles performance metric operations
+type PerformanceStore interface {
+	InsertPerformanceMetric(metric *model.PerformanceMetric) error
+	GetPerformanceSummaryByPage(projectID int64, metricName string, period string) ([]*model.PagePerformanceSummary, error)
+	GetPerformanceTrendByPage(projectID int64, pageURL string, metricName string, days int) ([]*model.DailyMetric, error)
+	GetPerformanceComparison(projectID int64, metricName string, releaseA, releaseB string) ([]*model.ReleaseComparison, error)
+}
+
 // Store combines all repositories for easy dependency injection
 type Store interface {
 	Events() EventStore

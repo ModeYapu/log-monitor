@@ -88,6 +88,9 @@ func main() {
 	// Ensure audit logs table exists
 	db.EnsureAuditLogsTable()
 
+	// Ensure performance metrics table exists (R003)
+	db.EnsurePerformanceMetricsTable()
+
 	// Initialize source map storage
 	smStorage, err := storage.NewSourceMapStorage("/opt/logmonitor/data")
 	if err != nil {

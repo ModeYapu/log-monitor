@@ -693,8 +693,43 @@ function setupEnhancedPerformance(): void {
     });
     inpObserver.observe({ entryTypes: ['event'] });
 
+    // FCP (First Contentful Paint)
+    const fcpObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.name === 'first-contentful-paint') {
+          collectedPerformance['fcp'] = entry.startTime;
+          // FCP only fires once, disconnect after capture
+          fcpObserver.disconnect();
+          break;
+        }
+      }
+    });
+    fcpObserver.observe({ entryTypes: ['paint'] });
+
+    // LCP (Largest Contentful Paint)
+    const lcpObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        // LCP can update multiple times, keep the latest/highest value
+        collectedPerformance['lcp'] = entry.startTime;
+      }
+    });
+    lcpObserver.observe({ entryTypes: ['largest-contentful-paint'] });
+
+    // CLS (Cumulative Layout Shift)
+    let clsValue = 0;
+    const clsObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        // Only count layout shifts without recent user input
+        if (!(entry as any).hadRecentInput) {
+          clsValue += (entry as any).value;
+          collectedPerformance['cls'] = clsValue;
+        }
+      }
+    });
+    clsObserver.observe({ entryTypes: ['layout-shift'] });
+
   } catch (err) {
-    // Long task / INP not supported, that's fine
+    // Long task / INP / Web Vitals not supported, that's fine
   }
 
   // TTFB from navigation timing

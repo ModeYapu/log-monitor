@@ -24,6 +24,7 @@ type RouterConfig struct {
 	CORS           *middleware.CORS
 	WebhookManager *webhook.Manager
 	OpenAPISpec    []byte
+	PerformanceHandler *handler.PerformanceHandler
 }
 
 // SetupRoutes configures all HTTP routes and returns the serve mux.
@@ -47,6 +48,10 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	screenshotHandler := handler.NewScreenshotHandler("./data/screenshots")
 	screenshotFileHandler := handler.NewScreenshotFileHandler("./data/screenshots")
 	auditHandler := handler.NewAuditHandler(rc.DB)
+	performanceHandler := rc.PerformanceHandler
+	if performanceHandler == nil {
+		performanceHandler = handler.NewPerformanceHandler(rc.DB)
+	}
 
 	sourceMapHandler.SetAllowedOrigins(rc.Config.Server.AllowedOrigins)
 
@@ -86,6 +91,11 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 		{"GET /api/query/performance/trend", queryHandler.QueryPerformanceTrend},
 		{"GET /api/query/performance/pages", queryHandler.QueryPerformancePages},
 		{"GET /api/query/performance/regression", queryHandler.QueryPerformanceRegression},
+
+		// Performance metrics - Web Vitals (R003)
+		{"GET /api/query/performance/summary-by-page", performanceHandler.GetPerformanceSummary},
+		{"GET /api/query/performance/trend-by-page", performanceHandler.GetPerformanceTrend},
+		{"GET /api/query/performance/compare-releases", performanceHandler.GetPerformanceComparison},
 
 		// Query - anomaly
 		{"GET /api/query/anomaly/new-errors", queryHandler.QueryNewErrors},
