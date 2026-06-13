@@ -1,41 +1,32 @@
 {
   "schemaVersion": 1,
-  "roundId": "R006",
+  "roundId": "R008",
   "slice": {
-    "description": "OpenAPI 文档自动生成 + E2E Verifier 联动 Webhook（发布前验证→发布后监控闭环）+ 事件类型细化（resource/api/user_action）",
+    "description": "Vue 3 CDN + Element Plus Dashboard SPA — 7 pages with full API integration",
     "sourceFiles": [
-      "collector/handler/openapi.go",
-      "collector/handler/webhooks.go",
-      "collector/model/event.go",
-      "collector/handler/report.go",
-      "collector/webhook/e2e_verifier.go"
+      "dashboard/index.html",
+      "collector/routes.go"
     ],
     "acceptanceCriteria": [
-      "cd collector && go build ./... exit 0",
-      "cd collector && go test ./handler/... exit 0",
-      "OpenAPI spec 包含所有 /api/query/* 和 /api/admin/* 端点的文档",
-      "Webhook 支持 e2e_verifier 类型：发布前触发验证→发布后接收结果",
-      "Event Type 新增 resource/api_error/user_action 三种类型常量",
-      "Report handler 根据 event type 路由到不同的处理逻辑"
+      "dashboard/index.html exists as standalone Vue 3 CDN SPA",
+      "Includes 7 pages: Dashboard, Events, Issues, Alerts, Performance, Audit Logs, Settings",
+      "Uses Vue 3 + Element Plus + Chart.js + Day.js from CDN",
+      "All API calls use fetch with error handling",
+      "Collector serves dashboard as static files at /",
+      "go build ./collector/... exit 0"
     ],
-    "maxFiles": 5,
+    "maxFiles": 2,
     "estimatedComplexity": "medium"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T14:50:00+08:00",
+  "startedAt": "2026-06-13T16:18:00+08:00",
   "filesChanged": [
-    "collector/handler/openapi.go",
-    "collector/model/event.go",
-    "collector/handler/report.go",
-    "collector/webhook/e2e_verifier.go",
-    "collector/storage/verification-store.go",
+    "dashboard/index.html",
     "collector/routes.go",
-    "collector/main.go"
+    "R008_TASK.md"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
-  "verifySliceCmd": "cd collector && go test ./handler/...",
   "verifyBuildPassed": true,
-  "verifySlicePassed": true,
-  "completedAt": "2026-06-13T14:51:00+08:00",
-  "commitSha": null
+  "completedAt": "2026-06-13T16:22:00+08:00",
+  "commitSha": "cccdd4d94320b6703d285d6712aea1dda6df0748"
 }
