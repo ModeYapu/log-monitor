@@ -1,31 +1,35 @@
 {
   "schemaVersion": 1,
-  "roundId": "R009",
+  "roundId": "R010",
   "slice": {
-    "description": "Architecture fix — handler layer interface decoupling + code review fixes",
+    "description": "Dashboard frontend enhancement + SDK optimization + webhook E2E verifier tests",
     "sourceFiles": [
-      "collector/handler/service.go",
-      "collector/handler/projects.go",
-      "collector/worker/worker_test.go"
+      "dashboard/index.html",
+      "sdk/src/index.ts",
+      "collector/webhook/e2e_verifier_test.go"
     ],
     "acceptanceCriteria": [
-      "handler/service.go defines service interfaces for handler layer",
-      "handler/projects.go JWT context extraction TODO removed",
-      "collector/worker/worker_test.go covers Manager methods",
+      "Dashboard: real-time event stream with 5s polling",
+      "Dashboard: dark mode toggle with Element Plus dark theme",
+      "Dashboard: Chart.js performance charts (FCP/LCP/CLS 7-day trends)",
+      "Dashboard: audit log timeline with user avatars",
+      "SDK: beforeSend hook for event filtering/modification",
+      "SDK: performanceSampleRate for independent performance event sampling",
+      "SDK: setUser/clearUser API for user context",
+      "SDK: cleanStack for error stack formatting",
+      "Webhook: comprehensive e2e_verifier_test.go",
       "go build ./... exit 0",
-      "go test ./... exit 0",
-      "go vet ./... exit 0"
+      "go test ./... exit 0"
     ],
-    "maxFiles": 3,
-    "estimatedComplexity": "low"
+    "maxFiles": 5,
+    "estimatedComplexity": "medium"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T16:34:00+08:00",
+  "startedAt": "2026-06-13T17:46:00+08:00",
   "filesChanged": [
-    "collector/handler/service.go",
-    "collector/handler/projects.go",
-    "collector/worker/worker_test.go",
-    ".dev-loop/round-state.json"
+    "dashboard/index.html",
+    "sdk/src/index.ts",
+    "collector/webhook/e2e_verifier_test.go"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
   "verifyBuildPassed": true,
@@ -33,6 +37,6 @@
   "verifyTestPassed": true,
   "verifyVetCmd": "cd collector && go vet ./...",
   "verifyVetPassed": true,
-  "completedAt": "2026-06-13T16:37:00+08:00",
-  "commitSha": "75125436a3b1235d9fe8c1ad4d2fa95491a7b6cc"
+  "completedAt": "2026-06-13T17:52:00+08:00",
+  "commitSha": "a6603c7"
 }
