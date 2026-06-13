@@ -15,7 +15,7 @@ import (
 // AlertsHandler handles alert-related requests
 type AlertsHandler struct {
 	alertStore storage.AlertStore
-	db        *storage.DB // Keep for legacy methods
+	db         *storage.DB // Keep for legacy methods
 }
 
 // NewAlertsHandler creates a new alerts handler
@@ -76,15 +76,15 @@ func (h *AlertsHandler) GetAlerts(w http.ResponseWriter, r *http.Request) {
 
 // CreateAlertRequest represents the request to create/update an alert rule
 type CreateAlertRequest struct {
-	AppID            string          `json:"app_id"`
-	Name             string          `json:"name"`
-	ConditionType    string          `json:"condition_type"`   // threshold|rate|new_error
-	ConditionConfig  json.RawMessage `json:"condition_config"` // JSON string
-	NotifyType       string          `json:"notify_type"`      // webhook|feishu|email
-	NotifyConfig     json.RawMessage `json:"notify_config"`    // JSON string
-	Enabled          bool            `json:"enabled"`
-	CooldownMinutes  int             `json:"cooldown_minutes"`
-	MessageTemplate  string          `json:"message_template"`  // Optional message template
+	AppID           string          `json:"app_id"`
+	Name            string          `json:"name"`
+	ConditionType   string          `json:"condition_type"`   // threshold|rate|new_error
+	ConditionConfig json.RawMessage `json:"condition_config"` // JSON string
+	NotifyType      string          `json:"notify_type"`      // webhook|feishu|email
+	NotifyConfig    json.RawMessage `json:"notify_config"`    // JSON string
+	Enabled         bool            `json:"enabled"`
+	CooldownMinutes int             `json:"cooldown_minutes"`
+	MessageTemplate string          `json:"message_template"` // Optional message template
 }
 
 // CreateAlert creates a new alert rule
@@ -115,16 +115,16 @@ func (h *AlertsHandler) CreateAlert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rule := storage.AlertRule{
-		AppID:            req.AppID,
-		Name:             req.Name,
-		ConditionType:    req.ConditionType,
-		ConditionConfig:  conditionConfig,
-		NotifyType:       req.NotifyType,
-		NotifyConfig:     notifyConfig,
-		Enabled:          boolToInt(req.Enabled),
-		CooldownMinutes:  req.CooldownMinutes,
-		MessageTemplate:  req.MessageTemplate,
-		CreatedAt:        time.Now().UnixMilli(),
+		AppID:           req.AppID,
+		Name:            req.Name,
+		ConditionType:   req.ConditionType,
+		ConditionConfig: conditionConfig,
+		NotifyType:      req.NotifyType,
+		NotifyConfig:    notifyConfig,
+		Enabled:         boolToInt(req.Enabled),
+		CooldownMinutes: req.CooldownMinutes,
+		MessageTemplate: req.MessageTemplate,
+		CreatedAt:       time.Now().UnixMilli(),
 	}
 
 	id, err := h.db.CreateAlertRule(rule)
@@ -279,8 +279,8 @@ func (h *AlertsHandler) TestAlert(w http.ResponseWriter, r *http.Request) {
 
 // SilenceAlertRequest represents the request to silence an alert
 type SilenceAlertRequest struct {
-	ID             int64  `json:"id"`
-	DurationMinutes int    `json:"durationMinutes"`
+	ID              int64 `json:"id"`
+	DurationMinutes int   `json:"durationMinutes"`
 }
 
 // SilenceAlert silences an alert for a specified duration
@@ -319,7 +319,7 @@ func (h *AlertsHandler) SilenceAlert(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":       true,
-		"silencedUntil":  silencedUntil,
+		"silencedUntil": silencedUntil,
 		"message":       fmt.Sprintf("Alert silenced for %d minutes", duration),
 	})
 }

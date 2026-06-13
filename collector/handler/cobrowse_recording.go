@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"encoding/json"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"github.com/logmonitor/collector/middleware"
 	"net/http"
@@ -11,8 +11,8 @@ import (
 )
 
 type RecordingHandler struct {
-	hub  *CoBrowseHub
-	db   CoBrowseDB
+	hub *CoBrowseHub
+	db  CoBrowseDB
 }
 
 // NewRecordingHandler creates a new recording handler

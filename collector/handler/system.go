@@ -13,12 +13,12 @@ import (
 
 // SystemHandler handles system-related requests
 type SystemHandler struct {
-	systemStore  storage.SystemStore
-	db          *storage.DB // Keep for legacy methods
-	dbPath      string
-	startTime   time.Time
+	systemStore   storage.SystemStore
+	db            *storage.DB // Keep for legacy methods
+	dbPath        string
+	startTime     time.Time
 	retentionDays int
-	version     string
+	version       string
 }
 
 // NewSystemHandler creates a new system handler
@@ -47,23 +47,23 @@ func NewSystemHandlerWithStore(systemStore storage.SystemStore, db *storage.DB, 
 
 // SystemInfo represents system information
 type SystemInfo struct {
-	Status          string  `json:"status"`
-	Version         string  `json:"version"`
-	DBSize          int64   `json:"dbSize"`
-	TotalEvents     int64   `json:"totalEvents"`
-	TotalRecordings int64   `json:"totalRecordings"`
-	RetentionDays   int     `json:"retentionDays"`
-	Uptime          int64   `json:"uptime"`
-	ServerTime      int64   `json:"serverTime"`
-	LastCleanupTime int64   `json:"lastCleanupTime"`
+	Status          string `json:"status"`
+	Version         string `json:"version"`
+	DBSize          int64  `json:"dbSize"`
+	TotalEvents     int64  `json:"totalEvents"`
+	TotalRecordings int64  `json:"totalRecordings"`
+	RetentionDays   int    `json:"retentionDays"`
+	Uptime          int64  `json:"uptime"`
+	ServerTime      int64  `json:"serverTime"`
+	LastCleanupTime int64  `json:"lastCleanupTime"`
 }
 
 // CleanupResult represents the result of a cleanup operation
 type CleanupResult struct {
-	EventsDeleted           int64 `json:"eventsDeleted"`
-	RecordingEventsDeleted  int64 `json:"recordingEventsDeleted"`
-	AlertLogsDeleted        int64 `json:"alertLogsDeleted"`
-	LastCleanupTime         int64 `json:"lastCleanupTime"`
+	EventsDeleted          int64 `json:"eventsDeleted"`
+	RecordingEventsDeleted int64 `json:"recordingEventsDeleted"`
+	AlertLogsDeleted       int64 `json:"alertLogsDeleted"`
+	LastCleanupTime        int64 `json:"lastCleanupTime"`
 }
 
 // GetSystemInfo returns system information

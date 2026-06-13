@@ -39,19 +39,19 @@ type BufferConfig struct {
 
 // AlertConfig holds alert configuration
 type AlertConfig struct {
-	CheckInterval int            `yaml:"check_interval_ms"`
-	Email         EmailConfig    `yaml:"email"`
+	CheckInterval int         `yaml:"check_interval_ms"`
+	Email         EmailConfig `yaml:"email"`
 }
 
 // EmailConfig holds email notification configuration
 type EmailConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	SMTPHost string `yaml:"smtp_host"`
-	SMTPPort string `yaml:"smtp_port"`
-	SMTPUser string `yaml:"smtp_user"`
-	SMTPPass string `yaml:"smtp_pass"`
+	Enabled   bool   `yaml:"enabled"`
+	SMTPHost  string `yaml:"smtp_host"`
+	SMTPPort  string `yaml:"smtp_port"`
+	SMTPUser  string `yaml:"smtp_user"`
+	SMTPPass  string `yaml:"smtp_pass"`
 	FromEmail string `yaml:"from_email"`
-	FromName string `yaml:"from_name"`
+	FromName  string `yaml:"from_name"`
 }
 
 // AuthConfig holds authentication configuration

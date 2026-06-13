@@ -118,7 +118,7 @@ func (h *ProjectsHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	// Add member counts and event counts for each project
 	type ProjectWithStats struct {
 		storage.Project
-		MemberCount int `json:"member_count"`
+		MemberCount int   `json:"member_count"`
 		EventCount  int64 `json:"event_count"`
 	}
 

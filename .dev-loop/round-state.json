@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "roundId": "R001",
+  "slice": {
+    "description": "P3 Slice 1: Source Map 上传 API 增强 — 支持批量上传、版本关联、文件校验、过期清理",
+    "sourceFiles": [
+      "collector/handler/sourcemap.go",
+      "collector/storage/sourcemap.go"
+    ],
+    "acceptanceCriteria": [
+      "go build ./... exit 0",
+      "go test ./... exit 0",
+      "POST /api/sourcemaps/upload 支持 multipart 多文件上传",
+      "Source Map 文件按 appId + release + 文件名组织存储",
+      "重复上传同版本文件会覆盖旧文件"
+    ],
+    "maxFiles": 6,
+    "estimatedComplexity": "medium",
+    "dependencies": ["P2 后端拆分已完成"]
+  },
+  "phase": "developing",
+  "startedAt": "2026-06-13T12:55:00+08:00",
+  "filesChanged": [],
+  "verifyBuildCmd": "cd /home/coder/log-monitor/collector && go build ./...",
+  "verifySliceCmd": "cd /home/coder/log-monitor/collector && go test ./...",
+  "verifyBuildPassed": null,
+  "verifySlicePassed": null,
+  "completedAt": null,
+  "commitSha": null
+}

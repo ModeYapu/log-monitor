@@ -8,21 +8,21 @@ import (
 
 // SourceMap represents a parsed source map
 type SourceMap struct {
-	Version    int                    `json:"version"`
-	File       string                 `json:"file"`
-	SourceRoot string                 `json:"sourceRoot"`
-	Sources    []string               `json:"sources"`
-	SourcesContent []string           `json:"sourcesContent"`
-	Mappings   string                 `json:"mappings"`
-	Names      []string               `json:"names"`
+	Version        int      `json:"version"`
+	File           string   `json:"file"`
+	SourceRoot     string   `json:"sourceRoot"`
+	Sources        []string `json:"sources"`
+	SourcesContent []string `json:"sourcesContent"`
+	Mappings       string   `json:"mappings"`
+	Names          []string `json:"names"`
 }
 
 // OriginalPosition represents an original source position
 type OriginalPosition struct {
-	Source     string `json:"source"`
-	Line       int    `json:"line"`
-	Column     int    `json:"column"`
-	Name       string `json:"name,omitempty"`
+	Source string `json:"source"`
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+	Name   string `json:"name,omitempty"`
 }
 
 // Parser parses and processes source maps
@@ -155,7 +155,7 @@ func decodeVLQSegment(segment string) ([]int, error) {
 		// Check continuation bit (bit 5)
 		if (v & 0x20) == 0 {
 			// Extract sign bit (bit 0 of each VLQ value)
-			if value & 1 == 1 {
+			if value&1 == 1 {
 				value = -(value >> 1)
 			} else {
 				value = value >> 1
@@ -170,7 +170,7 @@ func decodeVLQSegment(segment string) ([]int, error) {
 
 	// Handle last value
 	if shift > 0 {
-		if value & 1 == 1 {
+		if value&1 == 1 {
 			value = -(value >> 1)
 		} else {
 			value = value >> 1
@@ -195,17 +195,17 @@ var vlqDecodeMap = map[string]int{
 
 // DeobfuscateStackFrame deobfuscates a single stack frame
 type StackFrame struct {
-	Filename    string `json:"filename"`
-	Line        int    `json:"line"`
-	Column      int    `json:"column"`
+	Filename     string `json:"filename"`
+	Line         int    `json:"line"`
+	Column       int    `json:"column"`
 	FunctionName string `json:"functionName,omitempty"`
 }
 
 // DeobfuscateResult represents the result of deobfuscation
 type DeobfuscateResult struct {
-	Original  StackFrame       `json:"original"`
+	Original         StackFrame        `json:"original"`
 	OriginalPosition *OriginalPosition `json:"originalPosition,omitempty"`
-	Found     bool             `json:"found"`
+	Found            bool              `json:"found"`
 }
 
 // DeobfuscateStackTrace deobfuscates a full stack trace

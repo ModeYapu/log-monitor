@@ -317,6 +317,12 @@ export const adminApi = {
 
 export default api
 
+export const sourcemapApi = {
+  // Resolve stack trace using source maps
+  resolveStackTrace: (data: { appId: string; release: string; env?: string; buildId?: string; stackTrace: { frames: Array<{ filename: string; line: number; column: number; functionName?: string }> } }) =>
+    api.post<{ resolvedFrames: Array<{ filename: string; line: number; column: number; functionName?: string; originalFilename?: string; originalLine?: number; originalColumn?: number; originalFunctionName?: string }> }>('/sourcemaps/resolve', data)
+}
+
 export const projectApi = {
   // List all projects (admin) or user's projects
   listProjects: () =>

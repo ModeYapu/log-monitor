@@ -101,9 +101,9 @@ type SimilarResponse struct {
 
 // PerformanceTrendResponse is the typed response for QueryPerformanceTrend.
 type PerformanceTrendResponse struct {
-	Metric       string                 `json:"metric"`
-	Granularity  string                 `json:"granularity"`
-	Data         []PerformanceTrendData `json:"data"`
+	Metric      string                 `json:"metric"`
+	Granularity string                 `json:"granularity"`
+	Data        []PerformanceTrendData `json:"data"`
 }
 
 // PerformancePagesResponse is the typed response for QueryPerformancePages.
@@ -120,9 +120,9 @@ type PerformanceRegressionResponse struct {
 
 // NewErrorsResponse is the typed response for QueryNewErrors.
 type NewErrorsResponse struct {
-	Data          []NewError `json:"data"`
-	Count         int        `json:"count"`
-	SinceMinutes  int        `json:"since_minutes"`
+	Data         []NewError `json:"data"`
+	Count        int        `json:"count"`
+	SinceMinutes int        `json:"since_minutes"`
 }
 
 // AlertTriggersResponse is the typed response for QueryAlertTriggers.
@@ -139,13 +139,13 @@ type ActiveSessionsResponse struct {
 
 // ClustersResponse is the typed response for GetClusters.
 type ClustersResponse struct {
-	Data   []ErrorClusterResult `json:"data"`
-	Count  int                  `json:"count"`
+	Data  []ErrorClusterResult `json:"data"`
+	Count int                  `json:"count"`
 }
 
 // ClusterDetailResponse is the typed response for GetClusterDetail.
 type ClusterDetailResponse struct {
-	Cluster ClusterStats   `json:"cluster"`
-	Events  []EventRecord  `json:"events"`
-	Total   int64          `json:"total"`
+	Cluster ClusterStats  `json:"cluster"`
+	Events  []EventRecord `json:"events"`
+	Total   int64         `json:"total"`
 }

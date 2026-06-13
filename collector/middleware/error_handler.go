@@ -21,7 +21,7 @@ func ErrorHandler(next http.Handler) http.Handler {
 		// Create a custom response writer to capture errors
 		wrapped := &errorHandlerResponseWriter{
 			ResponseWriter: w,
-			Request:       r,
+			Request:        r,
 		}
 
 		// Call the next handler

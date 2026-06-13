@@ -27,9 +27,26 @@
       </div>
 
       <div class="detail-section" v-if="log.stack">
-        <h4>堆栈跟踪</h4>
+        <div class="section-header">
+          <h4>堆栈跟踪</h4>
+          <el-button
+            size="small"
+            :disabled="!log.release"
+            :loading="resolvingStack"
+            @click="handleResolveStack"
+          >
+            {{ log.release ? '显示原始代码' : '无 release 信息' }}
+          </el-button>
+        </div>
         <div class="stack-container">
-          <pre class="mono stack-trace">{{ log.stack }}</pre>
+          <pre class="mono stack-trace" :class="{ 'stack-resolved': showOriginal && resolvedFrames.length > 0 }">
+            <template v-if="showOriginal && resolvedFrames.length > 0">
+              <span v-for="(frame, idx) in resolvedFrames" :key="idx" :class="{ 'resolved-frame': isFrameResolved(frame) }">
+                {{ formatOriginalFrame(frame, idx) }}
+              </span>
+            </template>
+            <template v-else>{{ log.stack }}</template>
+          </pre>
           <el-button size="small" :icon="DocumentCopy" @click="copyText(log.stack, '堆栈跟踪')">复制堆栈</el-button>
         </div>
       </div>
@@ -129,6 +146,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Picture, DocumentCopy } from '@element-plus/icons-vue'
+import { sourcemapApi } from '../api'
 import type { Event } from '../types'
 
 interface Props {
@@ -174,6 +192,92 @@ const breadcrumbs = computed(() => {
     return []
   }
 })
+
+// Stack trace resolution state
+const resolvingStack = ref(false)
+const showOriginal = ref(false)
+const resolvedFrames = ref<Array<{ filename: string; line: number; column: number; functionName?: string; originalFilename?: string; originalLine?: number; originalColumn?: number; originalFunctionName?: string }>>([])
+
+// Parse stack trace to extract frames (supports common JS stack formats)
+const parseStackTrace = (stack: string): Array<{ filename: string; line: number; column: number; functionName?: string }> => {
+  const frames: Array<{ filename: string; line: number; column: number; functionName?: string }> = []
+  const lines = stack.split('\n')
+
+  for (const line of lines) {
+    // Match patterns like:
+    // at FunctionName (file.js:line:col)
+    // at file.js:line:col
+    // FunctionName@file.js:line:col
+    const match = line.match(/(?:at\s+)?(?:([^\s@]+)\s+|)(?:\(?)([^\s]+):(\d+):(\d+)/)
+    if (match) {
+      const [, functionName, filename, lineStr, colStr] = match
+      frames.push({
+        functionName: functionName || '(anonymous)',
+        filename: filename || 'unknown',
+        line: parseInt(lineStr, 10) || 0,
+        column: parseInt(colStr, 10) || 0
+      })
+    }
+  }
+
+  return frames
+}
+
+// Check if a frame was successfully resolved
+const isFrameResolved = (frame: any): boolean => {
+  return frame.originalFilename !== undefined &&
+         frame.originalFilename !== frame.filename &&
+         frame.originalLine !== undefined &&
+         frame.originalLine > 0
+}
+
+// Format a frame for display in the resolved stack
+const formatOriginalFrame = (frame: any, index: number): string => {
+  const original = isFrameResolved(frame)
+    ? `    at ${frame.originalFunctionName || '(anonymous)'} (${frame.originalFilename}:${frame.originalLine}:${frame.originalColumn})`
+    : `    at ${frame.functionName || '(anonymous)'} (${frame.filename}:${frame.line}:${frame.column})`
+
+  return original + '\n'
+}
+
+// Resolve stack trace using source maps
+const handleResolveStack = async () => {
+  if (!props.log || !props.log.stack) return
+
+  resolvingStack.value = true
+  try {
+    const frames = parseStackTrace(props.log.stack)
+    if (frames.length === 0) {
+      ElMessage.warning('无法解析堆栈跟踪格式')
+      return
+    }
+
+    const { data } = await sourcemapApi.resolveStackTrace({
+      appId: props.log.app_id,
+      release: props.log.release,
+      env: props.log.env || undefined,
+      buildId: props.log.build_id || undefined,
+      stackTrace: { frames }
+    })
+
+    resolvedFrames.value = data.resolvedFrames || []
+    showOriginal.value = true
+
+    const resolvedCount = resolvedFrames.value.filter(f => isFrameResolved(f)).length
+    if (resolvedCount > 0) {
+      ElMessage.success(`成功解析 ${resolvedCount}/${frames.length} 个堆栈帧`)
+    } else {
+      ElMessage.info('未找到匹配的 source map')
+    }
+  } catch (error: any) {
+    console.error('Failed to resolve stack trace:', error)
+    const errorMsg = error?.response?.data?.message || error?.message || '解析失败'
+    ElMessage.error(`Source map 解析失败: ${errorMsg}`)
+    showOriginal.value = false
+  } finally {
+    resolvingStack.value = false
+  }
+}
 
 const formatJson = (jsonStr: string) => {
   try {
@@ -476,5 +580,34 @@ const formatBreadcrumbTime = (ts: number) => {
 .crumb-text {
   color: #e0e6ed;
   word-break: break-all;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-header h4 {
+  color: #94a3b8;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.stack-resolved {
+  background: #0d1117 !important;
+}
+
+.stack-resolved span.resolved-frame {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.stack-resolved span:not(.resolved-frame) {
+  color: #64748b;
 }
 </style>

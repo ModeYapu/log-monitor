@@ -118,36 +118,35 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			eventIP = ip
 		}
 
+		// Convert to buffer record
+		records = append(records, storage.EventRecord{
+			AppID:       appID,
+			Release:     release,
+			Type:        e.Type,
+			Level:       e.Level,
+			Message:     truncateString(e.Message, 10000),
+			Stack:       truncateString(e.Stack, 50000),
+			URL:         truncateString(e.URL, 2000),
+			Line:        e.Line,
+			Col:         e.Col,
+			Tags:        toJSON(e.Tags),
+			Extra:       toJSON(e.Extra),
+			UA:          truncateString(e.UA, 1000),
+			Screen:      e.Screen,
+			Viewport:    e.Viewport,
+			Performance: toJSON(e.Performance),
+			IP:          eventIP,
+			CreatedAt:   createdAt,
+			ProjectID:   projectID,
+		})
+	}
 
-			// Convert to buffer record
-			records = append(records, storage.EventRecord{
-				AppID:       appID,
-				Release:     release,
-				Type:        e.Type,
-				Level:       e.Level,
-				Message:     truncateString(e.Message, 10000),
-				Stack:       truncateString(e.Stack, 50000),
-				URL:         truncateString(e.URL, 2000),
-				Line:        e.Line,
-				Col:         e.Col,
-				Tags:        toJSON(e.Tags),
-				Extra:       toJSON(e.Extra),
-				UA:          truncateString(e.UA, 1000),
-				Screen:      e.Screen,
-				Viewport:    e.Viewport,
-				Performance: toJSON(e.Performance),
-				IP:          eventIP,
-				CreatedAt:   createdAt,
-				ProjectID:   projectID,
-			})
+	// Write to buffer
+	for _, r := range records {
+		if err := h.writer.Write(r); err != nil {
+			slog.Error("Failed to write event to buffer", "error", err)
 		}
-
-		// Write to buffer
-		for _, r := range records {
-			if err := h.writer.Write(r); err != nil {
-				slog.Error("Failed to write event to buffer", "error", err)
-			}
-		}
+	}
 	// Respond with success
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{

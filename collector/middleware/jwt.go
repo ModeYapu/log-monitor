@@ -28,7 +28,7 @@ const (
 
 // JWT provides JWT authentication middleware
 type JWT struct {
-	secret          []byte
+	secret           []byte
 	tokenExpireHours int
 }
 
@@ -38,14 +38,14 @@ func NewJWT(secret string, tokenExpireHours int) *JWT {
 		// Generate a random secret if not provided
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-					slog.Error("Failed to generate JWT secret", "error", err)
+			slog.Error("Failed to generate JWT secret", "error", err)
 			os.Exit(1)
 		}
 		secret = base64.StdEncoding.EncodeToString(b)
-				slog.Info("Generated JWT secret (set auth.jwt_secret in config to persist)")
+		slog.Info("Generated JWT secret (set auth.jwt_secret in config to persist)")
 	}
 	return &JWT{
-		secret:          []byte(secret),
+		secret:           []byte(secret),
 		tokenExpireHours: tokenExpireHours,
 	}
 }
@@ -118,7 +118,7 @@ func (j *JWT) Handler(next http.Handler) http.Handler {
 
 		claims, err := j.ValidateToken(tokenString)
 		if err != nil {
-					slog.Warn("Token validation failed", "error", err)
+			slog.Warn("Token validation failed", "error", err)
 			j.unauthorized(w)
 			return
 		}

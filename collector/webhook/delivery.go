@@ -15,9 +15,9 @@ import (
 
 // Deliverer handles webhook delivery with retry logic
 type Deliverer struct {
-	client    *http.Client
-	mu        sync.Mutex
-	attempts  map[int64]int // Track delivery attempts per webhook
+	client   *http.Client
+	mu       sync.Mutex
+	attempts map[int64]int // Track delivery attempts per webhook
 }
 
 // NewDeliverer creates a new webhook deliverer

@@ -8,19 +8,19 @@ import (
 
 // Issue constants
 const (
-	IssueStatusOpen      = "open"
-	IssueStatusResolved  = "resolved"
-	IssueStatusIgnored   = "ignored"
-	IssueStatusMuted     = "muted"
+	IssueStatusOpen     = "open"
+	IssueStatusResolved = "resolved"
+	IssueStatusIgnored  = "ignored"
+	IssueStatusMuted    = "muted"
 
 	IssuePriorityLow      = "low"
 	IssuePriorityMedium   = "medium"
 	IssuePriorityHigh     = "high"
 	IssuePriorityCritical = "critical"
 
-	IssueTypeError        = "error"
-	IssueTypePerformance  = "performance"
-	IssueTypeResource     = "resource"
+	IssueTypeError       = "error"
+	IssueTypePerformance = "performance"
+	IssueTypeResource    = "resource"
 )
 
 // CreateOrUpdateIssues creates or updates issues based on events with fingerprints
@@ -28,7 +28,6 @@ func (db *DB) CreateOrUpdateIssues(events []EventRecord) error {
 	if len(events) == 0 {
 		return nil
 	}
-
 
 	if db.closed.Load() {
 		return fmt.Errorf("database is closed")

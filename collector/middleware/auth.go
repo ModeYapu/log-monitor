@@ -15,8 +15,8 @@ type JWTTokenValidator interface {
 
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
-	AdminTokens  map[string]bool  // Valid admin tokens
-	UserTokens   map[string]bool  // Valid user tokens (optional)
+	AdminTokens  map[string]bool // Valid admin tokens
+	UserTokens   map[string]bool // Valid user tokens (optional)
 	Enabled      bool
 	JWTValidator JWTTokenValidator
 	mu           sync.RWMutex // Protects token maps from concurrent access
@@ -166,7 +166,7 @@ func WriteAuthError(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": "unauthorized",
+		"error":   "unauthorized",
 		"message": message,
 	})
 }

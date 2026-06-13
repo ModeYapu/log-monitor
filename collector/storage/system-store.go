@@ -189,21 +189,21 @@ func (db *DB) CleanupOldDataWithPolicy(policy *RetentionPolicy) (*CleanupResultD
 	result := db.cleanupOldData(policy.Events)
 
 	return &CleanupResultDetail{
-		EventsDeleted:         result.DeletedEvents,
+		EventsDeleted:          result.DeletedEvents,
 		RecordingEventsDeleted: 0, // Not tracked separately
-		ScreenshotsDeleted:    0, // Not implemented yet
-		AlertLogsDeleted:      0, // Not tracked separately
-		FreedBytes:           result.TotalBytesFreed,
-		LastCleanupTime:       time.Now().UnixMilli(),
+		ScreenshotsDeleted:     0, // Not implemented yet
+		AlertLogsDeleted:       0, // Not tracked separately
+		FreedBytes:             result.TotalBytesFreed,
+		LastCleanupTime:        time.Now().UnixMilli(),
 	}, nil
 }
 
 // CleanupResultDetail represents detailed cleanup operation result
 type CleanupResultDetail struct {
-	EventsDeleted         int64 `json:"events_deleted"`
+	EventsDeleted          int64 `json:"events_deleted"`
 	RecordingEventsDeleted int64 `json:"recording_events_deleted"`
-	ScreenshotsDeleted    int64 `json:"screenshots_deleted"`
-	AlertLogsDeleted      int64 `json:"alert_logs_deleted"`
-	FreedBytes           int64 `json:"freed_bytes"`
-	LastCleanupTime       int64 `json:"last_cleanup_time"`
+	ScreenshotsDeleted     int64 `json:"screenshots_deleted"`
+	AlertLogsDeleted       int64 `json:"alert_logs_deleted"`
+	FreedBytes             int64 `json:"freed_bytes"`
+	LastCleanupTime        int64 `json:"last_cleanup_time"`
 }

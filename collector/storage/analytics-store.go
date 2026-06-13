@@ -72,11 +72,11 @@ func (db *DB) GetReleaseHealth(appID string, startTime, endTime int64) (*Release
 		}
 
 		releases = append(releases, ReleaseStats{
-			Release:    s.Release,
-			Env:        s.Env,
-			Count:      s.TotalSessions,
-			ErrorRate:  errorRate,
-			CrashFree:  crashFreeRate,
+			Release:   s.Release,
+			Env:       s.Env,
+			Count:     s.TotalSessions,
+			ErrorRate: errorRate,
+			CrashFree: crashFreeRate,
 		})
 	}
 
@@ -133,12 +133,12 @@ func (db *DB) GetSessionStats(appID string, startTime, endTime int64) (*SessionS
 	}
 
 	return &SessionStatsResult{
-		TotalSessions:     totalSessions,
-		CrashSessions:     crashSessions,
-		CrashFreeRate:     crashFreeRate,
-		ErrorCount:        errorCount,
-		AvgSessionLength:  avgDuration,
-		StartTime:         firstSeen,
-		EndTime:           lastSeen,
+		TotalSessions:    totalSessions,
+		CrashSessions:    crashSessions,
+		CrashFreeRate:    crashFreeRate,
+		ErrorCount:       errorCount,
+		AvgSessionLength: avgDuration,
+		StartTime:        firstSeen,
+		EndTime:          lastSeen,
 	}, nil
 }

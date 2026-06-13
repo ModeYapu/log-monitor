@@ -28,7 +28,6 @@ type SessionHub struct {
 	parentHub   *CoBrowseHub // Reference to parent hub for removal
 }
 
-
 func (hub *SessionHub) handleUserMessages(db CoBrowseDB) {
 	conn := hub.userConn
 	defer func() {
@@ -234,7 +233,9 @@ func (hub *SessionHub) handleFullSnapshot(msg *model.CoBrowseMessage, db CoBrows
 	broadcastMsg := map[string]interface{}{"type": "rrweb-full-snapshot", "data": msg.Data}
 	data, _ := json.Marshal(broadcastMsg)
 	viewerConns := make(map[*websocket.Conn]bool, len(hub.viewerConns))
-	for conn := range hub.viewerConns { viewerConns[conn] = true }
+	for conn := range hub.viewerConns {
+		viewerConns[conn] = true
+	}
 	hub.mu.Unlock()
 
 	// DB write outside lock

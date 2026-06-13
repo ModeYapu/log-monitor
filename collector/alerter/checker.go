@@ -392,10 +392,10 @@ func (c *Checker) gatherContext(rule storage.AlertRule) AlertContext {
 
 	// Parse condition config to get window minutes
 	var config struct {
-		WindowMinutes  int    `json:"windowMinutes"`
-		AggregateBy    string `json:"aggregateBy"`
-		FilterRelease  string `json:"filterRelease"`
-		FilterPage     string `json:"filterPage"`
+		WindowMinutes int    `json:"windowMinutes"`
+		AggregateBy   string `json:"aggregateBy"`
+		FilterRelease string `json:"filterRelease"`
+		FilterPage    string `json:"filterPage"`
 	}
 	if err := json.Unmarshal([]byte(rule.ConditionConfig), &config); err == nil {
 		if config.WindowMinutes > 0 {

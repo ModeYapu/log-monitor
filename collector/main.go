@@ -171,7 +171,7 @@ func main() {
 		OpenAPISpec:    openapiSpec,
 	})
 
-		// Initialize worker manager
+	// Initialize worker manager
 	workerManager := worker.NewManager()
 
 	// Register cleanup worker

@@ -7,15 +7,15 @@ import (
 
 // CoBrowseMessage represents a WebSocket message for cobrowsing
 type CoBrowseMessage struct {
-	Type   string                 `json:"type"`   // rrweb-event, rrweb-full-snapshot, control
-	Data   json.RawMessage        `json:"data"`   // rrweb event data or control payload
-	Action string                 `json:"action"` // For control: click, input, scroll, keydown, navigate
-	X      int                    `json:"x"`      // For click action
-	Y      int                    `json:"y"`      // For click action
-	Selector string               `json:"selector"` // For input action
-	Value  string                 `json:"value"`  // For input action
-	Key    string                 `json:"key"`    // For keydown action
-	URL    string                 `json:"url"`    // For navigate action
+	Type     string          `json:"type"`     // rrweb-event, rrweb-full-snapshot, control
+	Data     json.RawMessage `json:"data"`     // rrweb event data or control payload
+	Action   string          `json:"action"`   // For control: click, input, scroll, keydown, navigate
+	X        int             `json:"x"`        // For click action
+	Y        int             `json:"y"`        // For click action
+	Selector string          `json:"selector"` // For input action
+	Value    string          `json:"value"`    // For input action
+	Key      string          `json:"key"`      // For keydown action
+	URL      string          `json:"url"`      // For navigate action
 }
 
 // RRWebEvent represents an rrweb event
@@ -28,18 +28,18 @@ type RRWebEvent struct {
 
 // Recording represents a cobrowsing session recording
 type Recording struct {
-	ID            int64     `json:"id"`
-	SessionID     string    `json:"sessionId"`
-	AppID         string    `json:"appId"`
-	StartTime     int64     `json:"startTime"`
-	EndTime       int64     `json:"endTime"`
-	DurationMs    int64     `json:"durationMs"`
-	EventCount    int       `json:"eventCount"`
-	FullSnapshot  string    `json:"fullSnapshot"` // JSON string
-	URL           string    `json:"url"`
-	UA            string    `json:"ua"`
-	Status        string    `json:"status"` // recording, completed, error
-	CreatedAt     int64     `json:"createdAt"`
+	ID           int64  `json:"id"`
+	SessionID    string `json:"sessionId"`
+	AppID        string `json:"appId"`
+	StartTime    int64  `json:"startTime"`
+	EndTime      int64  `json:"endTime"`
+	DurationMs   int64  `json:"durationMs"`
+	EventCount   int    `json:"eventCount"`
+	FullSnapshot string `json:"fullSnapshot"` // JSON string
+	URL          string `json:"url"`
+	UA           string `json:"ua"`
+	Status       string `json:"status"` // recording, completed, error
+	CreatedAt    int64  `json:"createdAt"`
 }
 
 // RecordingEvent represents a single rrweb event in a recording
@@ -54,13 +54,13 @@ type RecordingEvent struct {
 
 // LiveSession represents a currently active cobrowsing session
 type LiveSession struct {
-	SessionID    string    `json:"sessionId"`
-	AppID        string    `json:"appId"`
-	URL          string    `json:"url"`
-	UA           string    `json:"ua"`
-	ConnectedAt  int64     `json:"connectedAt"`
-	ViewerCount  int       `json:"viewerCount"`
-	IsControlled bool      `json:"isControlled"`
+	SessionID    string `json:"sessionId"`
+	AppID        string `json:"appId"`
+	URL          string `json:"url"`
+	UA           string `json:"ua"`
+	ConnectedAt  int64  `json:"connectedAt"`
+	ViewerCount  int    `json:"viewerCount"`
+	IsControlled bool   `json:"isControlled"`
 }
 
 // NewCoBrowseMessage creates a new cobrowse message

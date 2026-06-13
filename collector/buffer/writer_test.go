@@ -43,8 +43,8 @@ func (m *mockEventStore) getInsertCalls() int64 {
 func (m *mockEventStore) QueryEvents(q storage.QueryParams) (*storage.QueryResult, error) {
 	return nil, nil
 }
-func (m *mockEventStore) GetStats(appID string) (*storage.Stats, error)        { return nil, nil }
-func (m *mockEventStore) GetApps() ([]storage.AppStats, error)                 { return nil, nil }
+func (m *mockEventStore) GetStats(appID string) (*storage.Stats, error) { return nil, nil }
+func (m *mockEventStore) GetApps() ([]storage.AppStats, error)          { return nil, nil }
 func (m *mockEventStore) GetTopN(appID, topType, orderBy string, limit int, filters storage.AnalyticsFilters) (*storage.TopNResult, error) {
 	return nil, nil
 }

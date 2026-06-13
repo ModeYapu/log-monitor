@@ -14,7 +14,7 @@ import (
 // WebhooksHandler handles webhook-related requests
 type WebhooksHandler struct {
 	webhookManager *webhook.Manager
-	db            *storage.DB // Keep for legacy methods
+	db             *storage.DB // Keep for legacy methods
 }
 
 // NewWebhooksHandler creates a new webhooks handler
@@ -84,10 +84,10 @@ func (h *WebhooksHandler) CreateWebhook(w http.ResponseWriter, r *http.Request) 
 
 	// Validate event types
 	validEvents := map[string]bool{
-		"issue.created":    true,
-		"issue.resolved":   true,
-		"issue.reopened":   true,
-		"alert.triggered":  true,
+		"issue.created":   true,
+		"issue.resolved":  true,
+		"issue.reopened":  true,
+		"alert.triggered": true,
 	}
 	for _, event := range req.Events {
 		if !validEvents[event] {
@@ -151,11 +151,11 @@ func (h *WebhooksHandler) UpdateWebhook(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Name    *string   `json:"name"`
-		URL     *string   `json:"url"`
-		Secret  *string   `json:"secret"`
-		Events  []string  `json:"events"`
-		Enabled *bool     `json:"enabled"`
+		Name    *string  `json:"name"`
+		URL     *string  `json:"url"`
+		Secret  *string  `json:"secret"`
+		Events  []string `json:"events"`
+		Enabled *bool    `json:"enabled"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -192,10 +192,10 @@ func (h *WebhooksHandler) UpdateWebhook(w http.ResponseWriter, r *http.Request) 
 
 		// Validate event types
 		validEvents := map[string]bool{
-			"issue.created":    true,
-			"issue.resolved":   true,
-			"issue.reopened":   true,
-			"alert.triggered":  true,
+			"issue.created":   true,
+			"issue.resolved":  true,
+			"issue.reopened":  true,
+			"alert.triggered": true,
 		}
 		for _, event := range req.Events {
 			if !validEvents[event] {

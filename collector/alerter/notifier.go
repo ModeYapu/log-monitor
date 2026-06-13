@@ -20,13 +20,13 @@ import (
 
 // EmailConfig holds SMTP configuration
 type EmailConfig struct {
-	Enabled  bool
-	SMTPHost string
-	SMTPPort string
-	SMTPUser string
-	SMTPPass string
+	Enabled   bool
+	SMTPHost  string
+	SMTPPort  string
+	SMTPUser  string
+	SMTPPass  string
 	FromEmail string
-	FromName string
+	FromName  string
 }
 
 // Notifier sends alert notifications

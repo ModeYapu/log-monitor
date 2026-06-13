@@ -22,9 +22,9 @@ const (
 
 // cachedParser wraps a parser with its source map key for caching
 type cachedParser struct {
-	parser     *sourcemap.Parser
-	cachedAt   time.Time
-	record     *storage.SourceMapRecord
+	parser   *sourcemap.Parser
+	cachedAt time.Time
+	record   *storage.SourceMapRecord
 }
 
 // SourceMapHandler handles source map upload and retrieval
@@ -542,15 +542,15 @@ func (h *SourceMapHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		resolved := make([]map[string]interface{}, len(req.Stacktrace))
 		for i, frame := range req.Stacktrace {
 			resolved[i] = map[string]interface{}{
-				"originalFile": frame.File,
-				"originalLine": frame.Line,
+				"originalFile":   frame.File,
+				"originalLine":   frame.Line,
 				"originalColumn": frame.Column,
-				"resolved": false,
+				"resolved":       false,
 			}
 		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":  false,
-			"message": "No source map found for the given app and release",
+			"message":  "No source map found for the given app and release",
 			"resolved": resolved,
 		})
 		return
@@ -585,15 +585,15 @@ func (h *SourceMapHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 			resolved := make([]map[string]interface{}, len(req.Stacktrace))
 			for i, frame := range req.Stacktrace {
 				resolved[i] = map[string]interface{}{
-					"originalFile": frame.File,
-					"originalLine": frame.Line,
+					"originalFile":   frame.File,
+					"originalLine":   frame.Line,
 					"originalColumn": frame.Column,
-					"resolved": false,
+					"resolved":       false,
 				}
 			}
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success":  false,
-				"message": "Failed to parse source map",
+				"message":  "Failed to parse source map",
 				"resolved": resolved,
 			})
 			return
@@ -614,10 +614,10 @@ func (h *SourceMapHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	for i, frame := range req.Stacktrace {
 		if frame.Line <= 0 {
 			resolved[i] = map[string]interface{}{
-				"originalFile": frame.File,
-				"originalLine": frame.Line,
+				"originalFile":   frame.File,
+				"originalLine":   frame.Line,
 				"originalColumn": frame.Column,
-				"resolved": false,
+				"resolved":       false,
 			}
 			continue
 		}
@@ -631,27 +631,27 @@ func (h *SourceMapHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			// No mapping found - keep original values
 			resolved[i] = map[string]interface{}{
-				"originalFile": frame.File,
-				"originalLine": frame.Line,
+				"originalFile":   frame.File,
+				"originalLine":   frame.Line,
 				"originalColumn": frame.Column,
-				"resolved": false,
+				"resolved":       false,
 			}
 			continue
 		}
 
 		resolved[i] = map[string]interface{}{
-			"originalFile": origPos.Source,
-			"originalLine": origPos.Line,
+			"originalFile":   origPos.Source,
+			"originalLine":   origPos.Line,
 			"originalColumn": origPos.Column,
-			"originalName": origPos.Name,
-			"resolved": true,
+			"originalName":   origPos.Name,
+			"resolved":       true,
 		}
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":  true,
 		"resolved": resolved,
-		"buildId": record.BuildID,
-		"env": record.Env,
+		"buildId":  record.BuildID,
+		"env":      record.Env,
 	})
 }

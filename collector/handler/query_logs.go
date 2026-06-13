@@ -61,7 +61,7 @@ func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	// Query database
 	result, err := h.db.QueryEvents(query)
 	if err != nil {
-			slog.Error("Failed to query logs", "error", err)
+		slog.Error("Failed to query logs", "error", err)
 		http.Error(w, "Failed to query logs", http.StatusInternalServerError)
 		return
 	}
@@ -94,7 +94,7 @@ func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.db.GetStats(appID)
 	if err != nil {
-			slog.Error("Failed to get stats", "error", err)
+		slog.Error("Failed to get stats", "error", err)
 		http.Error(w, "Failed to get stats", http.StatusInternalServerError)
 		return
 	}
@@ -118,7 +118,7 @@ func (h *QueryHandler) QueryApps(w http.ResponseWriter, r *http.Request) {
 
 	apps, err := h.db.GetApps()
 	if err != nil {
-			slog.Error("Failed to get apps", "error", err)
+		slog.Error("Failed to get apps", "error", err)
 		http.Error(w, "Failed to get apps", http.StatusInternalServerError)
 		return
 	}
@@ -132,7 +132,7 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 
 	// Parse query parameters
 	appID := r.URL.Query().Get("appId")
-	topType := r.URL.Query().Get("type") // errors|pages|releases|browsers
+	topType := r.URL.Query().Get("type")    // errors|pages|releases|browsers
 	orderBy := r.URL.Query().Get("orderBy") // count|users|impact|recent|regression
 	limit := parseIntParam(r.URL.Query().Get("limit"), 20)
 
@@ -178,7 +178,7 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 	// Query database
 	result, err := h.db.GetTopN(appID, topType, orderBy, limit, filters)
 	if err != nil {
-			slog.Error("Failed to query top N", "error", err)
+		slog.Error("Failed to query top N", "error", err)
 		http.Error(w, "Failed to query top N", http.StatusInternalServerError)
 		return
 	}
@@ -213,7 +213,7 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 	// Query database for error clustering
 	clusters, err := h.db.GetSimilarErrors(appID, message, threshold, limit)
 	if err != nil {
-			slog.Error("Failed to query similar errors", "error", err)
+		slog.Error("Failed to query similar errors", "error", err)
 		http.Error(w, "Failed to query similar errors", http.StatusInternalServerError)
 		return
 	}
@@ -271,7 +271,7 @@ func (h *QueryHandler) QueryExport(w http.ResponseWriter, r *http.Request) {
 	// Query database
 	result, err := h.db.QueryEvents(query)
 	if err != nil {
-			slog.Error("Failed to query events for export", "error", err)
+		slog.Error("Failed to query events for export", "error", err)
 		http.Error(w, "Failed to query events", http.StatusInternalServerError)
 		return
 	}
@@ -298,7 +298,7 @@ func (h *QueryHandler) exportCSV(w http.ResponseWriter, events []storage.EventRe
 		"Type", "Level", "Message", "Stack", "URL", "Line", "Col",
 		"UA", "Screen", "Viewport", "IP", "CreatedAt"}
 	if err := writer.Write(headers); err != nil {
-			slog.Error("Failed to write CSV header", "error", err)
+		slog.Error("Failed to write CSV header", "error", err)
 		return
 	}
 
@@ -325,7 +325,7 @@ func (h *QueryHandler) exportCSV(w http.ResponseWriter, events []storage.EventRe
 			strconv.FormatInt(event.CreatedAt, 10),
 		}
 		if err := writer.Write(row); err != nil {
-				slog.Error("Failed to write CSV row", "error", err)
+			slog.Error("Failed to write CSV row", "error", err)
 		}
 	}
 }

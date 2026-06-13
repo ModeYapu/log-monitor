@@ -44,19 +44,19 @@ func insertTestEvents(t *testing.T, db *storage.DB, appID string, count int) {
 	events := make([]storage.EventRecord, count)
 	for i := 0; i < count; i++ {
 		events[i] = storage.EventRecord{
-			AppID:     appID,
-			Type:      "error",
-			Level:     "error",
-			Message:   fmt.Sprintf("Error message %d", i),
-			URL:       fmt.Sprintf("/page/%d", i%3),
-			Release:   "v1.0.0",
-			Env:       "production",
-			UserID:    fmt.Sprintf("user-%d", i%5),
-			SessionID: fmt.Sprintf("session-%d", i%3),
-			Tags:      "{}",
-			Extra:     "{}",
+			AppID:       appID,
+			Type:        "error",
+			Level:       "error",
+			Message:     fmt.Sprintf("Error message %d", i),
+			URL:         fmt.Sprintf("/page/%d", i%3),
+			Release:     "v1.0.0",
+			Env:         "production",
+			UserID:      fmt.Sprintf("user-%d", i%5),
+			SessionID:   fmt.Sprintf("session-%d", i%3),
+			Tags:        "{}",
+			Extra:       "{}",
 			Performance: "{}",
-			CreatedAt: now.Add(-time.Duration(count-i) * time.Minute).UnixMilli(),
+			CreatedAt:   now.Add(-time.Duration(count-i) * time.Minute).UnixMilli(),
 		}
 	}
 	if err := db.InsertEvents(events); err != nil {

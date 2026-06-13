@@ -25,7 +25,6 @@ func (h *CoBrowseHub) removeSession(sessionID string) {
 	slog.Info("[CoBrowse] Session removed", "session", sessionID)
 }
 
-
 func (h *CoBrowseHub) HandleUserConnection(w http.ResponseWriter, r *http.Request) {
 	// Check session limit to prevent resource exhaustion
 	h.mu.RLock()
@@ -103,13 +102,13 @@ func (h *CoBrowseHub) HandleUserConnection(w http.ResponseWriter, r *http.Reques
 
 	// Create recording in database
 	recording := storage.RecordingInfo{
-		SessionID:    sessionID,
-		AppID:        appID,
-		StartTime:    hub.startTime,
-		URL:          url,
-		UA:           ua,
-		Status:       "recording",
-		CreatedAt:    hub.startTime,
+		SessionID: sessionID,
+		AppID:     appID,
+		StartTime: hub.startTime,
+		URL:       url,
+		UA:        ua,
+		Status:    "recording",
+		CreatedAt: hub.startTime,
 	}
 	if _, err := h.db.CreateRecording(recording); err != nil {
 		slog.Error("[CoBrowse] Failed to create recording", "error", err)
@@ -123,7 +122,6 @@ func (h *CoBrowseHub) HandleUserConnection(w http.ResponseWriter, r *http.Reques
 	// Send ping to keep connection alive
 	go hub.pingUser(conn)
 }
-
 
 func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Request) {
 	// Authenticate admin connection
@@ -207,7 +205,9 @@ func (h *CoBrowseHub) HandleViewerConnection(w http.ResponseWriter, r *http.Requ
 	// Broadcast viewer count to all viewers
 	viewerCountMsg, _ := json.Marshal(map[string]interface{}{"type": "viewer-count", "count": viewerCount})
 	hub.mu.RLock()
-	for c := range hub.viewerConns { c.WriteMessage(websocket.TextMessage, viewerCountMsg) }
+	for c := range hub.viewerConns {
+		c.WriteMessage(websocket.TextMessage, viewerCountMsg)
+	}
 	hub.mu.RUnlock()
 
 	// Handle viewer messages (control commands)

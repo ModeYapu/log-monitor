@@ -26,9 +26,9 @@ type SourceMapUploadRequest struct {
 
 // StackFrame represents a single stack frame
 type StackFrame struct {
-	Filename    string `json:"filename"`
-	Line        int    `json:"line"`
-	Column      int    `json:"column"`
+	Filename     string `json:"filename"`
+	Line         int    `json:"line"`
+	Column       int    `json:"column"`
 	FunctionName string `json:"functionName,omitempty"`
 }
 
@@ -39,9 +39,9 @@ type StackTrace struct {
 
 // SourceMapRequest represents a request to deobfuscate a stack trace
 type SourceMapRequest struct {
-	AppID      string       `json:"appId"`
-	Release    string       `json:"release"`
-	Env        string       `json:"env"`
-	BuildID    string       `json:"buildId"`
-	StackTrace StackTrace   `json:"stackTrace"`
+	AppID      string     `json:"appId"`
+	Release    string     `json:"release"`
+	Env        string     `json:"env"`
+	BuildID    string     `json:"buildId"`
+	StackTrace StackTrace `json:"stackTrace"`
 }

@@ -20,7 +20,6 @@ type CoBrowseHub struct {
 	maxSessions    int // Maximum sessions to prevent resource exhaustion
 }
 
-
 type CoBrowseDB interface {
 	CreateRecording(recording storage.RecordingInfo) (int64, error)
 	AddRecordingEvent(sessionID string, seq int, timestamp int64, eventData []byte) error
@@ -36,13 +35,12 @@ type CoBrowseDB interface {
 
 func NewCoBrowseHub(db CoBrowseDB) *CoBrowseHub {
 	return &CoBrowseHub{
-		sessions:   make(map[string]*SessionHub),
+		sessions:    make(map[string]*SessionHub),
 		maxSessions: 1000, // Limit concurrent sessions to prevent resource exhaustion
-		db:         db,
-		auth:       middleware.NewAuthConfig(),
+		db:          db,
+		auth:        middleware.NewAuthConfig(),
 	}
 }
-
 
 // SetAuthConfig sets the authentication configuration
 func (h *CoBrowseHub) SetAuthConfig(auth *middleware.AuthConfig) {
@@ -152,4 +150,3 @@ func getSessionIDFromRequest(r *http.Request) string {
 	// Fallback to query param
 	return r.URL.Query().Get("sessionId")
 }
-

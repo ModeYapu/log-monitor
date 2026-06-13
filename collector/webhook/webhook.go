@@ -13,9 +13,9 @@ import (
 type EventType string
 
 const (
-	EventIssueCreated  EventType = "issue.created"
-	EventIssueResolved EventType = "issue.resolved"
-	EventIssueReopened EventType = "issue.reopened"
+	EventIssueCreated   EventType = "issue.created"
+	EventIssueResolved  EventType = "issue.resolved"
+	EventIssueReopened  EventType = "issue.reopened"
 	EventAlertTriggered EventType = "alert.triggered"
 )
 
@@ -29,17 +29,17 @@ type Payload struct {
 
 // Webhook represents a webhook configuration
 type Webhook struct {
-	ID             int64      `json:"id"`
-	ProjectID      int64      `json:"project_id"`
-	Name           string     `json:"name"`
-	URL            string     `json:"url"`
-	Secret         string     `json:"secret"`
-	Events         []EventType `json:"events"`
-	Enabled        bool       `json:"enabled"`
-	LastTriggeredAt int64     `json:"last_triggered_at"`
-	FailureCount   int        `json:"failure_count"`
-	CreatedAt      int64      `json:"created_at"`
-	UpdatedAt      int64      `json:"updated_at"`
+	ID              int64       `json:"id"`
+	ProjectID       int64       `json:"project_id"`
+	Name            string      `json:"name"`
+	URL             string      `json:"url"`
+	Secret          string      `json:"secret"`
+	Events          []EventType `json:"events"`
+	Enabled         bool        `json:"enabled"`
+	LastTriggeredAt int64       `json:"last_triggered_at"`
+	FailureCount    int         `json:"failure_count"`
+	CreatedAt       int64       `json:"created_at"`
+	UpdatedAt       int64       `json:"updated_at"`
 }
 
 // WebhookStore defines the interface for webhook storage
@@ -157,7 +157,7 @@ func (m *Manager) deliverPayloads(payloads []Payload) {
 			}
 
 			// Check if webhook is interested in this event type
-		 eventType := EventType(payload.Event)
+			eventType := EventType(payload.Event)
 			if !m.webhookSubscribesTo(webhook, eventType) {
 				continue
 			}

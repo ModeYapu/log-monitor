@@ -1,6 +1,5 @@
 package storage
 
-
 // SQLiteStore implements Store interface using SQLite database
 type SQLiteStore struct {
 	db          *DB

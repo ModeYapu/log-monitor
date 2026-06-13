@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"time"
-
 )
 
 // GetTopN retrieves top N items grouped by type (errors/pages/releases/browsers)
@@ -142,16 +141,16 @@ func (db *DB) GetSimilarErrors(appID, message string, threshold float64, limit i
 
 // PerformanceMetricsSummary represents Web Vitals summary with grades
 type PerformanceMetricsSummary struct {
-	FCP PerformanceMetric `json:"fcp"`
-	LCP PerformanceMetric `json:"lcp"`
-	CLS PerformanceMetric `json:"cls"`
-	INP PerformanceMetric `json:"inp"`
+	FCP  PerformanceMetric `json:"fcp"`
+	LCP  PerformanceMetric `json:"lcp"`
+	CLS  PerformanceMetric `json:"cls"`
+	INP  PerformanceMetric `json:"inp"`
 	TTFB PerformanceMetric `json:"ttfb"`
 }
 
 // PerformanceMetric represents a single performance metric with grade
 type PerformanceMetric struct {
-	P75  float64 `json:"p75"`
+	P75   float64 `json:"p75"`
 	Grade string  `json:"grade"` // good|needs-improvement|poor
 }
 
@@ -164,14 +163,14 @@ type PerformanceTrendData struct {
 
 // PagePerformanceData represents page-level performance
 type PagePerformanceData struct {
-	URL             string                      `json:"url"`
-	FCP_P75         float64                     `json:"fcp_p75"`
-	LCP_P75         float64                     `json:"lcp_p75"`
-	CLS_P75         float64                     `json:"cls_p75"`
-	INP_P75         float64                     `json:"inp_p75"`
-	TTFB_P75        float64                     `json:"ttfb_p75"`
-	Samples         int64                       `json:"samples"`
-	PreviousPeriod  *PagePerformanceComparison  `json:"previous_period,omitempty"`
+	URL            string                     `json:"url"`
+	FCP_P75        float64                    `json:"fcp_p75"`
+	LCP_P75        float64                    `json:"lcp_p75"`
+	CLS_P75        float64                    `json:"cls_p75"`
+	INP_P75        float64                    `json:"inp_p75"`
+	TTFB_P75       float64                    `json:"ttfb_p75"`
+	Samples        int64                      `json:"samples"`
+	PreviousPeriod *PagePerformanceComparison `json:"previous_period,omitempty"`
 }
 
 // PagePerformanceComparison represents comparison with previous period
@@ -264,23 +263,23 @@ func (db *DB) GetPerformanceSummary(appID string, timeRange string) (*Performanc
 	// Calculate P75 and grades
 	return &PerformanceMetricsSummary{
 		FCP: PerformanceMetric{
-			P75:  calculateP75(fcpValues),
+			P75:   calculateP75(fcpValues),
 			Grade: getWebVitalsGrade("fcp", calculateP75(fcpValues)),
 		},
 		LCP: PerformanceMetric{
-			P75:  calculateP75(lcpValues),
+			P75:   calculateP75(lcpValues),
 			Grade: getWebVitalsGrade("lcp", calculateP75(lcpValues)),
 		},
 		CLS: PerformanceMetric{
-			P75:  calculateP75(clsValues),
+			P75:   calculateP75(clsValues),
 			Grade: getWebVitalsGrade("cls", calculateP75(clsValues)),
 		},
 		INP: PerformanceMetric{
-			P75:  calculateP75(inpValues),
+			P75:   calculateP75(inpValues),
 			Grade: getWebVitalsGrade("inp", calculateP75(inpValues)),
 		},
 		TTFB: PerformanceMetric{
-			P75:  calculateP75(ttfbValues),
+			P75:   calculateP75(ttfbValues),
 			Grade: getWebVitalsGrade("ttfb", calculateP75(ttfbValues)),
 		},
 	}, nil
@@ -408,8 +407,8 @@ func (db *DB) GetPagePerformanceRanking(appID, timeRange string) ([]PagePerforma
 
 		if _, exists := pageMetrics[url]; !exists {
 			pageMetrics[url] = &PagePerformanceData{
-				URL:      url,
-				Samples:  0,
+				URL:     url,
+				Samples: 0,
 			}
 		}
 
@@ -697,7 +696,7 @@ func calculateP75(values []float64) float64 {
 // getWebVitalsGrade returns the grade for a Web Vitals metric
 func getWebVitalsGrade(metric string, value float64) string {
 	thresholds := map[string]struct {
-		good            float64
+		good             float64
 		needsImprovement float64
 	}{
 		"fcp":  {good: 1800, needsImprovement: 3000},
@@ -723,11 +722,11 @@ func getWebVitalsGrade(metric string, value float64) string {
 
 // NewError represents an error that recently appeared
 type NewError struct {
-	Message      string `json:"message"`
-	Count        int64  `json:"count"`
-	FirstSeen    int64  `json:"first_seen"`
-	LastSeen     int64  `json:"last_seen"`
-	AffectedUsers int64 `json:"affected_users"`
+	Message       string `json:"message"`
+	Count         int64  `json:"count"`
+	FirstSeen     int64  `json:"first_seen"`
+	LastSeen      int64  `json:"last_seen"`
+	AffectedUsers int64  `json:"affected_users"`
 }
 
 // GetNewErrors returns errors that first appeared in the last N minutes
@@ -770,12 +769,12 @@ func (db *DB) GetNewErrors(appID string, sinceMinutes int) ([]NewError, error) {
 
 // AlertTrigger represents a triggered alert event
 type AlertTrigger struct {
-	ID         int64  `json:"id"`
-	AlertID    int64  `json:"alert_id"`
-	AlertName  string `json:"alert_name"`
-	Severity   string `json:"severity"`
-	TriggeredAt int64 `json:"triggered_at"`
-	Message    string `json:"message"`
+	ID          int64  `json:"id"`
+	AlertID     int64  `json:"alert_id"`
+	AlertName   string `json:"alert_name"`
+	Severity    string `json:"severity"`
+	TriggeredAt int64  `json:"triggered_at"`
+	Message     string `json:"message"`
 }
 
 // GetRecentAlertTriggers returns the last N triggered alerts
@@ -831,10 +830,10 @@ func (db *DB) GetRecentAlertTriggers(limit int) ([]AlertTrigger, error) {
 // ActiveSession represents an active user session
 type ActiveSession struct {
 	SessionID    string `json:"session_id"`
-	URL         string `json:"url"`
-	EventCount  int64  `json:"event_count"`
-	LastActivity int64 `json:"last_activity"`
-	UserID      string `json:"user_id"`
+	URL          string `json:"url"`
+	EventCount   int64  `json:"event_count"`
+	LastActivity int64  `json:"last_activity"`
+	UserID       string `json:"user_id"`
 }
 
 // GetActiveSessions returns recent active sessions
@@ -891,13 +890,13 @@ func (db *DB) GetActiveSessions(appID string, limit int) ([]ActiveSession, error
 
 // StatsComparison represents today vs yesterday statistics comparison
 type StatsComparison struct {
-	TodayEvents       int64   `json:"today_events"`
-	TodayErrors       int64   `json:"today_errors"`
-	TodayAffectedUsers int64  `json:"today_affected_users"`
+	TodayEvents        int64 `json:"today_events"`
+	TodayErrors        int64 `json:"today_errors"`
+	TodayAffectedUsers int64 `json:"today_affected_users"`
 
-	YesterdayEvents        int64   `json:"yesterday_events"`
-	YesterdayErrors        int64   `json:"yesterday_errors"`
-	YesterdayAffectedUsers int64   `json:"yesterday_affected_users"`
+	YesterdayEvents        int64 `json:"yesterday_events"`
+	YesterdayErrors        int64 `json:"yesterday_errors"`
+	YesterdayAffectedUsers int64 `json:"yesterday_affected_users"`
 
 	EventsChange        float64 `json:"events_change"`
 	ErrorsChange        float64 `json:"errors_change"`
@@ -976,4 +975,3 @@ func calculateChange(today, yesterday int64) float64 {
 	}
 	return ((float64(today) - float64(yesterday)) / float64(yesterday)) * 100.0
 }
-

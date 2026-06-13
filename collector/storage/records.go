@@ -2,31 +2,31 @@ package storage
 
 // EventRecord represents an event record from the database
 type EventRecord struct {
-	ID          int64                  `json:"id"`
-	AppID       string                 `json:"app_id"`
-	Release     string                 `json:"release"`
-	Env         string                 `json:"env"`
-	BuildID     string                 `json:"build_id"`
-	UserID      string                 `json:"user_id"`
-	SessionID   string                 `json:"session_id"`
-	Type        string                 `json:"type"`
-	Level       string                 `json:"level"`
-	Message     string                 `json:"message"`
-	Stack       string                 `json:"stack"`
-	URL         string                 `json:"url"`
-	Line        int                    `json:"line"`
-	Col         int                    `json:"col"`
-	Tags        string                 `json:"tags"`        // JSON string
-	Extra       string                 `json:"extra"`       // JSON string
-	UA          string                 `json:"ua"`
-	Screen      string                 `json:"screen"`
-	Viewport    string                 `json:"viewport"`
-	Performance string                 `json:"performance"` // JSON string
-	IP          string                 `json:"ip"`
-	Fingerprint string                 `json:"fingerprint"`
-	Breadcrumbs string                 `json:"breadcrumbs"` // JSON string
-	ProjectID   int64                  `json:"project_id"`
-	CreatedAt   int64                  `json:"created_at"`
+	ID          int64  `json:"id"`
+	AppID       string `json:"app_id"`
+	Release     string `json:"release"`
+	Env         string `json:"env"`
+	BuildID     string `json:"build_id"`
+	UserID      string `json:"user_id"`
+	SessionID   string `json:"session_id"`
+	Type        string `json:"type"`
+	Level       string `json:"level"`
+	Message     string `json:"message"`
+	Stack       string `json:"stack"`
+	URL         string `json:"url"`
+	Line        int    `json:"line"`
+	Col         int    `json:"col"`
+	Tags        string `json:"tags"`  // JSON string
+	Extra       string `json:"extra"` // JSON string
+	UA          string `json:"ua"`
+	Screen      string `json:"screen"`
+	Viewport    string `json:"viewport"`
+	Performance string `json:"performance"` // JSON string
+	IP          string `json:"ip"`
+	Fingerprint string `json:"fingerprint"`
+	Breadcrumbs string `json:"breadcrumbs"` // JSON string
+	ProjectID   int64  `json:"project_id"`
+	CreatedAt   int64  `json:"created_at"`
 }
 
 // QueryResult represents the result of a query
@@ -69,22 +69,22 @@ type AppStats struct {
 
 // Issue represents an issue in the system
 type Issue struct {
-	ID           int64  `json:"id"`
+	ID          int64  `json:"id"`
 	Fingerprint string `json:"fingerprint"`
-	AppID        string `json:"app_id"`
-	Title        string `json:"title"`
-	Type         string `json:"type"`
-	Status       string `json:"status"`
-	Priority     string `json:"priority"`
-	Assignee     string `json:"assignee"`
-	FirstSeenAt  int64  `json:"first_seen_at"`
-	LastSeenAt   int64  `json:"last_seen_at"`
-	EventCount   int64  `json:"event_count"`
-	UserCount    int64  `json:"user_count"`
-	ResolvedAt   int64  `json:"resolved_at"`
-	CreatedAt    int64  `json:"created_at"`
-	UpdatedAt    int64  `json:"updated_at"`
-	ProjectID    int64  `json:"project_id"`
+	AppID       string `json:"app_id"`
+	Title       string `json:"title"`
+	Type        string `json:"type"`
+	Status      string `json:"status"`
+	Priority    string `json:"priority"`
+	Assignee    string `json:"assignee"`
+	FirstSeenAt int64  `json:"first_seen_at"`
+	LastSeenAt  int64  `json:"last_seen_at"`
+	EventCount  int64  `json:"event_count"`
+	UserCount   int64  `json:"user_count"`
+	ResolvedAt  int64  `json:"resolved_at"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+	ProjectID   int64  `json:"project_id"`
 }
 
 // IssueFilter represents filter parameters for querying issues
@@ -179,43 +179,43 @@ type TopBrowser struct {
 
 // ErrorClusterResult represents an error cluster from the database
 type ErrorClusterResult struct {
-	Fingerprint    string   `json:"fingerprint"`
-	Message        string   `json:"message"`
-	Count          int64    `json:"count"`
-	Users          int64    `json:"users"`
-	FirstSeen      int64    `json:"firstSeen"`
-	LastSeen       int64    `json:"lastSeen"`
-	URLs           []string `json:"urls"`
-	Releases       []string `json:"releases"`
+	Fingerprint string   `json:"fingerprint"`
+	Message     string   `json:"message"`
+	Count       int64    `json:"count"`
+	Users       int64    `json:"users"`
+	FirstSeen   int64    `json:"firstSeen"`
+	LastSeen    int64    `json:"lastSeen"`
+	URLs        []string `json:"urls"`
+	Releases    []string `json:"releases"`
 }
 
 // ClusterStats represents detailed statistics for a cluster
 type ClusterStats struct {
-	Fingerprint         string                 `json:"fingerprint"`
-	TotalCount          int64                  `json:"totalCount"`
-	UniqueUsers         int64                  `json:"uniqueUsers"`
-	FirstSeen           int64                  `json:"firstSeen"`
-	LastSeen            int64                  `json:"lastSeen"`
-	ReleaseDistribution map[string]int64       `json:"releaseDistribution"`
-	EnvDistribution     map[string]int64       `json:"envDistribution"`
-	TimeSeries          []TimeSeriesPoint       `json:"timeSeries"`
+	Fingerprint         string            `json:"fingerprint"`
+	TotalCount          int64             `json:"totalCount"`
+	UniqueUsers         int64             `json:"uniqueUsers"`
+	FirstSeen           int64             `json:"firstSeen"`
+	LastSeen            int64             `json:"lastSeen"`
+	ReleaseDistribution map[string]int64  `json:"releaseDistribution"`
+	EnvDistribution     map[string]int64  `json:"envDistribution"`
+	TimeSeries          []TimeSeriesPoint `json:"timeSeries"`
 }
 
 // ErrorCluster represents a cluster of similar errors
 type ErrorCluster struct {
-	ClusterID    string        `json:"cluster_id"`
-	Pattern      string        `json:"pattern"`
-	Message      string        `json:"message"`
-	Count        int64         `json:"count"`
-	FirstSeen    int64         `json:"firstSeen"`
-	LastSeen     int64         `json:"lastSeen"`
-	AffectedUsers int64        `json:"affectedUsers"`
+	ClusterID     string        `json:"cluster_id"`
+	Pattern       string        `json:"pattern"`
+	Message       string        `json:"message"`
+	Count         int64         `json:"count"`
+	FirstSeen     int64         `json:"firstSeen"`
+	LastSeen      int64         `json:"lastSeen"`
+	AffectedUsers int64         `json:"affectedUsers"`
 	SampleEvents  []EventRecord `json:"sampleEvents"`
-	ID           string        `json:"id,omitempty"`
-	Users        int64         `json:"users,omitempty"`
-	Stack        string        `json:"stack,omitempty"`
-	AffectedURLs []string      `json:"affected_urls,omitempty"`
-	Releases     []string      `json:"releases,omitempty"`
+	ID            string        `json:"id,omitempty"`
+	Users         int64         `json:"users,omitempty"`
+	Stack         string        `json:"stack,omitempty"`
+	AffectedURLs  []string      `json:"affected_urls,omitempty"`
+	Releases      []string      `json:"releases,omitempty"`
 }
 
 // TopNItem represents an item in a top N list
@@ -231,7 +231,7 @@ type TopNItem struct {
 
 // TopNResult represents the result of a top N query
 type TopNResult struct {
-	Type   string     `json:"type"`
-	Items  []TopNItem `json:"items"`
-	Total  int64      `json:"total"`
+	Type  string     `json:"type"`
+	Items []TopNItem `json:"items"`
+	Total int64      `json:"total"`
 }

@@ -10,17 +10,17 @@ import (
 
 // Webhook represents a webhook configuration
 type Webhook struct {
-	ID             int64       `json:"id"`
-	ProjectID      int64       `json:"project_id"`
-	Name           string      `json:"name"`
-	URL            string      `json:"url"`
-	Secret         string      `json:"secret"`
-	Events         []string    `json:"events"`
-	Enabled        bool        `json:"enabled"`
-	LastTriggeredAt int64      `json:"last_triggered_at"`
-	FailureCount   int         `json:"failure_count"`
-	CreatedAt      int64       `json:"created_at"`
-	UpdatedAt      int64       `json:"updated_at"`
+	ID              int64    `json:"id"`
+	ProjectID       int64    `json:"project_id"`
+	Name            string   `json:"name"`
+	URL             string   `json:"url"`
+	Secret          string   `json:"secret"`
+	Events          []string `json:"events"`
+	Enabled         bool     `json:"enabled"`
+	LastTriggeredAt int64    `json:"last_triggered_at"`
+	FailureCount    int      `json:"failure_count"`
+	CreatedAt       int64    `json:"created_at"`
+	UpdatedAt       int64    `json:"updated_at"`
 }
 
 // WebhookStore defines the interface for webhook storage operations

@@ -94,7 +94,7 @@ func (w *Writer) flushLoop() {
 		}
 
 		if err := w.db.InsertEvents(batch); err != nil {
-					slog.Error("Failed to insert batch", "error", err)
+			slog.Error("Failed to insert batch", "error", err)
 			// Re-queue events on failure (simplified: just log)
 		} else {
 			w.flushCount.Add(int64(len(batch)))

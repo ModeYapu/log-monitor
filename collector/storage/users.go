@@ -10,8 +10,8 @@ import (
 
 // UserStorage handles user database operations
 type UserStorage struct {
-	db   *DB
-	mu   sync.RWMutex
+	db *DB
+	mu sync.RWMutex
 }
 
 // NewUserStorage creates a new user storage

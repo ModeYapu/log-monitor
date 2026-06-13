@@ -10,12 +10,12 @@ import (
 
 // RateLimiter implements IP-based rate limiting using the token bucket algorithm.
 type RateLimiter struct {
-	mu           sync.RWMutex
-	clients      map[string]*clientInfo
-	maxRequests  int
-	window       time.Duration
+	mu              sync.RWMutex
+	clients         map[string]*clientInfo
+	maxRequests     int
+	window          time.Duration
 	cleanupInterval time.Duration
-	stopCleanup  chan struct{}
+	stopCleanup     chan struct{}
 }
 
 type clientInfo struct {
@@ -28,11 +28,11 @@ type clientInfo struct {
 // window: time window for rate limiting
 func NewRateLimiter(maxRequests int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
-		clients:          make(map[string]*clientInfo),
-		maxRequests:      maxRequests,
-		window:           window,
-		cleanupInterval:  time.Minute,
-		stopCleanup:      make(chan struct{}),
+		clients:         make(map[string]*clientInfo),
+		maxRequests:     maxRequests,
+		window:          window,
+		cleanupInterval: time.Minute,
+		stopCleanup:     make(chan struct{}),
 	}
 
 	// Start cleanup goroutine to remove stale entries

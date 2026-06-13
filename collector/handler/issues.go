@@ -12,7 +12,7 @@ import (
 // IssuesHandler handles issue-related requests
 type IssuesHandler struct {
 	issueStore storage.IssueStore
-	db        *storage.DB // Keep for legacy methods
+	db         *storage.DB // Keep for legacy methods
 }
 
 // NewIssuesHandler creates a new issues handler

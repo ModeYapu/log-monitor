@@ -436,26 +436,26 @@ func TestGetNewErrors(t *testing.T) {
 	now := time.Now()
 	events := []EventRecord{
 		{
-			AppID:     "error-app",
-			Type:      "error",
-			Level:     "error",
-			Message:   "New critical error",
-			UserID:    "user1",
-			Tags:      "{}",
-			Extra:     "{}",
+			AppID:       "error-app",
+			Type:        "error",
+			Level:       "error",
+			Message:     "New critical error",
+			UserID:      "user1",
+			Tags:        "{}",
+			Extra:       "{}",
 			Performance: "{}",
-			CreatedAt: now.Add(-5 * time.Minute).UnixMilli(),
+			CreatedAt:   now.Add(-5 * time.Minute).UnixMilli(),
 		},
 		{
-			AppID:     "error-app",
-			Type:      "error",
-			Level:     "error",
-			Message:   "Another new error",
-			UserID:    "user2",
-			Tags:      "{}",
-			Extra:     "{}",
+			AppID:       "error-app",
+			Type:        "error",
+			Level:       "error",
+			Message:     "Another new error",
+			UserID:      "user2",
+			Tags:        "{}",
+			Extra:       "{}",
 			Performance: "{}",
-			CreatedAt: now.Add(-10 * time.Minute).UnixMilli(),
+			CreatedAt:   now.Add(-10 * time.Minute).UnixMilli(),
 		},
 	}
 	if err := db.InsertEvents(events); err != nil {
@@ -515,30 +515,30 @@ func TestGetActiveSessions(t *testing.T) {
 	now := time.Now()
 	events := []EventRecord{
 		{
-			AppID:     "session-app",
-			Type:      "click",
-			Level:     "info",
-			Message:   "user click",
-			URL:       "/page1",
-			UserID:    "user1",
-			SessionID: "sess-1",
-			Tags:      "{}",
-			Extra:     "{}",
+			AppID:       "session-app",
+			Type:        "click",
+			Level:       "info",
+			Message:     "user click",
+			URL:         "/page1",
+			UserID:      "user1",
+			SessionID:   "sess-1",
+			Tags:        "{}",
+			Extra:       "{}",
 			Performance: "{}",
-			CreatedAt: now.Add(-1 * time.Hour).UnixMilli(),
+			CreatedAt:   now.Add(-1 * time.Hour).UnixMilli(),
 		},
 		{
-			AppID:     "session-app",
-			Type:      "pageview",
-			Level:     "info",
-			Message:   "page view",
-			URL:       "/page2",
-			UserID:    "user2",
-			SessionID: "sess-2",
-			Tags:      "{}",
-			Extra:     "{}",
+			AppID:       "session-app",
+			Type:        "pageview",
+			Level:       "info",
+			Message:     "page view",
+			URL:         "/page2",
+			UserID:      "user2",
+			SessionID:   "sess-2",
+			Tags:        "{}",
+			Extra:       "{}",
 			Performance: "{}",
-			CreatedAt: now.Add(-30 * time.Minute).UnixMilli(),
+			CreatedAt:   now.Add(-30 * time.Minute).UnixMilli(),
 		},
 	}
 	if err := db.InsertEvents(events); err != nil {
@@ -568,15 +568,15 @@ func TestGetActiveSessions_Limit(t *testing.T) {
 	events := make([]EventRecord, 5)
 	for i := 0; i < 5; i++ {
 		events[i] = EventRecord{
-			AppID:     "limit-app",
-			Type:      "info",
-			Level:     "info",
-			Message:   "msg",
-			SessionID: "sess-" + string(rune('A'+i)),
-			Tags:      "{}",
-			Extra:     "{}",
+			AppID:       "limit-app",
+			Type:        "info",
+			Level:       "info",
+			Message:     "msg",
+			SessionID:   "sess-" + string(rune('A'+i)),
+			Tags:        "{}",
+			Extra:       "{}",
 			Performance: "{}",
-			CreatedAt: now.Add(-time.Duration(i) * time.Minute).UnixMilli(),
+			CreatedAt:   now.Add(-time.Duration(i) * time.Minute).UnixMilli(),
 		}
 	}
 	if err := db.InsertEvents(events); err != nil {
@@ -750,19 +750,19 @@ func TestGetSessionStats(t *testing.T) {
 		{
 			AppID: "stats-app", Type: "info", Level: "info", Message: "pageview",
 			SessionID: "s1",
-			Tags: "{}", Extra: "{}", Performance: "{}",
+			Tags:      "{}", Extra: "{}", Performance: "{}",
 			CreatedAt: now.Add(-1 * time.Hour).UnixMilli(),
 		},
 		{
 			AppID: "stats-app", Type: "error", Level: "error", Message: "crash",
 			SessionID: "s1",
-			Tags: "{}", Extra: "{}", Performance: "{}",
+			Tags:      "{}", Extra: "{}", Performance: "{}",
 			CreatedAt: now.Add(-30 * time.Minute).UnixMilli(),
 		},
 		{
 			AppID: "stats-app", Type: "info", Level: "info", Message: "pageview",
 			SessionID: "s2",
-			Tags: "{}", Extra: "{}", Performance: "{}",
+			Tags:      "{}", Extra: "{}", Performance: "{}",
 			CreatedAt: now.Add(-15 * time.Minute).UnixMilli(),
 		},
 	}
@@ -816,10 +816,10 @@ func TestGetSessionStats_EmptyApp(t *testing.T) {
 
 func TestCalculateChange(t *testing.T) {
 	tests := []struct {
-		name     string
-		today    int64
+		name      string
+		today     int64
 		yesterday int64
-		want     float64
+		want      float64
 	}{
 		{"both zero", 0, 0, 0},
 		{"today from zero", 5, 0, 100.0},

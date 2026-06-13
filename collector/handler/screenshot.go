@@ -152,7 +152,7 @@ type ScreenshotFileHandler struct {
 }
 
 func NewScreenshotFileHandler(screenshotDir string) *ScreenshotFileHandler {
-	return &ScreenshotFileHandler{ screenshotDir: screenshotDir }
+	return &ScreenshotFileHandler{screenshotDir: screenshotDir}
 }
 
 func (h *ScreenshotFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
