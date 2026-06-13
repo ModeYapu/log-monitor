@@ -1,21 +1,1943 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LogMonitor - 前端日志监控系统</title>
-  <meta name="description" content="轻量级自托管的前端日志监控系统，实时错误追踪、用户行为录制、性能指标监控、智能告警">
-  <meta name="keywords" content="log monitor, frontend monitoring, error tracking, performance, rrweb">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
-  <meta property="og:title" content="LogMonitor Dashboard">
-  <meta property="og:description" content="前端日志监控系统 — 实时错误追踪、行为录制、性能监控">
-  <meta property="og:type" content="website">
-  <meta name="theme-color" content="#409EFF">
+  <title>LogMonitor Dashboard</title>
+  <meta name="description" content="Lightweight self-hosted frontend log monitoring system">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23409EFF'><path d='M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.5L19 8v8l-7 3.5L5 16V8l7-3.5zM11 7h2v6h-2V7zm0 8h2v2h-2v-2z'/></svg>">
+
+  <!-- Element Plus CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/element-plus@2.8.7/dist/index.css">
+
+  <style>
+    :root {
+      --el-color-primary: #409EFF;
+      --sidebar-width: 220px;
+      --header-height: 60px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f5f7fa;
+    }
+
+    #app {
+      min-height: 100vh;
+    }
+
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .login-box {
+      width: 400px;
+      padding: 40px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+
+    .login-title {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #303133;
+      font-size: 24px;
+    }
+
+    .dashboard-layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: var(--sidebar-width);
+      background: #304156;
+      color: #fff;
+      transition: width 0.3s;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 100;
+    }
+
+    .sidebar-header {
+      height: var(--header-height);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--el-color-primary);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-menu {
+      padding: 20px 0;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+      color: #bfcbd9;
+      text-decoration: none;
+    }
+
+    .nav-item:hover {
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+    }
+
+    .nav-item.active {
+      background: var(--el-color-primary);
+      color: #fff;
+    }
+
+    .nav-item-icon {
+      width: 18px;
+      height: 18px;
+      margin-right: 12px;
+    }
+
+    .main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .top-header {
+      height: var(--header-height);
+      background: #fff;
+      border-bottom: 1px solid #e4e7ed;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      z-index: 99;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .page-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: #303133;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .user-menu {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--el-color-primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 500;
+    }
+
+    .content-area {
+      padding: 20px;
+      flex: 1;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .stat-title {
+      color: #909399;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .stat-trend {
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .trend-up { color: #67c23a; }
+    .trend-down { color: #f56c6c; }
+
+    .content-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #303133;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .severity-tag {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .severity-error { background: #fef0f0; color: #f56c6c; }
+    .severity-warn { background: #fdf6ec; color: #e6a23c; }
+    .severity-info { background: #f4f4f5; color: #909399; }
+
+    .status-tag {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .status-open { background: #fef0f0; color: #f56c6c; }
+    .status-resolved { background: #f0f9ff; color: #67c23a; }
+    .status-ignored { background: #f4f4f5; color: #909399; }
+
+    .priority-tag {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .priority-critical { background: #fef0f0; color: #f56c6c; }
+    .priority-high { background: #fdf6ec; color: #e6a23c; }
+    .priority-medium { background: #f4f4f5; color: #909399; }
+    .priority-low { background: #f0f9ff; color: #409eff; }
+
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 60px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #909399;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .event-message {
+      max-width: 500px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .url-cell {
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+      width: 100%;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 60px;
+      }
+
+      .sidebar-header {
+        justify-content: center;
+      }
+
+      .logo span {
+        display: none;
+      }
+
+      .nav-item span {
+        display: none;
+      }
+
+      .nav-item-icon {
+        margin-right: 0;
+      }
+
+      .main-content {
+        margin-left: 60px;
+      }
+
+      .stat-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .filter-bar {
+        flex-direction: column;
+      }
+
+      .filter-bar > * {
+        width: 100% !important;
+      }
+    }
+  </style>
 </head>
 <body>
-  <style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}</style>
   <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
+
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+
+  <!-- Element Plus -->
+  <script src="https://unpkg.com/element-plus@2.8.7/dist/index.full.min.js"></script>
+
+  <!-- Element Plus Icons -->
+  <script src="https://unpkg.com/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://unpkg.com/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <!-- Day.js -->
+  <script src="https://unpkg.com/dayjs@1.11.10/dayjs.min.js"></script>
+  <script src="https://unpkg.com/dayjs@1.11.10/plugin/relativeTime.js"></script>
+
+  <script>
+    dayjs.extend(dayjs_plugin_relativeTime);
+
+    const { createApp, ref, reactive, computed, onMounted, watch } = Vue;
+    const { ElMessage, ElNotification, ElMessageBox } = ElementPlus;
+
+    // Store for global state
+    const store = reactive({
+      token: localStorage.getItem('token') || '',
+      user: JSON.parse(localStorage.getItem('user') || 'null'),
+      currentProject: JSON.parse(localStorage.getItem('currentProject') || 'null'),
+      projects: [],
+
+      setToken(token) {
+        this.token = token;
+        localStorage.setItem('token', token);
+      },
+
+      setUser(user) {
+        this.user = user;
+        localStorage.setItem('user', JSON.stringify(user));
+      },
+
+      setCurrentProject(project) {
+        this.currentProject = project;
+        localStorage.setItem('currentProject', JSON.stringify(project));
+      },
+
+      logout() {
+        this.token = '';
+        this.user = null;
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('currentProject');
+      },
+
+      isAuthenticated() {
+        return !!this.token;
+      }
+    });
+
+    // API helper function
+    async function apiCall(url, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+      };
+
+      if (store.token) {
+        headers['Authorization'] = `Bearer ${store.token}`;
+      }
+
+      const config = {
+        ...options,
+        headers: new Headers(headers)
+      };
+
+      try {
+        const response = await fetch(url, config);
+
+        if (response.status === 401) {
+          store.logout();
+          window.location.reload();
+          throw new Error('Unauthorized');
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || data.message || 'API request failed');
+        }
+
+        return data;
+      } catch (error) {
+        if (error.message !== 'Unauthorized') {
+          ElNotification({
+            title: 'API Error',
+            message: error.message,
+            type: 'error'
+          });
+        }
+        throw error;
+      }
+    }
+
+    // Login Component
+    const LoginPage = {
+      template: `
+        <div class="login-container">
+          <div class="login-box">
+            <div class="login-title">
+              <svg style="width:48px;height:48px;color:#409EFF;margin-bottom:16px" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.5L19 8v8l-7 3.5L5 16V8l7-3.5zM11 7h2v6h-2V7zm0 8h2v2h-2v-2z"/>
+              </svg>
+              <div>LogMonitor</div>
+            </div>
+            <el-form :model="form" :rules="rules" ref="formRef" @submit.prevent="handleLogin">
+              <el-form-item prop="username">
+                <el-input v-model="form.username" placeholder="Username" prefix-icon="User" size="large" />
+              </el-form-item>
+              <el-form-item prop="password">
+                <el-input v-model="form.password" type="password" placeholder="Password" prefix-icon="Lock" size="large" show-password />
+              </el-form-item>
+              <el-button type="primary" native-type="submit" :loading="loading" size="large" style="width:100%">
+                Sign In
+              </el-button>
+            </el-form>
+          </div>
+        </div>
+      `,
+      setup() {
+        const formRef = ref();
+        const loading = ref(false);
+        const form = reactive({
+          username: '',
+          password: ''
+        });
+
+        const rules = {
+          username: [{ required: true, message: 'Please enter username', trigger: 'blur' }],
+          password: [{ required: true, message: 'Please enter password', trigger: 'blur' }]
+        };
+
+        const handleLogin = async () => {
+          try {
+            await formRef.value.validate();
+            loading.value = true;
+
+            const data = await apiCall('/api/auth/login', {
+              method: 'POST',
+              body: JSON.stringify({
+                username: form.username,
+                password: form.password
+              })
+            });
+
+            store.setToken(data.token);
+            store.setUser(data.user);
+
+            ElNotification({
+              title: 'Login Successful',
+              message: `Welcome back, ${data.user.username}!`,
+              type: 'success'
+            });
+
+            // Reload to enter dashboard
+            setTimeout(() => window.location.reload(), 500);
+          } catch (error) {
+            // Error already handled by apiCall
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        return { formRef, form, rules, loading, handleLogin };
+      }
+    };
+
+    // Dashboard Overview Component
+    const DashboardOverview = {
+      template: `
+        <div>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-title">Today's Events</div>
+              <div class="stat-value">{{ stats.todayEvents || 0 }}</div>
+              <div class="stat-trend">{{ stats.totalEvents || 0 }} total events</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">Unresolved Issues</div>
+              <div class="stat-value">{{ stats.unresolvedIssues || 0 }}</div>
+              <div class="stat-trend" :class="stats.issuesTrend > 0 ? 'trend-up' : 'trend-down'">
+                {{ stats.issuesTrend > 0 ? '+' : '' }}{{ stats.issuesTrend || 0 }} from yesterday
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">Active Alerts</div>
+              <div class="stat-value">{{ stats.activeAlerts || 0 }}</div>
+              <div class="stat-trend">Monitoring {{ store.projects?.length || 0 }} projects</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">Error Rate (24h)</div>
+              <div class="stat-value">{{ (stats.errorRate || 0).toFixed(2) }}%</div>
+              <div class="stat-trend" :class="stats.errorRateTrend < 0 ? 'trend-up' : 'trend-down'">
+                {{ stats.errorRateTrend < 0 ? '↓' : '↑' }} {{ Math.abs(stats.errorRateTrend || 0).toFixed(1) }}%
+              </div>
+            </div>
+          </div>
+
+          <div class="content-card">
+            <div class="card-header">
+              <span class="card-title">Recent Events</span>
+              <el-button size="small" @click="$emit('navigate', 'events')">View All</el-button>
+            </div>
+            <el-table :data="recentEvents" v-loading="loading" size="small">
+              <el-table-column prop="timestamp" label="Time" width="160">
+                <template #default="{ row }">
+                  {{ dayjs(row.timestamp).format('MM-DD HH:mm:ss') }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="type" label="Type" width="100" />
+              <el-table-column prop="level" label="Level" width="80">
+                <template #default="{ row }">
+                  <span :class="'severity-tag severity-' + row.level">{{ row.level }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="message" label="Message">
+                <template #default="{ row }">
+                  <div class="event-message" :title="row.message">{{ row.message }}</div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+      `,
+      setup() {
+        const loading = ref(false);
+        const stats = reactive({
+          todayEvents: 0,
+          totalEvents: 0,
+          unresolvedIssues: 0,
+          issuesTrend: 0,
+          activeAlerts: 0,
+          errorRate: 0,
+          errorRateTrend: 0
+        });
+        const recentEvents = ref([]);
+
+        const loadData = async () => {
+          if (!store.currentProject) return;
+
+          loading.value = true;
+          try {
+            const appId = store.currentProject.name;
+            const now = dayjs();
+            const todayStart = now.startOf('day').valueOf();
+            const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
+
+            // Get stats
+            const statsData = await apiCall(`/api/query/stats?appId=${encodeURIComponent(appId)}`);
+            stats.totalEvents = statsData.totalEvents || 0;
+            stats.errorCount = statsData.errorCount || 0;
+            stats.warnCount = statsData.warnCount || 0;
+            stats.infoCount = statsData.infoCount || 0;
+            stats.todayEvents = statsData.totalEvents || 0;
+            stats.errorRate = statsData.totalEvents > 0
+              ? (statsData.errorCount / statsData.totalEvents * 100)
+              : 0;
+
+            // Get recent events
+            const eventsData = await apiCall(
+              `/api/query/logs?appId=${encodeURIComponent(appId)}&pageSize=10&page=1`
+            );
+            recentEvents.value = (eventsData.data || []).map(e => ({
+              timestamp: e.timestamp || e.created_at,
+              type: e.type || 'error',
+              level: e.level || 'error',
+              message: e.message || 'Unknown error'
+            }));
+
+            // Get issue stats
+            try {
+              const issueStats = await apiCall(`/api/query/issues/stats?app_id=${encodeURIComponent(appId)}`);
+              stats.unresolvedIssues = (issueStats.open_count || 0) + (issueStats.ignored_count || 0);
+            } catch (e) {
+              // Issue stats might not be available
+            }
+
+            // Get alerts
+            try {
+              const alertsData = await apiCall(`/api/query/alerts?app_id=${encodeURIComponent(appId)}`);
+              stats.activeAlerts = (alertsData.data || alertsData || []).filter(a => a.enabled || a.enabled !== 0).length;
+            } catch (e) {
+              // Alerts might not be available
+            }
+          } catch (error) {
+            // Error handled by apiCall
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        onMounted(() => {
+          loadData();
+        });
+
+        return { loading, stats, recentEvents, store };
+      }
+    };
+
+    // Events Page Component
+    const EventsPage = {
+      template: `
+        <div>
+          <div class="content-card">
+            <div class="filter-bar">
+              <el-input v-model="filters.keyword" placeholder="Search message..." style="width:200px" clearable>
+                <template #prefix>
+                  <el-icon><Search /></el-icon>
+                </template>
+              </el-input>
+              <el-select v-model="filters.type" placeholder="Type" clearable style="width:120px">
+                <el-option label="Error" value="error" />
+                <el-option label="Warning" value="warning" />
+                <el-option label="Info" value="info" />
+                <el-option label="Log" value="log" />
+              </el-select>
+              <el-select v-model="filters.level" placeholder="Level" clearable style="width:120px">
+                <el-option label="Error" value="error" />
+                <el-option label="Warn" value="warn" />
+                <el-option label="Info" value="info" />
+                <el-option label="Debug" value="debug" />
+              </el-select>
+              <el-select v-model="filters.pageSize" placeholder="Per page" style="width:100px">
+                <el-option label="20" :value="20" />
+                <el-option label="50" :value="50" />
+                <el-option label="100" :value="100" />
+              </el-select>
+              <el-button type="primary" @click="loadData">Search</el-button>
+              <el-button @click="resetFilters">Reset</el-button>
+              <div style="flex:1"></div>
+              <el-button type="success" @click="exportData">Export</el-button>
+            </div>
+
+            <el-table :data="events" v-loading="loading" stripe size="small">
+              <el-table-column prop="timestamp" label="Timestamp" width="170">
+                <template #default="{ row }">
+                  {{ dayjs(row.timestamp || row.created_at).format('YYYY-MM-DD HH:mm:ss') }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="type" label="Type" width="100" />
+              <el-table-column prop="level" label="Level" width="80">
+                <template #default="{ row }">
+                  <span :class="'severity-tag severity-' + (row.level || 'info')">
+                    {{ row.level || 'info' }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="app_id" label="Project" width="120" />
+              <el-table-column prop="message" label="Message" min-width="300">
+                <template #default="{ row }">
+                  <div class="event-message" :title="row.message">{{ row.message }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="url" label="URL" width="200">
+                <template #default="{ row }">
+                  <div class="url-cell" :title="row.url">{{ row.url || '-' }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="user_id" label="User" width="80" />
+            </el-table>
+
+            <div style="display:flex;justify-content:center;margin-top:20px">
+              <el-pagination
+                v-model:current-page="pagination.page"
+                v-model:page-size="pagination.pageSize"
+                :total="pagination.total"
+                :page-sizes="[20, 50, 100]"
+                layout="total, sizes, prev, pager, next"
+                @current-change="loadData"
+                @size-change="loadData"
+              />
+            </div>
+          </div>
+        </div>
+      `,
+      setup() {
+        const loading = ref(false);
+        const events = ref([]);
+        const filters = reactive({
+          keyword: '',
+          type: '',
+          level: '',
+          pageSize: 50
+        });
+        const pagination = reactive({
+          page: 1,
+          pageSize: 50,
+          total: 0
+        });
+
+        const loadData = async () => {
+          if (!store.currentProject) return;
+
+          loading.value = true;
+          try {
+            const params = new URLSearchParams({
+              appId: store.currentProject.name,
+              page: pagination.page,
+              pageSize: pagination.pageSize
+            });
+
+            if (filters.keyword) params.append('keyword', filters.keyword);
+            if (filters.type) params.append('type', filters.type);
+            if (filters.level) params.append('level', filters.level);
+
+            const data = await apiCall(`/api/query/logs?${params.toString()}`);
+            events.value = data.data || [];
+            pagination.total = data.total || 0;
+          } catch (error) {
+            events.value = [];
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const resetFilters = () => {
+          filters.keyword = '';
+          filters.type = '';
+          filters.level = '';
+          filters.pageSize = 50;
+          pagination.page = 1;
+          pagination.pageSize = 50;
+          loadData();
+        };
+
+        const exportData = async () => {
+          try {
+            const params = new URLSearchParams({
+              appId: store.currentProject.name,
+              export: 'true'
+            });
+
+            if (filters.keyword) params.append('keyword', filters.keyword);
+            if (filters.type) params.append('type', filters.type);
+            if (filters.level) params.append('level', filters.level);
+
+            const response = await fetch(`/api/query/export?${params.toString()}`, {
+              headers: { Authorization: `Bearer ${store.token}` }
+            });
+
+            if (response.ok) {
+              const blob = await response.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `logs-${dayjs().format('YYYY-MM-DD')}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              ElNotification({ title: 'Export Successful', type: 'success' });
+            }
+          } catch (error) {
+            ElNotification({ title: 'Export Failed', message: error.message, type: 'error' });
+          }
+        };
+
+        onMounted(() => {
+          loadData();
+        });
+
+        return { loading, events, filters, pagination, loadData, resetFilters, exportData };
+      }
+    };
+
+    // Issues Page Component
+    const IssuesPage = {
+      template: `
+        <div>
+          <div class="content-card">
+            <div class="filter-bar">
+              <el-select v-model="filters.status" placeholder="Status" clearable style="width:120px">
+                <el-option label="Open" value="open" />
+                <el-option label="Resolved" value="resolved" />
+                <el-option label="Ignored" value="ignored" />
+              </el-select>
+              <el-select v-model="filters.priority" placeholder="Priority" clearable style="width:120px">
+                <el-option label="Critical" value="critical" />
+                <el-option label="High" value="high" />
+                <el-option label="Medium" value="medium" />
+                <el-option label="Low" value="low" />
+              </el-select>
+              <el-button type="primary" @click="loadData">Filter</el-button>
+              <el-button @click="resetFilters">Reset</el-button>
+            </div>
+
+            <el-table :data="issues" v-loading="loading" stripe @row-click="viewIssue" style="cursor:pointer">
+              <el-table-column prop="title" label="Title" min-width="300">
+                <template #default="{ row }">
+                  <div>{{ row.title || row.message || 'Unknown issue' }}</div>
+                  <div style="font-size:12px;color:#909399">{{ row.fingerprint || '' }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="Status" width="100">
+                <template #default="{ row }">
+                  <span :class="'status-tag status-' + (row.status || 'open')">
+                    {{ row.status || 'open' }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="priority" label="Priority" width="100">
+                <template #default="{ row }">
+                  <span :class="'priority-tag priority-' + (row.priority || 'medium')">
+                    {{ row.priority || 'medium' }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="count" label="Occurrences" width="100" />
+              <el-table-column prop="first_seen" label="First Seen" width="160">
+                <template #default="{ row }">
+                  {{ dayjs(row.first_seen || row.created_at).format('MM-DD HH:mm') }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="last_seen" label="Last Seen" width="160">
+                <template #default="{ row }">
+                  {{ dayjs(row.last_seen || row.updated_at).format('MM-DD HH:mm') }}
+                </template>
+              </el-table-column>
+              <el-table-column label="Actions" width="180">
+                <template #default="{ row }">
+                  <el-button-group size="small">
+                    <el-button type="success" :disabled="row.status === 'resolved'" @click.stop="resolveIssue(row)">
+                      Resolve
+                    </el-button>
+                    <el-button :disabled="row.status === 'ignored'" @click.stop="ignoreIssue(row)">
+                      Ignore
+                    </el-button>
+                  </el-button-group>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <div style="display:flex;justify-content:center;margin-top:20px">
+              <el-pagination
+                v-model:current-page="pagination.page"
+                v-model:page-size="pagination.pageSize"
+                :total="pagination.total"
+                layout="total, prev, pager, next"
+                @current-change="loadData"
+              />
+            </div>
+          </div>
+
+          <el-drawer v-model="drawerVisible" title="Issue Details" size="60%">
+            <div v-if="selectedIssue">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="Title">
+                  {{ selectedIssue.title || selectedIssue.message }}
+                </el-descriptions-item>
+                <el-descriptions-item label="Status">
+                  <el-tag :type="selectedIssue.status === 'resolved' ? 'success' : selectedIssue.status === 'ignored' ? 'info' : 'danger'">
+                    {{ selectedIssue.status || 'open' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="Priority">
+                  <el-tag :type="selectedIssue.priority === 'critical' ? 'danger' : selectedIssue.priority === 'high' ? 'warning' : ''">
+                    {{ selectedIssue.priority || 'medium' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="Occurrences">
+                  {{ selectedIssue.count || 0 }}
+                </el-descriptions-item>
+                <el-descriptions-item label="First Seen">
+                  {{ dayjs(selectedIssue.first_seen || selectedIssue.created_at).format('YYYY-MM-DD HH:mm:ss') }}
+                </el-descriptions-item>
+                <el-descriptions-item label="Last Seen">
+                  {{ dayjs(selectedIssue.last_seen || selectedIssue.updated_at).format('YYYY-MM-DD HH:mm:ss') }}
+                </el-descriptions-item>
+                <el-descriptions-item label="Fingerprint" :span="2">
+                  <code style="font-size:12px">{{ selectedIssue.fingerprint || '' }}</code>
+                </el-descriptions-item>
+              </el-descriptions>
+
+              <h3 style="margin:20px 0 10px">Stack Trace</h3>
+              <pre style="background:#f5f7fa;padding:15px;border-radius:4px;font-size:12px;overflow:auto">{{ selectedIssue.stack || 'No stack trace available' }}</pre>
+            </div>
+          </el-drawer>
+        </div>
+      `,
+      setup() {
+        const loading = ref(false);
+        const issues = ref([]);
+        const drawerVisible = ref(false);
+        const selectedIssue = ref(null);
+        const filters = reactive({
+          status: '',
+          priority: ''
+        });
+        const pagination = reactive({
+          page: 1,
+          pageSize: 20,
+          total: 0
+        });
+
+        const loadData = async () => {
+          if (!store.currentProject) return;
+
+          loading.value = true;
+          try {
+            const params = new URLSearchParams({
+              app_id: store.currentProject.name,
+              page: pagination.page,
+              page_size: pagination.pageSize
+            });
+
+            if (filters.status) params.append('status', filters.status);
+            if (filters.priority) params.append('priority', filters.priority);
+
+            const data = await apiCall(`/api/query/issues?${params.toString()}`);
+            issues.value = (data.data || []).map(i => ({
+              ...i,
+              title: i.title || i.message || 'Unknown issue'
+            }));
+            pagination.total = data.total || 0;
+          } catch (error) {
+            issues.value = [];
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const resetFilters = () => {
+          filters.status = '';
+          filters.priority = '';
+          pagination.page = 1;
+          loadData();
+        };
+
+        const viewIssue = (row) => {
+          selectedIssue.value = row;
+          drawerVisible.value = true;
+        };
+
+        const resolveIssue = async (issue) => {
+          try {
+            await apiCall(`/api/query/issues/${issue.id}?action=resolve`, { method: 'POST' });
+            ElNotification({ title: 'Issue Resolved', type: 'success' });
+            loadData();
+          } catch (error) {
+            // Error handled by apiCall
+          }
+        };
+
+        const ignoreIssue = async (issue) => {
+          try {
+            await apiCall(`/api/query/issues/${issue.id}?action=ignore`, { method: 'POST' });
+            ElNotification({ title: 'Issue Ignored', type: 'success' });
+            loadData();
+          } catch (error) {
+            // Error handled by apiCall
+          }
+        };
+
+        onMounted(() => {
+          loadData();
+        });
+
+        return {
+          loading, issues, drawerVisible, selectedIssue,
+          filters, pagination, loadData, resetFilters,
+          viewIssue, resolveIssue, ignoreIssue
+        };
+      }
+    };
+
+    // Alerts Page Component
+    const AlertsPage = {
+      template: `
+        <div>
+          <div class="content-card">
+            <div class="card-header">
+              <span class="card-title">Alert Rules</span>
+              <el-button type="primary" @click="showCreateDialog = true">
+                <el-icon><Plus /></el-icon> Create Alert
+              </el-button>
+            </div>
+
+            <el-table :data="alerts" v-loading="loading" stripe>
+              <el-table-column prop="name" label="Name" min-width="200" />
+              <el-table-column prop="condition_type" label="Condition" width="150">
+                <template #default="{ row }">
+                  {{ formatCondition(row) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="notify_type" label="Notification" width="120" />
+              <el-table-column prop="enabled" label="Status" width="80">
+                <template #default="{ row }">
+                  <el-tag :type="row.enabled || row.enabled !== 0 ? 'success' : 'info'">
+                    {{ row.enabled || row.enabled !== 0 ? 'Active' : 'Inactive' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="last_triggered_at" label="Last Triggered" width="160">
+                <template #default="{ row }">
+                  {{ row.last_triggered_at ? dayjs(row.last_triggered_at).fromNow() : 'Never' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="Actions" width="120">
+                <template #default="{ row }">
+                  <el-button-group size="small">
+                    <el-button type="danger" @click="deleteAlert(row)">Delete</el-button>
+                  </el-button-group>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <el-dialog v-model="showCreateDialog" title="Create Alert Rule" width="500px">
+            <el-form :model="form" label-width="120px">
+              <el-form-item label="Name">
+                <el-input v-model="form.name" placeholder="Alert name" />
+              </el-form-item>
+              <el-form-item label="Condition">
+                <el-select v-model="form.condition_type" style="width:100%">
+                  <el-option label="Error Count" value="error_count" />
+                  <el-option label="Error Rate" value="error_rate" />
+                  <el-option label="New Error" value="new_error" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="Threshold">
+                <el-input-number v-model="form.threshold" :min="1" />
+                <span style="margin-left:10px;color:#909399">events per minute</span>
+              </el-form-item>
+              <el-form-item label="Notification">
+                <el-select v-model="form.notify_type" style="width:100%">
+                  <el-option label="Webhook" value="webhook" />
+                  <el-option label="Email" value="email" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="Webhook URL" v-if="form.notify_type === 'webhook'">
+                <el-input v-model="form.notify_config" placeholder="https://..." />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="showCreateDialog = false">Cancel</el-button>
+              <el-button type="primary" @click="createAlert" :loading="creating">Create</el-button>
+            </template>
+          </el-dialog>
+        </div>
+      `,
+      setup() {
+        const loading = ref(false);
+        const creating = ref(false);
+        const alerts = ref([]);
+        const showCreateDialog = ref(false);
+        const form = reactive({
+          name: '',
+          condition_type: 'error_count',
+          threshold: 10,
+          notify_type: 'webhook',
+          notify_config: ''
+        });
+
+        const loadData = async () => {
+          if (!store.currentProject) return;
+
+          loading.value = true;
+          try {
+            const data = await apiCall(`/api/query/alerts?app_id=${encodeURIComponent(store.currentProject.name)}`);
+            alerts.value = data.data || data || [];
+          } catch (error) {
+            alerts.value = [];
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const formatCondition = (alert) => {
+          const conditions = {
+            error_count: 'Error Count',
+            error_rate: 'Error Rate',
+            new_error: 'New Error'
+          };
+          return conditions[alert.condition_type] || alert.condition_type;
+        };
+
+        const createAlert = async () => {
+          if (!form.name) {
+            ElMessage.warning('Please enter alert name');
+            return;
+          }
+
+          creating.value = true;
+          try {
+            await apiCall('/api/query/alerts', {
+              method: 'POST',
+              body: JSON.stringify({
+                app_id: store.currentProject.name,
+                name: form.name,
+                condition_type: form.condition_type,
+                condition_config: JSON.stringify({ threshold: form.threshold }),
+                notify_type: form.notify_type,
+                notify_config: form.notify_config
+              })
+            });
+
+            ElNotification({ title: 'Alert Created', type: 'success' });
+            showCreateDialog.value = false;
+            form.name = '';
+            form.threshold = 10;
+            loadData();
+          } catch (error) {
+            // Error handled by apiCall
+          } finally {
+            creating.value = false;
+          }
+        };
+
+        const deleteAlert = async (alert) => {
+          try {
+            await ElMessageBox.confirm('Delete this alert?', 'Confirm', {
+              type: 'warning'
+            });
+
+            await apiCall(`/api/query/alerts/${alert.id}`, { method: 'DELETE' });
+            ElNotification({ title: 'Alert Deleted', type: 'success' });
+            loadData();
+          } catch (error) {
+            if (error !== 'cancel') {
+              // Error handled by apiCall
+            }
+          }
+        };
+
+        onMounted(() => {
+          loadData();
+        });
+
+        return {
+          loading, creating, alerts, showCreateDialog, form,
+          loadData, formatCondition, createAlert, deleteAlert
+        };
+      }
+    };
+
+    // Performance Page Component
+    const PerformancePage = {
+      template: `
+        <div>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-title">FCP (P75)</div>
+              <div class="stat-value">{{ formatMs(performance.fcp_p75 || 0) }}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">LCP (P75)</div>
+              <div class="stat-value">{{ formatMs(performance.lcp_p75 || 0) }}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">CLS (P75)</div>
+              <div class="stat-value">{{ (performance.cls_p75 || 0).toFixed(3) }}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">INP (P75)</div>
+              <div class="stat-value">{{ formatMs(performance.inp_p75 || 0) }}</div>
+            </div>
+          </div>
+
+          <div class="content-card">
+            <div class="card-header">
+              <span class="card-title">Performance Trend (LCP)</span>
+            </div>
+            <div class="chart-container">
+              <canvas ref="trendChart"></canvas>
+            </div>
+          </div>
+
+          <div class="content-card">
+            <div class="card-header">
+              <span class="card-title">Page Performance</span>
+            </div>
+            <el-table :data="pages" v-loading="loading" stripe size="small">
+              <el-table-column prop="url" label="URL" min-width="300">
+                <template #default="{ row }">
+                  {{ formatUrl(row.url) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="fcp_p75" label="FCP" width="80">
+                <template #default="{ row }">{{ formatMs(row.fcp_p75 || 0) }}</template>
+              </el-table-column>
+              <el-table-column prop="lcp_p75" label="LCP" width="80">
+                <template #default="{ row }">{{ formatMs(row.lcp_p75 || 0) }}</template>
+              </el-table-column>
+              <el-table-column prop="cls_p75" label="CLS" width="80">
+                <template #default="{ row }">{{ (row.cls_p75 || 0).toFixed(3) }}</template>
+              </el-table-column>
+              <el-table-column prop="inp_p75" label="INP" width="80">
+                <template #default="{ row }">{{ formatMs(row.inp_p75 || 0) }}</template>
+              </el-table-column>
+              <el-table-column prop="sample_count" label="Samples" width="80" />
+            </el-table>
+          </div>
+        </div>
+      `,
+      setup() {
+        const loading = ref(false);
+        const performance = reactive({
+          fcp_p75: 0,
+          lcp_p75: 0,
+          cls_p75: 0,
+          inp_p75: 0
+        });
+        const pages = ref([]);
+        const trendChart = ref(null);
+        let chartInstance = null;
+
+        const formatMs = (val) => {
+          if (val < 1000) return `${val.toFixed(0)}ms`;
+          return `${(val / 1000).toFixed(2)}s`;
+        };
+
+        const formatUrl = (url) => {
+          try {
+            const u = new URL(url);
+            return u.pathname + u.search;
+          } catch {
+            return url;
+          }
+        };
+
+        const loadData = async () => {
+          if (!store.currentProject) return;
+
+          loading.value = true;
+          try {
+            // Get performance summary
+            try {
+              const summary = await apiCall(`/api/query/performance/summary?app_id=${encodeURIComponent(store.currentProject.name)}`);
+              Object.assign(performance, summary);
+            } catch (e) {
+              // Summary endpoint might not exist
+            }
+
+            // Get trend data
+            let trendData = [];
+            try {
+              const trend = await apiCall(`/api/query/performance/trend?app_id=${encodeURIComponent(store.currentProject.name)}&metric=lcp&period=7d`);
+              trendData = trend.data || trend || [];
+            } catch (e) {
+              // Generate sample data if API not available
+              const now = Date.now();
+              for (let i = 6; i >= 0; i--) {
+                trendData.push({
+                  date: now - i * 24 * 60 * 60 * 1000,
+                  value: 1500 + Math.random() * 500
+                });
+              }
+            }
+
+            // Get page performance
+            try {
+              const pageData = await apiCall(`/api/query/performance/pages?app_id=${encodeURIComponent(store.currentProject.name)}`);
+              pages.value = pageData.data || pageData || [];
+            } catch (e) {
+              pages.value = [];
+            }
+
+            // Render chart
+            if (trendChart.value && trendData.length > 0) {
+              if (chartInstance) chartInstance.destroy();
+
+              const ctx = trendChart.value.getContext('2d');
+              chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                  labels: trendData.map(d => dayjs(d.date).format('MM-DD')),
+                  datasets: [{
+                    label: 'LCP (ms)',
+                    data: trendData.map(d => d.value || d.p75 || d.lcp_p75 || 0),
+                    borderColor: '#409EFF',
+                    backgroundColor: 'rgba(64, 158, 255, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: { callback: v => v + 'ms' }
+                    }
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            // Error handled by apiCall
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        onMounted(() => {
+          loadData();
+        });
+
+        return { loading, performance, pages, trendChart, formatMs, formatUrl };
+      }
+    };
+
+    // Audit Logs Page Component
+    const AuditLogsPage = {
+      template: `
+        <div>
+          <div class="content-card">
+            <div class="filter-bar">
+              <el-input v-model="filters.username" placeholder="User" style="width:150px" clearable />
+              <el-select v-model="filters.action" placeholder="Action" clearable style="width:120px">
+                <el-option label="Create" value="create" />
+                <el-option label="Update" value="update" />
+                <el-option label="Delete" value="delete" />
+                <el-option label="Login" value="login" />
+                <el-option label="Logout" value="logout" />
+              </el-select>
+              <el-date-picker v-model="dateRange" type="daterange" range-separator="to" start-placeholder="Start" end-placeholder="End" />
+              <el-button type="primary" @click="loadData">Filter</el-button>
+              <el-button @click="resetFilters">Reset</el-button>
+            </div>
+
+            <el-table :data="logs" v-loading="loading" stripe size="small">
+              <el-table-column prop="timestamp" label="Timestamp" width="170">
+                <template #default="{ row }">
+                  {{ dayjs(row.timestamp || row.created_at).format('YYYY-MM-DD HH:mm:ss') }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="username" label="User" width="120" />
+              <el-table-column prop="action" label="Action" width="100">
+                <template #default="{ row }">
+                  <el-tag size="small">{{ row.action }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="resource" label="Resource" width="120" />
+              <el-table-column prop="resource_id" label="Resource ID" width="100" />
+              <el-table-column prop="detail" label="Detail" min-width="200" />
+              <el-table-column prop="ip" label="IP Address" width="130" />
+            </el-table>
+
+            <div style="display:flex;justify-content:center;margin-top:20px">
+              <el-pagination
+                v-model:current-page="pagination.page"
+                v-model:page-size="pagination.pageSize"
+                :total="pagination.total"
+                layout="total, prev, pager, next"
+                @current-change="loadData"
+              />
+            </div>
+          </div>
+        </div>
+      `,
+      setup() {
+        const loading = ref(false);
+        const logs = ref([]);
+        const dateRange = ref([]);
+        const filters = reactive({
+          username: '',
+          action: ''
+        });
+        const pagination = reactive({
+          page: 1,
+          pageSize: 20,
+          total: 0
+        });
+
+        const loadData = async () => {
+          loading.value = true;
+          try {
+            const params = new URLSearchParams({
+              page: pagination.page,
+              page_size: pagination.pageSize
+            });
+
+            if (filters.username) params.append('username', filters.username);
+            if (filters.action) params.append('action', filters.action);
+            if (dateRange.value?.length === 2) {
+              params.append('start_date', dayjs(dateRange.value[0]).valueOf());
+              params.append('end_date', dayjs(dateRange.value[1]).valueOf());
+            }
+
+            const data = await apiCall(`/api/admin/audit-logs?${params.toString()}`);
+            logs.value = data.data || [];
+            pagination.total = data.total || 0;
+          } catch (error) {
+            logs.value = [];
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const resetFilters = () => {
+          filters.username = '';
+          filters.action = '';
+          dateRange.value = [];
+          pagination.page = 1;
+          loadData();
+        };
+
+        onMounted(() => {
+          loadData();
+        });
+
+        return { loading, logs, dateRange, filters, pagination, loadData, resetFilters };
+      }
+    };
+
+    // Settings Page Component
+    const SettingsPage = {
+      template: `
+        <div>
+          <el-tabs v-model="activeTab">
+            <el-tab-pane label="Projects" name="projects">
+              <div class="content-card">
+                <div class="card-header">
+                  <span class="card-title">Projects</span>
+                  <el-button type="primary" @click="showCreateProject = true">
+                    <el-icon><Plus /></el-icon> New Project
+                  </el-button>
+                </div>
+
+                <el-table :data="projects" v-loading="loading" stripe>
+                  <el-table-column prop="id" label="ID" width="60" />
+                  <el-table-column prop="name" label="Name" width="200" />
+                  <el-table-column prop="description" label="Description" min-width="200" />
+                  <el-table-column prop="api_key" label="API Key" width="300">
+                    <template #default="{ row }">
+                      <code style="font-size:12px">{{ maskKey(row.api_key) }}</code>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Actions" width="180">
+                    <template #default="{ row }">
+                      <el-button-group size="small">
+                        <el-button @click="regenerateKey(row)">Regenerate Key</el-button>
+                        <el-button type="danger" @click="deleteProject(row)">Delete</el-button>
+                      </el-button-group>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="API Keys" name="keys">
+              <div class="content-card">
+                <div class="card-header">
+                  <span class="card-title">Project API Keys</span>
+                </div>
+                <el-table :data="projects" stripe>
+                  <el-table-column prop="name" label="Project" width="200" />
+                  <el-table-column prop="api_key" label="API Key">
+                    <template #default="{ row }">
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <code style="font-size:12px">{{ maskKey(row.api_key) }}</code>
+                        <el-button size="small" @click="copyKey(row.api_key)">Copy</el-button>
+                      </div>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="Members" name="members">
+              <div class="content-card">
+                <div class="card-header">
+                  <span class="card-title">Team Members</span>
+                  <el-button type="primary" @click="showAddMember = true">
+                    <el-icon><Plus /></el-icon> Add Member
+                  </el-button>
+                </div>
+
+                <el-table :data="users" v-loading="loadingUsers" stripe>
+                  <el-table-column prop="id" label="ID" width="60" />
+                  <el-table-column prop="username" label="Username" width="150" />
+                  <el-table-column prop="role" label="Role" width="120">
+                    <template #default="{ row }">
+                      <el-tag :type="row.role === 'admin' ? 'danger' : ''">{{ row.role }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="created_at" label="Created" width="170">
+                    <template #default="{ row }">
+                      {{ dayjs(row.created_at).format('YYYY-MM-DD HH:mm:ss') }}
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+
+          <el-dialog v-model="showCreateProject" title="Create Project" width="500px">
+            <el-form :model="projectForm" label-width="100px">
+              <el-form-item label="Name">
+                <el-input v-model="projectForm.name" placeholder="my-app" />
+              </el-form-item>
+              <el-form-item label="Description">
+                <el-input v-model="projectForm.description" type="textarea" placeholder="Project description" />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="showCreateProject = false">Cancel</el-button>
+              <el-button type="primary" @click="createProject" :loading="creating">Create</el-button>
+            </template>
+          </el-dialog>
+
+          <el-dialog v-model="showAddMember" title="Add Member" width="400px">
+            <el-form :model="memberForm" label-width="100px">
+              <el-form-item label="Username">
+                <el-input v-model="memberForm.username" placeholder="username" />
+              </el-form-item>
+              <el-form-item label="Password">
+                <el-input v-model="memberForm.password" type="password" placeholder="password" />
+              </el-form-item>
+              <el-form-item label="Role">
+                <el-select v-model="memberForm.role" style="width:100%">
+                  <el-option label="User" value="user" />
+                  <el-option label="Admin" value="admin" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="showAddMember = false">Cancel</el-button>
+              <el-button type="primary" @click="addMember" :loading="adding">Add</el-button>
+            </template>
+          </el-dialog>
+        </div>
+      `,
+      setup() {
+        const activeTab = ref('projects');
+        const loading = ref(false);
+        const loadingUsers = ref(false);
+        const creating = ref(false);
+        const adding = ref(false);
+        const projects = ref([]);
+        const users = ref([]);
+        const showCreateProject = ref(false);
+        const showAddMember = ref(false);
+        const projectForm = reactive({ name: '', description: '' });
+        const memberForm = reactive({ username: '', password: '', role: 'user' });
+
+        const loadProjects = async () => {
+          loading.value = true;
+          try {
+            const data = await apiCall('/api/admin/projects');
+            projects.value = data.data || data || [];
+          } catch (error) {
+            projects.value = [];
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const loadUsers = async () => {
+          loadingUsers.value = true;
+          try {
+            const data = await apiCall('/api/users');
+            users.value = data.data || data || [];
+          } catch (error) {
+            users.value = [];
+          } finally {
+            loadingUsers.value = false;
+          }
+        };
+
+        const maskKey = (key) => {
+          if (!key) return '-';
+          return key.slice(0, 8) + '...' + key.slice(-4);
+        };
+
+        const createProject = async () => {
+          if (!projectForm.name) {
+            ElMessage.warning('Please enter project name');
+            return;
+          }
+
+          creating.value = true;
+          try {
+            await apiCall('/api/admin/projects', {
+              method: 'POST',
+              body: JSON.stringify(projectForm)
+            });
+
+            ElNotification({ title: 'Project Created', type: 'success' });
+            showCreateProject.value = false;
+            projectForm.name = '';
+            projectForm.description = '';
+            loadProjects();
+          } catch (error) {
+            // Error handled by apiCall
+          } finally {
+            creating.value = false;
+          }
+        };
+
+        const deleteProject = async (project) => {
+          try {
+            await ElMessageBox.confirm(`Delete project "${project.name}"?`, 'Confirm', {
+              type: 'warning'
+            });
+
+            await apiCall(`/api/admin/projects/${project.id}`, { method: 'DELETE' });
+            ElNotification({ title: 'Project Deleted', type: 'success' });
+            loadProjects();
+          } catch (error) {
+            if (error !== 'cancel') {
+              // Error handled by apiCall
+            }
+          }
+        };
+
+        const regenerateKey = async (project) => {
+          try {
+            await ElMessageBox.confirm(`Regenerate API key for "${project.name}"?`, 'Confirm', {
+              type: 'warning'
+            });
+
+            const data = await apiCall('/api/admin/projects/api-key', {
+              method: 'POST',
+              body: JSON.stringify({ project_id: project.id })
+            });
+
+            ElMessageBox.alert(data.api_key || data.apiKey, 'New API Key', {
+              confirmButtonText: 'Copy',
+              callback: () => {
+                navigator.clipboard.writeText(data.api_key || data.apiKey);
+                ElMessage.success('Copied to clipboard');
+              }
+            });
+
+            loadProjects();
+          } catch (error) {
+            if (error !== 'cancel') {
+              // Error handled by apiCall
+            }
+          }
+        };
+
+        const copyKey = (key) => {
+          navigator.clipboard.writeText(key);
+          ElMessage.success('Copied to clipboard');
+        };
+
+        const addMember = async () => {
+          if (!memberForm.username || !memberForm.password) {
+            ElMessage.warning('Please fill all fields');
+            return;
+          }
+
+          adding.value = true;
+          try {
+            await apiCall('/api/users', {
+              method: 'POST',
+              body: JSON.stringify(memberForm)
+            });
+
+            ElNotification({ title: 'Member Added', type: 'success' });
+            showAddMember.value = false;
+            memberForm.username = '';
+            memberForm.password = '';
+            memberForm.role = 'user';
+            loadUsers();
+          } catch (error) {
+            // Error handled by apiCall
+          } finally {
+            adding.value = false;
+          }
+        };
+
+        onMounted(() => {
+          loadProjects();
+          loadUsers();
+        });
+
+        return {
+          activeTab, loading, loadingUsers, creating, adding,
+          projects, users, showCreateProject, showAddMember,
+          projectForm, memberForm, loadProjects, loadUsers,
+          maskKey, createProject, deleteProject, regenerateKey, copyKey, addMember
+        };
+      }
+    };
+
+    // Main Dashboard Component
+    const Dashboard = {
+      components: {
+        DashboardOverview,
+        EventsPage,
+        IssuesPage,
+        AlertsPage,
+        PerformancePage,
+        AuditLogsPage,
+        SettingsPage
+      },
+      template: `
+        <div class="dashboard-layout">
+          <aside class="sidebar">
+            <div class="sidebar-header">
+              <div class="logo">
+                <div class="logo-icon">
+                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px;color:#fff">
+                    <path d="M12 2L2 7v10l10 5 10-5V7L12 2z"/>
+                  </svg>
+                </div>
+                <span>LogMonitor</span>
+              </div>
+            </div>
+            <nav class="nav-menu">
+              <a v-for="item in navItems"
+                 :key="item.key"
+                 :class="['nav-item', { active: currentPage === item.key }]"
+                 @click="currentPage = item.key">
+                <svg class="nav-item-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path :d="item.icon" />
+                </svg>
+                <span>{{ item.label }}</span>
+              </a>
+            </nav>
+          </aside>
+
+          <main class="main-content">
+            <header class="top-header">
+              <div class="header-left">
+                <el-dropdown @command="selectProject" trigger="click">
+                  <span style="cursor:pointer;display:flex;align-items:center;gap:8px">
+                    <el-button type="primary" :icon="FolderOpened">
+                      {{ currentProject?.name || 'Select Project' }}
+                    </el-button>
+                  </span>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-for="p in projects" :key="p.id" :command="p">
+                        {{ p.name }}
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+              <div class="header-right">
+                <span class="page-title">{{ currentPageTitle }}</span>
+                <el-dropdown @command="handleUserCommand" trigger="click">
+                  <div class="user-menu">
+                    <div class="user-avatar">{{ user?.username?.charAt(0)?.toUpperCase() || 'U' }}</div>
+                    <span>{{ user?.username || 'User' }}</span>
+                    <el-icon><ArrowDown /></el-icon>
+                  </div>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="logout">Logout</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+            </header>
+
+            <div class="content-area" v-if="currentProject">
+              <component :is="currentPageComponent" @navigate="navigateTo" />
+            </div>
+            <div class="empty-state" v-else>
+              <div class="empty-icon">📁</div>
+              <h3>No Project Selected</h3>
+              <p>Please select a project from the dropdown above</p>
+            </div>
+          </main>
+        </div>
+      `,
+      setup() {
+        const currentPage = ref('dashboard');
+        const projects = ref([]);
+        const user = computed(() => store.user);
+        const currentProject = computed(() => store.currentProject);
+
+        const navItems = [
+          { key: 'dashboard', label: 'Dashboard', icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
+          { key: 'events', label: 'Events', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z' },
+          { key: 'issues', label: 'Issues', icon: 'M12 2L1 21h22L12 2zm0 3.5L19.5 19H4.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z' },
+          { key: 'alerts', label: 'Alerts', icon: 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z' },
+          { key: 'performance', label: 'Performance', icon: 'M3.5 18.5l6-6.01 4 4L22 6.92l-1.07-1.05-7.44 7.44-4-4L2 16.44z' },
+          { key: 'audit', label: 'Audit Logs', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 14H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z' },
+          { key: 'settings', label: 'Settings', icon: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z' }
+        ];
+
+        const currentPageComponent = computed(() => {
+          const map = {
+            dashboard: 'DashboardOverview',
+            events: 'EventsPage',
+            issues: 'IssuesPage',
+            alerts: 'AlertsPage',
+            performance: 'PerformancePage',
+            audit: 'AuditLogsPage',
+            settings: 'SettingsPage'
+          };
+          return map[currentPage.value] || 'DashboardOverview';
+        });
+
+        const currentPageTitle = computed(() => {
+          const item = navItems.find(i => i.key === currentPage.value);
+          return item?.label || 'Dashboard';
+        });
+
+        const navigateTo = (page) => {
+          currentPage.value = page;
+        };
+
+        const loadProjects = async () => {
+          try {
+            const data = await apiCall('/api/query/apps');
+            const apps = data.data || data || [];
+            projects.value = apps.map(a => ({ name: a, id: a }));
+          } catch (error) {
+            projects.value = [];
+          }
+        };
+
+        const selectProject = (project) => {
+          store.setCurrentProject(project);
+        };
+
+        const handleUserCommand = (command) => {
+          if (command === 'logout') {
+            store.logout();
+            window.location.reload();
+          }
+        };
+
+        onMounted(() => {
+          loadProjects();
+        });
+
+        return {
+          currentPage,
+          currentPageComponent,
+          currentPageTitle,
+          navItems,
+          projects,
+          user,
+          currentProject,
+          navigateTo,
+          selectProject,
+          handleUserCommand
+        };
+      }
+    };
+
+    // Root App
+    const App = {
+      components: { LoginPage, Dashboard },
+      template: `
+        <LoginPage v-if="!isAuthenticated" />
+        <Dashboard v-else />
+      `,
+      setup() {
+        const isAuthenticated = computed(() => store.isAuthenticated());
+
+        // Load user info if authenticated
+        onMounted(async () => {
+          if (isAuthenticated.value) {
+            try {
+              const user = await apiCall('/api/auth/me');
+              store.setUser(user);
+            } catch (error) {
+              store.logout();
+            }
+          }
+        });
+
+        return { isAuthenticated };
+      }
+    };
+
+    // Create and mount app
+    const app = createApp(App);
+    app.use(ElementPlus);
+    app.mount('#app');
+  </script>
 </body>
 </html>

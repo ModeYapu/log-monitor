@@ -259,5 +259,10 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	// Audit logs
 	adminGroup.HandleFunc("GET /api/admin/audit-logs", auditHandler.GetAuditLogs)
 
+	// === Serve dashboard static files (SPA fallback) ===
+	// This must come last so it doesn't interfere with API routes
+	dashboardFS := http.FileServer(http.Dir("../dashboard"))
+	mux.Handle("/", dashboardFS)
+
 	return mux
 }
