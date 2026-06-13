@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,10 @@ import (
 
 	"github.com/logmonitor/collector/sourcemap"
 	"github.com/logmonitor/collector/storage"
+)
+
+const (
+	maxSourceMapSize = 10 << 20 // 10MB
 )
 
 // SourceMapHandler handles source map upload and retrieval
@@ -43,12 +48,12 @@ func (h *SourceMapHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sourcemaps/deobfuscate", h.Deobfuscate)
 }
 
-// Upload handles source map file upload
+// Upload handles source map file upload (supports batch upload)
 func (h *SourceMapHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Parse multipart form (max 32MB)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	// Parse multipart form (max 100MB for batch uploads)
+	if err := r.ParseMultipartForm(100 << 20); err != nil {
 		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
@@ -57,12 +62,10 @@ func (h *SourceMapHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	appID := r.FormValue("appId")
 	release := r.FormValue("release")
 	env := r.FormValue("env")
-	buildID := r.FormValue("buildId")
-	originalURL := r.FormValue("originalUrl")
 
 	// Validate required fields
-	if appID == "" || release == "" || buildID == "" {
-		http.Error(w, "Missing required fields: appId, release, buildId", http.StatusBadRequest)
+	if appID == "" || release == "" {
+		http.Error(w, "Missing required fields: appId, release", http.StatusBadRequest)
 		return
 	}
 
@@ -71,75 +74,147 @@ func (h *SourceMapHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		env = "production"
 	}
 
-	// Get uploaded file
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "No file uploaded", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Validate file extension
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".map" && ext != ".json" {
-		http.Error(w, "Invalid file type. Only .map and .json files are allowed", http.StatusBadRequest)
-		return
+	// Get uploaded files (supports both "files" for batch and "file" for single file)
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 {
+		// Fallback to single file upload for backward compatibility
+		if file, header, err := r.FormFile("file"); err == nil {
+			files = []*multipart.FileHeader{header}
+			file.Close()
+		}
 	}
 
-	// Read file content
-	content, err := io.ReadAll(file)
-	if err != nil {
-		slog.Error("Failed to read uploaded file", "error", err)
-		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+	if len(files) == 0 {
+		http.Error(w, "No files uploaded", http.StatusBadRequest)
 		return
 	}
 
-	// Validate it's a valid source map (has "version" field)
-	if !isValidSourceMap(content) {
-		http.Error(w, "Invalid source map format", http.StatusBadRequest)
-		return
+	uploaded := make([]string, 0, len(files))
+	uploadErrors := make([]map[string]interface{}, 0)
+
+	for _, fileHeader := range files {
+		filename := fileHeader.Filename
+
+		// Validate file extension
+		ext := strings.ToLower(filepath.Ext(filename))
+		if ext != ".map" && ext != ".json" {
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": "Invalid file type. Only .map and .json files are allowed",
+			})
+			continue
+		}
+
+		// Validate file size
+		if fileHeader.Size > maxSourceMapSize {
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": "File size exceeds 10MB limit",
+			})
+			continue
+		}
+
+		// Open uploaded file
+		file, err := fileHeader.Open()
+		if err != nil {
+			slog.Error("Failed to open uploaded file", "file", filename, "error", err)
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": "Failed to open file",
+			})
+			continue
+		}
+
+		// Read file content
+		content, err := io.ReadAll(file)
+		file.Close()
+		if err != nil {
+			slog.Error("Failed to read uploaded file", "file", filename, "error", err)
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": "Failed to read file",
+			})
+			continue
+		}
+
+		// Validate it's a valid source map (version=3)
+		ver, err := validateSourceMapV3(content)
+		if err != nil {
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": err.Error(),
+			})
+			continue
+		}
+		if ver != 3 {
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": "Source map version must be 3",
+			})
+			continue
+		}
+
+		// Generate buildID from filename if not provided
+		buildID := strings.TrimSuffix(filename, ext)
+		if buildID == "" {
+			buildID = filename
+		}
+
+		// Save file to storage
+		filePath, fileSize, err := h.smStorage.Save(appID, release, buildID, content)
+		if err != nil {
+			slog.Error("Failed to save source map", "file", filename, "error", err)
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": "Failed to save file",
+			})
+			continue
+		}
+
+		// Create database record
+		record := storage.SourceMapRecord{
+			AppID:       appID,
+			Release:     release,
+			Env:         env,
+			BuildID:     buildID,
+			FilePath:    filePath,
+			OriginalURL: filename,
+			FileSize:    fileSize,
+			UploadedAt:  time.Now().UnixMilli(),
+		}
+
+		id, err := h.db.CreateSourceMap(record)
+		if err != nil {
+			slog.Error("Failed to create source map record", "file", filename, "error", err)
+			uploadErrors = append(uploadErrors, map[string]interface{}{
+				"file":  filename,
+				"error": "Failed to create database record",
+			})
+			continue
+		}
+
+		slog.Info("Source map uploaded", "app", appID, "release", release, "env", env, "build", buildID, "size", fileSize)
+		uploaded = append(uploaded, filename)
+		_ = id // Use id to avoid unused variable warning
 	}
 
-	// Save file to storage
-	filePath, fileSize, err := h.smStorage.Save(appID, release, buildID, content)
-	if err != nil {
-		slog.Error("Failed to save source map", "error", err)
-		http.Error(w, "Failed to save source map", http.StatusInternalServerError)
-		return
+	response := map[string]interface{}{
+		"success":  len(uploaded) > 0,
+		"uploaded": uploaded,
+		"count":    len(uploaded),
 	}
 
-	// Create database record
-	record := storage.SourceMapRecord{
-		AppID:       appID,
-		Release:     release,
-		Env:         env,
-		BuildID:     buildID,
-		FilePath:    filePath,
-		OriginalURL: originalURL,
-		FileSize:    fileSize,
-		UploadedAt:  time.Now().UnixMilli(),
+	if len(uploadErrors) > 0 {
+		response["errors"] = uploadErrors
 	}
 
-	id, err := h.db.CreateSourceMap(record)
-	if err != nil {
-		slog.Error("Failed to create source map record", "error", err)
-		http.Error(w, "Failed to create source map record", http.StatusInternalServerError)
-		return
+	if len(uploaded) > 0 {
+		w.WriteHeader(http.StatusCreated)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
 	}
 
-	slog.Info("Source map uploaded", "app", appID, "release", release, "env", env, "build", buildID, "size", fileSize)
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":          id,
-		"appId":       appID,
-		"release":     release,
-		"env":         env,
-		"buildId":     buildID,
-		"originalUrl": originalURL,
-		"fileSize":    fileSize,
-		"uploadedAt":  record.UploadedAt,
-	})
+	json.NewEncoder(w).Encode(response)
 }
 
 // List lists all source maps for an app
@@ -341,31 +416,53 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 	// Convert results to response format
 	response := map[string]interface{}{
 		"deobfuscated": true,
-		"buildId":     record.BuildID,
-		"release":     record.Release,
-		"env":         record.Env,
-		"frames":      results,
+		"buildId":      record.BuildID,
+		"release":      record.Release,
+		"env":          record.Env,
+		"frames":       results,
 	}
 
 	json.NewEncoder(w).Encode(response)
 }
 
-// isValidSourceMap checks if the content is a valid source map
-func isValidSourceMap(content []byte) bool {
+// validateSourceMapV3 checks if the content is a valid source map and returns its version
+func validateSourceMapV3(content []byte) (int, error) {
 	var data map[string]interface{}
 	if err := json.Unmarshal(content, &data); err != nil {
-		return false
+		return 0, fmt.Errorf("invalid JSON format")
 	}
 
 	// Check for version field (required for source maps)
-	if _, ok := data["version"]; !ok {
-		return false
+	versionVal, ok := data["version"]
+	if !ok {
+		return 0, fmt.Errorf("missing version field")
+	}
+
+	// Parse version - can be number or string
+	var version int
+	switch v := versionVal.(type) {
+	case float64:
+		version = int(v)
+	case string:
+		// Try to parse as int
+		if _, err := fmt.Sscanf(v, "%d", &version); err != nil {
+			return 0, fmt.Errorf("invalid version format")
+		}
+	default:
+		return 0, fmt.Errorf("invalid version type")
 	}
 
 	// Check for mappings field
 	if _, ok := data["mappings"]; !ok {
-		return false
+		return 0, fmt.Errorf("missing mappings field")
 	}
 
-	return true
+	return version, nil
+}
+
+// isValidSourceMap checks if the content is a valid source map
+// Deprecated: Use validateSourceMapV3 for version checking
+func isValidSourceMap(content []byte) bool {
+	ver, err := validateSourceMapV3(content)
+	return err == nil && ver > 0
 }

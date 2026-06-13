@@ -1,11 +1,12 @@
 package storage
 
 import (
-	"log/slog"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -287,6 +288,89 @@ func (s *SourceMapStorage) CleanupOld(days int) error {
 		}
 		return nil
 	})
+}
+
+// GetSourceMap retrieves a source map file by appId, release, and filename (buildID)
+// The filename should be the buildID (without .map extension) or the full filename
+func (s *SourceMapStorage) GetSourceMap(appID, release, filename string) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Sanitize inputs
+	appDir := filepath.Join(s.baseDir, sanitizePathSegment(appID))
+
+	// If filename doesn't have .map extension, add it with release prefix
+	ext := filepath.Ext(filename)
+	var filePath string
+	if ext == ".map" || ext == ".json" {
+		// Full filename provided - try to match in the app directory
+		entries, err := os.ReadDir(appDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read app directory: %w", err)
+		}
+		for _, entry := range entries {
+			if entry.Name() == filename {
+				filePath = filepath.Join(appDir, filename)
+				break
+			}
+		}
+		if filePath == "" {
+			return nil, fmt.Errorf("source map file not found: %s", filename)
+		}
+	} else {
+		// buildID provided - construct the filename
+		filePath = s.GetPath(appID, release, filename)
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read source map file: %w", err)
+	}
+	return content, nil
+}
+
+// ListSourceMaps lists all source map filenames for an app and optional release
+// If release is empty, returns all source maps for the app
+func (s *SourceMapStorage) ListSourceMaps(appID, release string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	appDir := filepath.Join(s.baseDir, sanitizePathSegment(appID))
+
+	entries, err := os.ReadDir(appDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to read app directory: %w", err)
+	}
+
+	var filenames []string
+	releasePrefix := sanitizePathSegment(release)
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		ext := filepath.Ext(name)
+		if ext != ".map" && ext != ".json" {
+			continue
+		}
+
+		// Filter by release if specified
+		if release != "" {
+			// Check if filename starts with "{release}-"
+			if !strings.HasPrefix(name, releasePrefix+"-") {
+				continue
+			}
+		}
+
+		filenames = append(filenames, name)
+	}
+
+	return filenames, nil
 }
 
 func sanitizePathSegment(s string) string {
