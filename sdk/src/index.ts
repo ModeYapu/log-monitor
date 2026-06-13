@@ -19,6 +19,8 @@ export interface LogMonitorConfig {
   captureXhr?: boolean;               // Auto-capture XHR/fetch requests, default true
   maxBreadcrumbs?: number;            // Max breadcrumbs per session, default 30
   privacy?: PrivacyConfig;            // Data masking configuration
+  beforeSend?: (event: LogEvent) => LogEvent | null;  // Hook to filter/modify events before sending
+  performanceSampleRate?: number;     // Separate sampling rate for performance events (default: same as sampleRate)
 }
 
 export interface PrivacyConfig {
@@ -125,6 +127,7 @@ let html2canvasLoaded = false;
 // New state
 let breadcrumbs: Breadcrumb[] = [];
 let privacyEngine: PrivacyEngine | null = null;
+let currentUser: { userId?: string; traits?: Record<string, any> } | null = null;
 
 // Default configuration
 const DEFAULT_CONFIG = {
@@ -137,6 +140,38 @@ const DEFAULT_CONFIG = {
   captureXhr: true,
   maxBreadcrumbs: 30,
 };
+
+// ==================== Stack Cleanup ====================
+
+/**
+ * Clean up error stack traces by removing internal paths and truncating
+ * - Removes webpack:/// prefixes
+ * - Removes node_modules paths
+ * - Removes query strings from file URLs
+ * - Truncates to max 3000 characters
+ */
+export function cleanStack(stack: string): string {
+  if (!stack) return stack;
+
+  let cleaned = stack;
+
+  // Remove webpack:/// prefixes
+  cleaned = cleaned.replace(/webpack:\/\/\/\//g, '');
+
+  // Remove node_modules paths (replace with [internal])
+  cleaned = cleaned.replace(/node_modules\/[^/]+\/node_modules\//g, 'node_modules/[internal]/');
+  cleaned = cleaned.replace(/\/node_modules\/[^/]+\//g, '/[internal]/');
+
+  // Remove query strings from file URLs
+  cleaned = cleaned.replace(/\?[\w\d=&_-]+/g, '');
+
+  // Truncate to max 3000 chars
+  if (cleaned.length > 3000) {
+    cleaned = cleaned.substring(0, 3000) + '\n... (truncated)';
+  }
+
+  return cleaned;
+}
 
 // ==================== Privacy Engine ====================
 
@@ -926,12 +961,13 @@ export function captureException(error: Error, tags?: Record<string, any>, extra
   if (!config) return;
 
   const maskedMessage = privacyEngine?.maskText(error.message || String(error)) || error.message || String(error);
+  const cleanedStack = cleanStack(error.stack || '');
 
   const event: LogEvent = {
     type: 'error',
     level: 'error',
     message: maskedMessage,
-    stack: error.stack || '',
+    stack: cleanedStack,
     url: privacyEngine?.maskUrl(window.location.href) || window.location.href,
     tags: { ...config.userAttributes, ...tags },
     extra: extra ? (privacyEngine?.maskObject(extra) || extra) : {},
@@ -1006,6 +1042,32 @@ export function getConfig(): Readonly<LogMonitorConfig> | null {
  */
 export function getBufferSize(): number {
   return buffer.length;
+}
+
+/**
+ * Set user context that will be attached to all subsequent events
+ * @param userId - User identifier
+ * @param traits - Optional user attributes (email, plan, etc.)
+ */
+export function setUser(userId: string, traits?: Record<string, any>): void {
+  currentUser = {
+    userId,
+    traits: traits ? (privacyEngine?.maskObject(traits) || traits) : undefined,
+  };
+}
+
+/**
+ * Clear user context
+ */
+export function clearUser(): void {
+  currentUser = null;
+}
+
+/**
+ * Get current user context
+ */
+export function getUser(): { userId?: string; traits?: Record<string, any> } | null {
+  return currentUser;
 }
 
 /**
@@ -1105,12 +1167,36 @@ function logMessage(level: string, message: string, extra?: Record<string, any>)
 function addEvent(event: LogEvent): void {
   if (!config) return;
 
-  if (Math.random() > config.sampleRate!) return;
+  // Apply sampling: use performanceSampleRate for performance events, regular sampleRate for others
+  const effectiveSampleRate = event.type === 'performance'
+    ? (config.performanceSampleRate ?? config.sampleRate!)
+    : config.sampleRate!;
+
+  if (Math.random() > effectiveSampleRate) return;
+
+  // Attach user context to tags
+  if (currentUser) {
+    event.tags = {
+      ...event.tags,
+      userId: currentUser.userId,
+      userTraits: currentUser.traits,
+    };
+  }
 
   event.tags = {
     ...event.tags,
     ...getCommonTags(),
   };
+
+  // Call beforeSend hook - allows filtering/transforming events
+  if (config.beforeSend) {
+    const processed = config.beforeSend(event);
+    if (processed === null) {
+      // Event was filtered out
+      return;
+    }
+    event = processed;
+  }
 
   if (Object.keys(collectedPerformance).length > 0) {
     event.performance = { ...collectedPerformance };
@@ -1174,7 +1260,7 @@ function setupErrorHandlers(): void {
       type: 'error',
       level: 'error',
       message: privacyEngine?.maskText(String(message)) || String(message),
-      stack: error?.stack || '',
+      stack: error?.stack ? cleanStack(error.stack) : '',
       url: source ? (privacyEngine?.maskUrl(source) || source) : window.location.href,
       line: lineno || 0,
       col: colno || 0,
@@ -1192,7 +1278,7 @@ function setupErrorHandlers(): void {
         type: 'error',
         level: 'error',
         message: privacyEngine?.maskText(err?.message || String(err)) || err?.message || String(err),
-        stack: err?.stack || '',
+        stack: err?.stack ? cleanStack(err.stack) : '',
         url: privacyEngine?.maskUrl(window.location.href) || window.location.href,
         tags: { ...config.userAttributes, source: 'unhandledrejection' },
         breadcrumbs: getBreadcrumbs(),
@@ -1364,6 +1450,10 @@ if (typeof window !== 'undefined') {
     flush,
     getConfig,
     getBufferSize,
+    setUser,
+    clearUser,
+    getUser,
+    cleanStack,
     addBreadcrumb: addCustomBreadcrumb,
     maskData,
     captureScreenshot: captureException,
