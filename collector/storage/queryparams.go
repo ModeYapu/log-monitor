@@ -16,6 +16,7 @@ type QueryParams struct {
 	PageSize  int
 	SortBy    string
 	SortOrder string
+	ProjectID int64 // Project ID for data isolation
 }
 
 // AnalyticsFilters represents typed filters for analytics queries
@@ -24,6 +25,7 @@ type AnalyticsFilters struct {
 	Release   string
 	StartTime int64
 	EndTime   int64
+	ProjectID int64 // Project ID for data isolation
 }
 
 // EventTimelinePoint represents a data point in event timeline

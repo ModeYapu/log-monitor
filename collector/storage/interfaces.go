@@ -19,10 +19,10 @@ type CleanupResult struct {
 type EventStore interface {
 	InsertEvents(events []EventRecord) error
 	QueryEvents(query QueryParams) (*QueryResult, error)
-	GetStats(appID string) (*Stats, error)
-	GetApps() ([]AppStats, error)
+	GetStats(appID string, projectID int64) (*Stats, error)
+	GetApps(projectID int64) ([]AppStats, error)
 	GetTopN(appID, topType, orderBy string, limit int, filters AnalyticsFilters) (*TopNResult, error)
-	GetSimilarErrors(appID, message string, threshold float64, limit int) ([]ErrorCluster, error)
+	GetSimilarErrors(appID, message string, threshold float64, limit int, projectID int64) ([]ErrorCluster, error)
 	GetSessionEvents(sessionID string, limit int) ([]EventRecord, error)
 	GetSessionErrorCount(sessionID string) (int64, error)
 	GetTopErrors(params TopListParams) ([]TopError, error)
@@ -32,7 +32,7 @@ type EventStore interface {
 	GetErrorClustersByTime(appID string, startTime, endTime int64, limit int) ([]ErrorClusterResult, error)
 	GetClusterEvents(appID, fingerprint string, page, pageSize int) ([]EventRecord, int64, error)
 	GetClusterStats(appID, fingerprint string) (ClusterStats, error)
-	GetErrorClusters(appID, errorMessage string, threshold float64, limit int) ([]ErrorCluster, error)
+	GetErrorClusters(appID, errorMessage string, threshold float64, limit int, projectID int64) ([]ErrorCluster, error)
 	GetRecentEvents(limit int) ([]EventRecord, error)
 }
 
@@ -77,8 +77,8 @@ type AlertStore interface {
 
 // AnalyticsStore handles statistics, performance, and anomaly queries
 type AnalyticsStore interface {
-	GetStats(appID string) (*Stats, error)
-	GetApps() ([]AppStats, error)
+	GetStats(appID string, projectID int64) (*Stats, error)
+	GetApps(projectID int64) ([]AppStats, error)
 	GetTopN(appID, topType, orderBy string, limit int, filters AnalyticsFilters) (*TopNResult, error)
 	GetTopErrors(params TopListParams) ([]TopError, error)
 	GetTopPages(params TopListParams) ([]TopPage, error)

@@ -9,8 +9,112 @@ import (
 	"github.com/logmonitor/collector/storage"
 )
 
-// ProjectContextKey is the context key for project ID
+// Context keys for project context
 type ProjectContextKey struct{}
+type ProjectRoleContextKey struct{}
+
+// ProjectContext extracts project_id from API Key context or query parameter
+// and injects both project_id and user's project role into the request context
+func ProjectContext(db *storage.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var projectID int64
+			var projectRole string
+
+			// First, try to get project_id from API Key context (set by api_token middleware)
+			if id, ok := r.Context().Value(ProjectIDKey).(int64); ok && id > 0 {
+				projectID = id
+				// For API key authentication, determine role based on ReadOnly flag
+				// The api_token middleware already sets ProjectIDKey
+				// We need to get the API key info to determine if read-only
+				apiKey := r.Context().Value(APIKeyIDKey)
+				if apiKey != nil {
+					// API keys are either read-only (viewer) or read-write (developer)
+					// We'll set a default role here that authorization middleware can check
+					projectRole = "developer" // Default for read-write API keys
+				}
+			}
+
+			// If not found in API Key context, try query parameter
+			if projectID == 0 {
+				projectIDStr := r.URL.Query().Get("project_id")
+				if projectIDStr != "" {
+					pid, err := strconv.ParseInt(projectIDStr, 10, 64)
+					if err != nil {
+						http.Error(w, "Invalid project_id parameter", http.StatusBadRequest)
+						return
+					}
+					projectID = pid
+				}
+			}
+
+			// If no project_id found, continue without project context
+			if projectID == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Get user info from context (set by JWT middleware)
+			userID := GetUserID(r)
+			userRole := GetRole(r)
+
+			// Admin users can access all projects
+			if userRole == "admin" {
+				// Verify project exists
+				project, err := db.GetProject(projectID)
+				if err != nil {
+					http.Error(w, "Project not found", http.StatusNotFound)
+					return
+				}
+
+				if project.DeletedAt > 0 {
+					http.Error(w, "Project has been deleted", http.StatusNotFound)
+					return
+				}
+
+				// Add project info to context - admin has full access
+				ctx := context.WithValue(r.Context(), ProjectContextKey{}, projectID)
+				ctx = context.WithValue(ctx, ProjectRoleContextKey{}, "owner")
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// For API Key authentication, no userID is set
+			// The project_id is already validated by api_token middleware
+			if userID == 0 {
+				// Verify project exists for API key auth
+				project, err := db.GetProject(projectID)
+				if err != nil {
+					http.Error(w, "Project not found", http.StatusNotFound)
+					return
+				}
+
+				if project.DeletedAt > 0 {
+					http.Error(w, "Project has been deleted", http.StatusNotFound)
+					return
+				}
+
+				// Add project info to context
+				ctx := context.WithValue(r.Context(), ProjectContextKey{}, projectID)
+				ctx = context.WithValue(ctx, ProjectRoleContextKey{}, projectRole)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// Regular users (JWT auth) must be project members
+			role, err := db.GetUserRole(projectID, userID)
+			if err != nil || role == "" {
+				http.Error(w, "Access denied to this project", http.StatusForbidden)
+				return
+			}
+
+			// Add project info to context along with user's role
+			ctx := context.WithValue(r.Context(), ProjectContextKey{}, projectID)
+			ctx = context.WithValue(ctx, ProjectRoleContextKey{}, role)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
 
 // RequireProjectAccess is middleware that verifies project access and adds project_id to context
 func RequireProjectAccess(db *storage.DB) func(http.Handler) http.Handler {
@@ -217,8 +321,7 @@ func GetProjectIDFromContext(r *http.Request) int64 {
 
 // GetProjectRoleFromContext retrieves the user's role in the current project context
 func GetProjectRoleFromContext(r *http.Request) string {
-	// This would be set by RequireProjectAccess
-	if role := r.Context().Value(struct{}{}); role != nil {
+	if role := r.Context().Value(ProjectRoleContextKey{}); role != nil {
 		if r, ok := role.(string); ok {
 			return r
 		}

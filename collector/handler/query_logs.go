@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/storage"
 )
 
@@ -27,6 +28,12 @@ func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
 		Keyword:  r.URL.Query().Get("keyword"),
 		Page:     parseIntParam(r.URL.Query().Get("page"), 1),
 		PageSize: parseIntParam(r.URL.Query().Get("pageSize"), 50),
+	}
+
+	// Extract project_id from context for data isolation
+	projectID := middleware.GetProjectIDFromContext(r)
+	if projectID > 0 {
+		query.ProjectID = projectID
 	}
 
 	// Validate required params
@@ -92,7 +99,10 @@ func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := h.db.GetStats(appID)
+	// Extract project_id from context for data isolation
+	projectID := middleware.GetProjectIDFromContext(r)
+
+	stats, err := h.db.GetStats(appID, projectID)
 	if err != nil {
 		slog.Error("Failed to get stats", "error", err)
 		http.Error(w, "Failed to get stats", http.StatusInternalServerError)
@@ -116,7 +126,10 @@ func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
 func (h *QueryHandler) QueryApps(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	apps, err := h.db.GetApps()
+	// Extract project_id from context for data isolation
+	projectID := middleware.GetProjectIDFromContext(r)
+
+	apps, err := h.db.GetApps(projectID)
 	if err != nil {
 		slog.Error("Failed to get apps", "error", err)
 		http.Error(w, "Failed to get apps", http.StatusInternalServerError)
@@ -173,6 +186,7 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 		Release:   release,
 		StartTime: startTime,
 		EndTime:   endTime,
+		ProjectID: middleware.GetProjectIDFromContext(r),
 	}
 
 	// Query database
@@ -211,7 +225,7 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query database for error clustering
-	clusters, err := h.db.GetSimilarErrors(appID, message, threshold, limit)
+	clusters, err := h.db.GetSimilarErrors(appID, message, threshold, limit, middleware.GetProjectIDFromContext(r))
 	if err != nil {
 		slog.Error("Failed to query similar errors", "error", err)
 		http.Error(w, "Failed to query similar errors", http.StatusInternalServerError)
@@ -246,14 +260,15 @@ func (h *QueryHandler) QueryExport(w http.ResponseWriter, r *http.Request) {
 
 	// Build query params
 	query := storage.QueryParams{
-		AppID:    appID,
-		Type:     exportType,
-		Level:    level,
-		Release:  release,
-		Env:      env,
-		Keyword:  keyword,
-		Page:     1,
-		PageSize: 10000, // Large limit for export
+		AppID:     appID,
+		Type:      exportType,
+		Level:     level,
+		Release:   release,
+		Env:       env,
+		Keyword:   keyword,
+		Page:      1,
+		PageSize:  10000, // Large limit for export
+		ProjectID: middleware.GetProjectIDFromContext(r),
 	}
 
 	// Parse time range

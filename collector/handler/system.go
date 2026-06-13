@@ -78,7 +78,7 @@ func (h *SystemHandler) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Get total events count
 	totalEvents := int64(0)
-	if apps, err := h.db.GetApps(); err == nil {
+	if apps, err := h.db.GetApps(0); err == nil {
 		for _, app := range apps {
 			totalEvents += app.TotalEvents
 		}

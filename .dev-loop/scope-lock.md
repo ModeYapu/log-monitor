@@ -1,20 +1,21 @@
-# Scope Lock
+# Scope Lock — LogMonitor P4: 多租户与权限
 
 ## Original Requirement
-LogMonitor P3 产品化开发 — Source Map 完整链路 + 错误反混淆展示 + Dashboard 增强体验
+实现 LogMonitor 的多租户与权限系统，支持多项目隔离、角色管理、API Token、审计日志。
 
 ## In Scope
-- [ ] P3-S1: Source Map 上传 API 增强（多文件批量上传、版本关联、清理策略）
-- [ ] P3-S2: Source Map 反混淆 API 端点（接收 stack trace → 返回原始位置）
-- [ ] P3-S3: Dashboard 错误详情页展示反混淆后的 stack trace
-- [ ] P3-S4: Dashboard Issues 页面增强（批量操作、状态筛选、排序优化）
-- [ ] P3-S5: Overview 仪表盘增强（趋势图、Top Errors 排行、最近告警）
-- [ ] P3-S6: Settings 页面完善（项目管理、API Key 管理、Webhook 配置）
+- [ ] 项目(Project)数据模型 + CRUD API
+- [ ] API Key / Token 认证中间件（替代当前的硬编码认证）
+- [ ] 角色：admin / developer / readonly
+- [ ] 项目级数据隔离（日志、告警、录屏、issue 按项目过滤）
+- [ ] 审计日志（谁在什么时候做了什么操作）
 
 ## Explicitly Out of Scope
-- AI 自动分析错误
-- 多浏览器兼容细节
-- 复杂权限系统（P2 已做基础）
+- P5 性能监控增强（Web Vitals 等）
+- P6 后端职责拆分
+- 前端用户管理 UI（先做后端 API）
+- OAuth / SSO 外部认证集成
+- 多数据库支持
 
-## Locked At: 2026-06-13T12:55:00+08:00
+## Locked At: 2026-06-13T14:01:00+08:00
 ## Locked By: Round R001

@@ -71,3 +71,6 @@ collector/logmonitor-collector
 collector/collector
 dashboard/dist_new/
 dashboard/dist_new/
+
+# dev-loop state
+.dev-loop/

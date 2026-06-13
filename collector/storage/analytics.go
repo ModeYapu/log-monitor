@@ -23,6 +23,12 @@ func (db *DB) GetTopN(appID, topType, orderBy string, limit int, filters Analyti
 	whereClause := "WHERE app_id = ?"
 	args := []interface{}{appID}
 
+	// Add project_id filter for data isolation (if specified)
+	if filters.ProjectID > 0 {
+		whereClause += " AND project_id = ?"
+		args = append(args, filters.ProjectID)
+	}
+
 	if filters.Env != "" {
 		whereClause += " AND env = ?"
 		args = append(args, filters.Env)
@@ -124,8 +130,8 @@ func (db *DB) GetTopN(appID, topType, orderBy string, limit int, filters Analyti
 
 // GetSimilarErrors finds errors similar to the given message
 // This is a wrapper around GetErrorClusters that adds additional fields
-func (db *DB) GetSimilarErrors(appID, message string, threshold float64, limit int) ([]ErrorCluster, error) {
-	clusters, err := db.GetErrorClusters(appID, message, threshold, limit)
+func (db *DB) GetSimilarErrors(appID, message string, threshold float64, limit int, projectID int64) ([]ErrorCluster, error) {
+	clusters, err := db.GetErrorClusters(appID, message, threshold, limit, projectID)
 	if err != nil {
 		return nil, err
 	}

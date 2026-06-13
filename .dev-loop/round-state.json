@@ -2,29 +2,41 @@
   "schemaVersion": 1,
   "roundId": "R001",
   "slice": {
-    "description": "P3 Slice 1: Source Map 上传 API 增强 — 支持批量上传、版本关联、文件校验、过期清理",
+    "description": "实现项目级数据隔离：所有查询（events/issues/alerts/recordings）强制按 project_id 过滤 + 角色权限增强（owner/developer/viewer 三级）",
     "sourceFiles": [
-      "collector/handler/sourcemap.go",
-      "collector/storage/sourcemap.go"
+      "collector/middleware/project.go",
+      "collector/middleware/authorization.go",
+      "collector/middleware/authorization_test.go",
+      "collector/handler/query_handler.go",
+      "collector/handler/query_logs.go"
     ],
     "acceptanceCriteria": [
-      "go build ./... exit 0",
-      "go test ./... exit 0",
-      "POST /api/sourcemaps/upload 支持 multipart 多文件上传",
-      "Source Map 文件按 appId + release + 文件名组织存储",
-      "重复上传同版本文件会覆盖旧文件"
+      "go build ./collector/... exit 0",
+      "go test ./collector/middleware/... exit 0 — authorization 中间件测试全绿",
+      "ProjectContext 中间件从 API Key 或 JWT 提取 project_id 注入 context",
+      "Authorization 中间件检查角色：viewer 只能 GET，developer 可 POST/PUT，owner 全权限",
+      "query_handler 和 query_logs 中的查询都按 project_id 过滤"
     ],
-    "maxFiles": 6,
-    "estimatedComplexity": "medium",
-    "dependencies": ["P2 后端拆分已完成"]
+    "maxFiles": 5,
+    "estimatedComplexity": "medium"
   },
-  "phase": "developing",
-  "startedAt": "2026-06-13T12:55:00+08:00",
-  "filesChanged": [],
-  "verifyBuildCmd": "cd /home/coder/log-monitor/collector && go build ./...",
-  "verifySliceCmd": "cd /home/coder/log-monitor/collector && go test ./...",
-  "verifyBuildPassed": null,
-  "verifySlicePassed": null,
-  "completedAt": null,
+  "phase": "completed",
+  "startedAt": "2026-06-13T14:10:00+08:00",
+  "filesChanged": [
+    "collector/middleware/project.go",
+    "collector/middleware/authorization.go",
+    "collector/middleware/authorization_test.go",
+    "collector/handler/query_logs.go",
+    "collector/handler/system.go",
+    "collector/storage/queryparams.go",
+    "collector/storage/event-store.go",
+    "collector/storage/analytics.go",
+    "collector/storage/interfaces.go"
+  ],
+  "verifyBuildCmd": "cd collector && go build ./...",
+  "verifySliceCmd": "cd collector && go test ./middleware/... ./handler/...",
+  "verifyBuildPassed": true,
+  "verifySlicePassed": true,
+  "completedAt": "2026-06-13T14:15:00+08:00",
   "commitSha": null
 }

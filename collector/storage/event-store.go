@@ -88,6 +88,12 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 	whereClause := "WHERE app_id = ?"
 	args := []interface{}{query.AppID}
 
+	// Add project_id filter for data isolation (if specified)
+	if query.ProjectID > 0 {
+		whereClause += " AND project_id = ?"
+		args = append(args, query.ProjectID)
+	}
+
 	if query.Type != "" {
 		whereClause += " AND type = ?"
 		args = append(args, query.Type)
@@ -170,7 +176,7 @@ func (db *DB) QueryEvents(query QueryParams) (*QueryResult, error) {
 }
 
 // GetApps returns list of all apps with basic stats
-func (db *DB) GetApps() ([]AppStats, error) {
+func (db *DB) GetApps(projectID int64) ([]AppStats, error) {
 
 	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
@@ -185,11 +191,21 @@ func (db *DB) GetApps() ([]AppStats, error) {
 			SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
 			COUNT(*) as total_events
 		FROM events
+	`
+
+	// Add project filter if specified
+	var args []interface{}
+	if projectID > 0 {
+		query += " WHERE project_id = ?"
+		args = append(args, projectID)
+	}
+
+	query += `
 		GROUP BY app_id
 		ORDER BY last_seen DESC
 	`
 
-	rows, err := db.conn.Query(query)
+	rows, err := db.conn.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query apps: %w", err)
 	}
@@ -209,7 +225,7 @@ func (db *DB) GetApps() ([]AppStats, error) {
 }
 
 // GetStats returns statistics for an app
-func (db *DB) GetStats(appID string) (*Stats, error) {
+func (db *DB) GetStats(appID string, projectID int64) (*Stats, error) {
 
 	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
@@ -217,16 +233,24 @@ func (db *DB) GetStats(appID string) (*Stats, error) {
 
 	stats := &Stats{}
 
+	// Build WHERE clause with project_id filter
+	whereClause := "WHERE app_id = ?"
+	args := []interface{}{appID}
+	if projectID > 0 {
+		whereClause += " AND project_id = ?"
+		args = append(args, projectID)
+	}
+
 	// Total events by level
 	levelQuery := `
 		SELECT
 			level,
 			COUNT(*) as count
 		FROM events
-		WHERE app_id = ?
+		` + whereClause + `
 		GROUP BY level
 	`
-	rows, err := db.conn.Query(levelQuery, appID)
+	rows, err := db.conn.Query(levelQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query level stats: %w", err)
 	}
@@ -256,12 +280,12 @@ func (db *DB) GetStats(appID string) (*Stats, error) {
 			COUNT(*) as count,
 			MAX(created_at) as last_seen
 		FROM events
-		WHERE app_id = ? AND level = 'error'
+		` + whereClause + ` AND level = 'error'
 		GROUP BY message
 		ORDER BY count DESC
 		LIMIT 10
 	`
-	rows, err = db.conn.Query(topErrorsQuery, appID)
+	rows, err = db.conn.Query(topErrorsQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query top errors: %w", err)
 	}
@@ -797,15 +821,26 @@ func (db *DB) GetClusterStats(appID, fingerprint string) (ClusterStats, error) {
 }
 
 // GetErrorClusters retrieves error clusters based on similarity
-func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, limit int) ([]ErrorCluster, error) {
+func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, limit int, projectID int64) ([]ErrorCluster, error) {
 	if db.closed.Load() {
 		return nil, fmt.Errorf("database is closed")
 	}
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
+
+	// Build WHERE clause with project filter
+	whereClause := "WHERE app_id = ?"
+	args := []interface{}{appID}
+	if projectID > 0 {
+		whereClause += " AND project_id = ?"
+		args = append(args, projectID)
+	}
+
 	var targetStack sql.NullString
-	err := db.conn.QueryRow(`SELECT stack FROM events WHERE app_id = ? AND message = ? AND level = 'error' ORDER BY created_at DESC LIMIT 1`, appID, errorMessage).Scan(&targetStack)
+	targetQuery := "SELECT stack FROM events " + whereClause + " AND message = ? AND level = 'error' ORDER BY created_at DESC LIMIT 1"
+	targetArgs := append(args, errorMessage)
+	err := db.conn.QueryRow(targetQuery, targetArgs...).Scan(&targetStack)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find target error: %w", err)
 	}
@@ -816,8 +851,8 @@ func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, li
 	query := `SELECT SUBSTR(message, 1, 100) as pattern, COUNT(*) as count, MIN(created_at) as first_seen,
 		MAX(created_at) as last_seen, COUNT(DISTINCT user_id) as affected_users,
 		GROUP_CONCAT(DISTINCT message, '|||') as messages, SUBSTR(GROUP_CONCAT(stack), 1, 1000) as sample_stack
-		FROM events WHERE app_id = ? AND level = 'error' GROUP BY SUBSTR(message, 1, 100) HAVING count > 0 ORDER BY count DESC LIMIT ?`
-	rows, err := db.conn.Query(query, appID, limit*2)
+		FROM events ` + whereClause + ` AND level = 'error' GROUP BY SUBSTR(message, 1, 100) HAVING count > 0 ORDER BY count DESC LIMIT ?`
+	rows, err := db.conn.Query(query, append(args, limit*2)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query error clusters: %w", err)
 	}
@@ -844,9 +879,9 @@ func (db *DB) GetErrorClusters(appID, errorMessage string, threshold float64, li
 				c.Message = c.Pattern + "..."
 			}
 			sampleQuery := `SELECT id, app_id, release, env, build_id, user_id, session_id, type, level, message, stack, url, line, col,
-				tags, extra, ua, screen, viewport, performance, ip, created_at FROM events WHERE app_id = ? AND level = 'error'
+				tags, extra, ua, screen, viewport, performance, ip, created_at FROM events ` + whereClause + ` AND level = 'error'
 				AND SUBSTR(message, 1, 100) = ? ORDER BY created_at DESC LIMIT 3`
-			sampleRows, err := db.conn.Query(sampleQuery, appID, c.Pattern)
+			sampleRows, err := db.conn.Query(sampleQuery, append(args, c.Pattern)...)
 			if err == nil {
 				for sampleRows.Next() {
 					var e EventRecord
