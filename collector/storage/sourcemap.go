@@ -201,6 +201,56 @@ func (db *DB) DeleteSourceMap(id int64) error {
 	return nil
 }
 
+// DeleteSourceMapsByRelease deletes all source maps for a given app and release
+func (db *DB) DeleteSourceMapsByRelease(appID, release string) (int, error) {
+
+	if db.closed.Load() {
+		return 0, fmt.Errorf("database is closed")
+	}
+
+	// First get all file paths for the release
+	rows, err := db.conn.Query(`
+		SELECT id, file_path FROM source_maps
+		WHERE app_id = ? AND release = ?
+	`, appID, release)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query source maps: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	var filePaths []string
+	for rows.Next() {
+		var id int64
+		var filePath string
+		if err := rows.Scan(&id, &filePath); err != nil {
+			return 0, fmt.Errorf("failed to scan source map: %w", err)
+		}
+		ids = append(ids, id)
+		filePaths = append(filePaths, filePath)
+	}
+
+	// Delete database records
+	result, err := db.conn.Exec(`
+		DELETE FROM source_maps WHERE app_id = ? AND release = ?
+	`, appID, release)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete source maps: %w", err)
+	}
+
+	// Delete files
+	for _, filePath := range filePaths {
+		if filePath != "" {
+			if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+				slog.Info("[sourcemap] Failed to delete file %s: %v\n", filePath, err)
+			}
+		}
+	}
+
+	count, _ := result.RowsAffected()
+	return int(count), nil
+}
+
 // SourceMapStorage handles source map file storage
 type SourceMapStorage struct {
 	baseDir string

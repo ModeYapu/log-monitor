@@ -296,6 +296,84 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
             <el-empty v-if="!loadingWebhooks && webhooks.length === 0" description="暂无 Webhook" />
           </div>
         </el-card>
+
+        <!-- Slice 6: Source Map Management Section -->
+        <el-card class="mt-4">
+          <template #header>
+            <div class="flex justify-between items-center">
+              <span>Source Map 管理</span>
+              <div class="flex gap-2">
+                <el-select v-model="selectedAppId" placeholder="选择应用" size="small" style="width: 150px" @change="fetchSourceMaps">
+                  <el-option
+                    v-for="app in apps"
+                    :key="app.app_id"
+                    :label="app.app_id"
+                    :value="app.app_id"
+                  />
+                </el-select>
+                <el-button size="small" @click="fetchSourceMaps" :loading="loadingSourceMaps">
+                  <el-icon><Refresh /></el-icon>
+                  刷新
+                </el-button>
+                <el-button size="small" type="primary" @click="showUploadDialog">
+                  <el-icon><Plus /></el-icon>
+                  上传
+                </el-button>
+              </div>
+            </div>
+          </template>
+
+          <div v-loading="loadingSourceMaps" class="sourcemap-list">
+            <!-- Grouped by release -->
+            <div v-for="(group, release) in groupedSourceMaps" :key="release" class="release-group">
+              <div class="release-header">
+                <div class="release-info">
+                  <span class="release-name">{{ release }}</span>
+                  <el-tag size="small" type="info">{{ group.files.length }} 个文件</el-tag>
+                  <el-tag size="small" type="success">{{ formatBytes(group.totalSize) }}</el-tag>
+                  <span class="release-time">{{ formatTime(group.uploadedAt) }}</span>
+                </div>
+                <el-button size="small" type="danger" @click="confirmDeleteRelease(release, group)">
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </div>
+              <div class="file-list">
+                <div v-for="file in group.files" :key="file.id" class="file-item">
+                  <span class="file-name">{{ file.originalUrl }}</span>
+                  <span class="file-size">{{ formatBytes(file.fileSize) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <el-empty v-if="!loadingSourceMaps && sourceMaps.length === 0" description="暂无 Source Map 文件" />
+          </div>
+        </el-card>
+
+        <!-- Slice 6: Source Map Retention Policy -->
+        <el-card class="mt-4">
+          <template #header>
+            <span>Source Map 保留策略</span>
+          </template>
+
+          <el-form label-width="180px">
+            <el-form-item label="保留天数">
+              <el-input-number v-model="sourcemapRetentionDays" :min="7" :max="365" />
+              <span class="ml-2 text-secondary">天</span>
+              <el-button type="primary" size="small" @click="saveSourcemapRetention" class="ml-4">
+                保存
+              </el-button>
+            </el-form-item>
+            <el-form-item>
+              <el-alert
+                title="注意：Source Map 文件清理需要后端支持，当前设置仅保存在本地"
+                type="info"
+                :closable="false"
+                show-icon
+              />
+            </el-form-item>
+          </el-form>
+        </el-card>
       </el-col>
 
       <el-col :span="8">
@@ -457,14 +535,83 @@ LogMonitor.track('button_click', { button: 'submit' })</pre>
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Slice 6: Source Map Upload Dialog -->
+    <el-dialog
+      v-model="showUploadSourceMapDialog"
+      title="上传 Source Map"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="120px">
+        <el-form-item label="应用">
+          <span>{{ selectedAppId || '请先选择应用' }}</span>
+        </el-form-item>
+        <el-form-item label="版本号 (Release)">
+          <el-input v-model="uploadForm.release" placeholder="例如: 1.0.0" />
+        </el-form-item>
+        <el-form-item label="环境">
+          <el-select v-model="uploadForm.env" placeholder="选择环境">
+            <el-option label="生产" value="production" />
+            <el-option label="预发布" value="staging" />
+            <el-option label="开发" value="development" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="选择文件">
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".map,.json"
+            multiple
+            @change="handleFileSelect"
+            style="display: none"
+          />
+          <el-button @click="triggerFileSelect">
+            <el-icon><Plus /></el-icon>
+            选择文件
+          </el-button>
+          <span class="ml-2 text-secondary text-sm">支持 .map 和 .json 文件</span>
+        </el-form-item>
+        <el-form-item v-if="uploadForm.files.length > 0">
+          <div class="file-list-preview">
+            <div v-for="(file, index) in uploadForm.files" :key="index" class="file-preview-item">
+              <span>{{ file.name }}</span>
+              <span class="text-secondary text-sm">{{ formatBytes(file.size) }}</span>
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showUploadSourceMapDialog = false">取消</el-button>
+        <el-button type="primary" @click="uploadSourceMaps" :loading="uploadingSourceMaps" :disabled="uploadForm.files.length === 0">
+          上传
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Slice 6: Source Map Delete Confirmation Dialog -->
+    <el-dialog
+      v-model="showDeleteSourceMapDialog"
+      title="确认删除 Source Map"
+      width="400px"
+    >
+      <p>确定要删除版本 "<strong>{{ deletingReleaseGroup?.release }}</strong>" 的所有 Source Map 文件吗？</p>
+      <p class="text-secondary">此操作将删除 {{ deletingReleaseGroup?.files.length }} 个文件，且不可恢复。</p>
+      <template #footer>
+        <el-button @click="showDeleteSourceMapDialog = false">取消</el-button>
+        <el-button type="danger" @click="deleteReleaseSourceMaps" :loading="deletingSourceMaps">
+          确认删除
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { CircleCheck, Refresh, Delete, Plus, Connection } from '@element-plus/icons-vue'
-import { logApi, authApi, systemApi, adminApi } from '../api'
+import { logApi, authApi, systemApi, adminApi, sourcemapApi } from '../api'
 import { formatNumber, formatTime } from '../utils/formatters'
 
 const apps = ref<any[]>([])
@@ -505,6 +652,45 @@ const deletingWebhook = ref<any>(null)
 const savingWebhook = ref(false)
 const deletingWebhookInProgress = ref(false)
 const webhookFormRef = ref<FormInstance>()
+
+// Slice 6: Source Map state
+const sourceMaps = ref<any[]>([])
+const loadingSourceMaps = ref(false)
+const showUploadSourceMapDialog = ref(false)
+const showDeleteSourceMapDialog = ref(false)
+const uploadingSourceMaps = ref(false)
+const deletingSourceMaps = ref(false)
+const deletingReleaseGroup = ref<any>(null)
+const sourcemapRetentionDays = ref(30)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+const uploadForm = reactive({
+  release: '',
+  env: 'production',
+  files: [] as File[]
+})
+
+// Computed: Group source maps by release
+const groupedSourceMaps = computed(() => {
+  const groups: Record<string, { files: any[]; totalSize: number; uploadedAt: number }> = {}
+  for (const sm of sourceMaps.value) {
+    const key = sm.release
+    if (!groups[key]) {
+      groups[key] = {
+        files: [],
+        totalSize: 0,
+        uploadedAt: sm.uploadedAt
+      }
+    }
+    groups[key].files.push(sm)
+    groups[key].totalSize += sm.fileSize
+    // Use the latest upload time
+    if (sm.uploadedAt > groups[key].uploadedAt) {
+      groups[key].uploadedAt = sm.uploadedAt
+    }
+  }
+  return groups
+})
 
 const webhookForm = reactive({
   name: '',
@@ -916,12 +1102,130 @@ const handleChangePassword = async () => {
   })
 }
 
+// Slice 6: Source Map functions
+const fetchSourceMaps = async () => {
+  if (!selectedAppId.value) return
+
+  loadingSourceMaps.value = true
+  try {
+    const { data } = await sourcemapApi.listSourceMaps(selectedAppId.value)
+    sourceMaps.value = data.data || []
+  } catch (error: any) {
+    console.error('Failed to fetch source maps:', error)
+    ElMessage.error('获取 Source Map 列表失败')
+  } finally {
+    loadingSourceMaps.value = false
+  }
+}
+
+const showUploadDialog = () => {
+  if (!selectedAppId.value) {
+    ElMessage.warning('请先选择应用')
+    return
+  }
+  // Reset form
+  uploadForm.release = ''
+  uploadForm.env = 'production'
+  uploadForm.files = []
+  showUploadSourceMapDialog.value = true
+}
+
+const triggerFileSelect = () => {
+  fileInputRef.value?.click()
+}
+
+const handleFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files) {
+    uploadForm.files = Array.from(target.files)
+  }
+}
+
+const uploadSourceMaps = async () => {
+  if (!selectedAppId.value) {
+    ElMessage.warning('请先选择应用')
+    return
+  }
+  if (!uploadForm.release) {
+    ElMessage.warning('请输入版本号')
+    return
+  }
+  if (uploadForm.files.length === 0) {
+    ElMessage.warning('请选择文件')
+    return
+  }
+
+  uploadingSourceMaps.value = true
+  try {
+    const formData = new FormData()
+    formData.append('appId', selectedAppId.value)
+    formData.append('release', uploadForm.release)
+    formData.append('env', uploadForm.env)
+
+    uploadForm.files.forEach(file => {
+      formData.append('files', file)
+    })
+
+    const { data } = await sourcemapApi.uploadSourceMap(formData)
+
+    if (data.success) {
+      ElMessage.success(`成功上传 ${data.count} 个文件`)
+      showUploadSourceMapDialog.value = false
+      await fetchSourceMaps()
+    } else {
+      ElMessage.error('上传失败')
+    }
+
+    if (data.errors && data.errors.length > 0) {
+      console.error('Upload errors:', data.errors)
+    }
+  } catch (error: any) {
+    console.error('Failed to upload source maps:', error)
+    ElMessage.error(error.response?.data?.error || '上传失败')
+  } finally {
+    uploadingSourceMaps.value = false
+  }
+}
+
+const confirmDeleteRelease = (release: string, group: any) => {
+  deletingReleaseGroup.value = { release, ...group }
+  showDeleteSourceMapDialog.value = true
+}
+
+const deleteReleaseSourceMaps = async () => {
+  if (!deletingReleaseGroup.value || !selectedAppId.value) return
+
+  deletingSourceMaps.value = true
+  try {
+    await sourcemapApi.deleteReleaseSourceMaps(selectedAppId.value, deletingReleaseGroup.value.release)
+    ElMessage.success('删除成功')
+    showDeleteSourceMapDialog.value = false
+    await fetchSourceMaps()
+  } catch (error: any) {
+    console.error('Failed to delete source maps:', error)
+    ElMessage.error(error.response?.data?.error || '删除失败')
+  } finally {
+    deletingSourceMaps.value = false
+  }
+}
+
+const saveSourcemapRetention = () => {
+  localStorage.setItem('sourcemap_retention_days', String(sourcemapRetentionDays.value))
+  ElMessage.success(`Source Map 保留天数已设置为 ${sourcemapRetentionDays.value} 天`)
+}
+
 onMounted(() => {
   fetchApps()
   refreshSystemInfo()
   fetchStorageStats()
   fetchRetentionPolicy()
   fetchWebhooks()
+
+  // Load sourcemap retention from localStorage
+  const savedRetention = localStorage.getItem('sourcemap_retention_days')
+  if (savedRetention) {
+    sourcemapRetentionDays.value = parseInt(savedRetention, 10)
+  }
 })
 </script>
 
@@ -1162,5 +1466,94 @@ onMounted(() => {
 
 .items-center {
   align-items: center;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+/* Slice 6: Source Map styles */
+.sourcemap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.release-group {
+  background: #1a1f2e;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.release-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #2d3748;
+  margin-bottom: 12px;
+}
+
+.release-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.release-name {
+  color: #e0e6ed;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.release-time {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #121620;
+  border-radius: 4px;
+}
+
+.file-name {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.file-size {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.file-list-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.file-preview-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #1a1f2e;
+  border-radius: 4px;
+}
+
+.text-sm {
+  font-size: 12px;
 }
 </style>

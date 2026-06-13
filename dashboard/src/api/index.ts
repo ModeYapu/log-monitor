@@ -320,7 +320,25 @@ export default api
 export const sourcemapApi = {
   // Resolve stack trace using source maps
   resolveStackTrace: (data: { appId: string; release: string; env?: string; buildId?: string; stackTrace: { frames: Array<{ filename: string; line: number; column: number; functionName?: string }> } }) =>
-    api.post<{ resolvedFrames: Array<{ filename: string; line: number; column: number; functionName?: string; originalFilename?: string; originalLine?: number; originalColumn?: number; originalFunctionName?: string }> }>('/sourcemaps/resolve', data)
+    api.post<{ resolvedFrames: Array<{ filename: string; line: number; column: number; functionName?: string; originalFilename?: string; originalLine?: number; originalColumn?: number; originalFunctionName?: string }> }>('/sourcemaps/resolve', data),
+
+  // List source maps for an app
+  listSourceMaps: (appId: string) =>
+    api.get<{ data: Array<{ id: number; appId: string; release: string; env: string; buildId: string; filePath: string; originalUrl: string; fileSize: number; uploadedAt: number }>; total: number }>('/sourcemaps', { params: { appId } }),
+
+  // Upload source map file
+  uploadSourceMap: (formData: FormData) =>
+    api.post<{ success: boolean; uploaded: string[]; count: number; errors?: Array<{ file: string; error: string }> }>('/sourcemaps/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+
+  // Delete a source map by ID
+  deleteSourceMap: (id: number) =>
+    api.delete<{ message: string; id: number }>(`/sourcemaps/${id}`),
+
+  // Delete all source maps for a release
+  deleteReleaseSourceMaps: (appId: string, release: string) =>
+    api.delete<{ message: string; appID: string; release: string; count: number }>(`/sourcemaps/release/${appId}/${release}`)
 }
 
 export const projectApi = {

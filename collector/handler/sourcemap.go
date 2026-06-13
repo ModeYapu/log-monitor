@@ -57,6 +57,7 @@ func (h *SourceMapHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sourcemaps", h.List)
 	mux.HandleFunc("GET /api/sourcemaps/download", h.Download)
 	mux.HandleFunc("DELETE /api/sourcemaps/", h.Delete)
+	mux.HandleFunc("DELETE /api/sourcemaps/release/", h.DeleteRelease)
 	mux.HandleFunc("POST /api/sourcemaps/deobfuscate", h.Deobfuscate)
 	mux.HandleFunc("POST /api/sourcemaps/resolve", h.Resolve)
 }
@@ -330,6 +331,48 @@ func (h *SourceMapHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Source map deleted successfully",
 		"id":      id,
+	})
+}
+
+// DeleteRelease deletes all source maps for a given app and release
+func (h *SourceMapHandler) DeleteRelease(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract appID and release from path: /api/sourcemaps/release/{appID}/{release}
+	path := r.URL.Path
+	prefix := "/api/sourcemaps/release/"
+	if !strings.HasPrefix(path, prefix) {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	suffix := strings.TrimPrefix(path, prefix)
+	parts := strings.Split(suffix, "/")
+	if len(parts) < 2 {
+		http.Error(w, "Invalid path format, expected /api/sourcemaps/release/{appID}/{release}", http.StatusBadRequest)
+		return
+	}
+
+	appID := parts[0]
+	release := parts[1]
+
+	if appID == "" || release == "" {
+		http.Error(w, "Missing appID or release", http.StatusBadRequest)
+		return
+	}
+
+	count, err := h.db.DeleteSourceMapsByRelease(appID, release)
+	if err != nil {
+		slog.Error("Failed to delete source maps by release", "error", err)
+		http.Error(w, "Failed to delete source maps", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Source maps deleted successfully",
+		"appID":   appID,
+		"release": release,
+		"count":   count,
 	})
 }
 
