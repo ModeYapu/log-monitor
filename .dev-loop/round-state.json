@@ -1,35 +1,44 @@
 {
   "schemaVersion": 1,
-  "roundId": "R010",
+  "roundId": "R011",
   "slice": {
-    "description": "Dashboard frontend enhancement + SDK optimization + webhook E2E verifier tests",
+    "description": "Session tracking + replay timeline + user journey (R011)",
     "sourceFiles": [
-      "dashboard/index.html",
-      "sdk/src/index.ts",
-      "collector/webhook/e2e_verifier_test.go"
+      "collector/handler/cobrowse_hub.go",
+      "collector/handler/cobrowse_recording.go",
+      "collector/handler/session_handler.go",
+      "collector/routes.go",
+      "collector/storage/event-store.go",
+      "collector/storage/recording-store.go",
+      "collector/storage/records.go",
+      "dashboard/index.html"
     ],
     "acceptanceCriteria": [
-      "Dashboard: real-time event stream with 5s polling",
-      "Dashboard: dark mode toggle with Element Plus dark theme",
-      "Dashboard: Chart.js performance charts (FCP/LCP/CLS 7-day trends)",
-      "Dashboard: audit log timeline with user avatars",
-      "SDK: beforeSend hook for event filtering/modification",
-      "SDK: performanceSampleRate for independent performance event sampling",
-      "SDK: setUser/clearUser API for user context",
-      "SDK: cleanStack for error stack formatting",
-      "Webhook: comprehensive e2e_verifier_test.go",
+      "GET /api/query/recordings/:id/timeline returns event timeline",
+      "GET /api/query/sessions returns session list with filters (project/user/date)",
+      "GET /api/query/sessions/:id returns session detail with events and stats",
+      "GET /api/query/sessions/:id/journey returns user journey (page flow data)",
+      "Dashboard: Sessions page with list + detail drawer",
+      "Dashboard: Session detail with Events, Journey SVG, and Replay tabs",
+      "Dashboard: Journey SVG with page nodes, transition edges, error markers",
+      "Dashboard: Replay with timeline markers + speed controls (1x/2x/4x/8x)",
       "go build ./... exit 0",
       "go test ./... exit 0"
     ],
-    "maxFiles": 5,
-    "estimatedComplexity": "medium"
+    "maxFiles": 8,
+    "estimatedComplexity": "high"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T17:46:00+08:00",
+  "startedAt": "2026-06-13T18:04:00+08:00",
   "filesChanged": [
-    "dashboard/index.html",
-    "sdk/src/index.ts",
-    "collector/webhook/e2e_verifier_test.go"
+    "collector/handler/cobrowse_hub.go",
+    "collector/handler/cobrowse_recording.go",
+    "collector/handler/session_handler.go",
+    "collector/routes.go",
+    "collector/storage/event-store.go",
+    "collector/storage/recording-store.go",
+    "collector/storage/records.go",
+    "dashboard/index.html"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
   "verifyBuildPassed": true,
@@ -37,6 +46,6 @@
   "verifyTestPassed": true,
   "verifyVetCmd": "cd collector && go vet ./...",
   "verifyVetPassed": true,
-  "completedAt": "2026-06-13T17:52:00+08:00",
-  "commitSha": "a6603c7"
+  "completedAt": "2026-06-13T18:13:00+08:00",
+  "commitSha": "dd0cfa8"
 }
