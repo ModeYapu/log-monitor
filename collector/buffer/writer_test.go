@@ -43,12 +43,12 @@ func (m *mockEventStore) getInsertCalls() int64 {
 func (m *mockEventStore) QueryEvents(q storage.QueryParams) (*storage.QueryResult, error) {
 	return nil, nil
 }
-func (m *mockEventStore) GetStats(appID string) (*storage.Stats, error) { return nil, nil }
-func (m *mockEventStore) GetApps() ([]storage.AppStats, error)          { return nil, nil }
+func (m *mockEventStore) GetStats(appID string, projectID int64) (*storage.Stats, error) { return nil, nil }
+func (m *mockEventStore) GetApps(projectID int64) ([]storage.AppStats, error) { return nil, nil }
 func (m *mockEventStore) GetTopN(appID, topType, orderBy string, limit int, filters storage.AnalyticsFilters) (*storage.TopNResult, error) {
 	return nil, nil
 }
-func (m *mockEventStore) GetSimilarErrors(appID, message string, threshold float64, limit int) ([]storage.ErrorCluster, error) {
+func (m *mockEventStore) GetSimilarErrors(appID, message string, threshold float64, limit int, projectID int64) ([]storage.ErrorCluster, error) {
 	return nil, nil
 }
 func (m *mockEventStore) GetSessionEvents(sessionID string, limit int) ([]storage.EventRecord, error) {
@@ -76,7 +76,7 @@ func (m *mockEventStore) GetClusterEvents(appID, fingerprint string, page, pageS
 func (m *mockEventStore) GetClusterStats(appID, fingerprint string) (storage.ClusterStats, error) {
 	return storage.ClusterStats{}, nil
 }
-func (m *mockEventStore) GetErrorClusters(appID, errorMessage string, threshold float64, limit int) ([]storage.ErrorCluster, error) {
+func (m *mockEventStore) GetErrorClusters(appID, errorMessage string, threshold float64, limit int, projectID int64) ([]storage.ErrorCluster, error) {
 	return nil, nil
 }
 func (m *mockEventStore) GetRecentEvents(limit int) ([]storage.EventRecord, error) {
