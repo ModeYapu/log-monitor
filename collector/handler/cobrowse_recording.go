@@ -29,7 +29,7 @@ func (h *RecordingHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/query/recordings/", h.getRecordingWithRouting)
 	mux.HandleFunc("DELETE /api/query/recordings/", h.deleteRecording)
 	mux.HandleFunc("GET /api/query/live-sessions", h.getLiveSessions)
-	mux.HandleFunc("GET /api/query/sessions/", h.getSessionEvents)
+	// Note: /api/query/sessions/ routes are now handled by SessionHandler
 }
 
 // listRecordings returns a list of recordings
@@ -122,6 +122,13 @@ func (h *RecordingHandler) getRecordingWithRouting(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Check if requesting timeline
+	if strings.HasSuffix(sessionID, "/timeline") {
+		sessionID = strings.TrimSuffix(sessionID, "/timeline")
+		h.getRecordingTimeline(w, r, sessionID)
+		return
+	}
+
 	// Check if requesting events
 	if r.URL.Query().Get("events") == "true" {
 		h.getRecordingEvents(w, r, sessionID)
@@ -198,6 +205,26 @@ func (h *RecordingHandler) getRecordingStats(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
+}
+
+// getRecordingTimeline returns timeline events for a recording
+func (h *RecordingHandler) getRecordingTimeline(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if sessionID == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
+	timeline, err := h.db.GetRecordingTimeline(sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"sessionId": sessionID,
+		"timeline":  timeline,
+	})
 }
 
 // deleteRecording deletes a recording

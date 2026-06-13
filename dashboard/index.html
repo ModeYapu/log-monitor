@@ -634,6 +634,20 @@
         width: 100% !important;
       }
     }
+
+    /* Sessions Page Styles */
+    .pulse-node {
+      animation: pulse-error 2s infinite;
+    }
+
+    @keyframes pulse-error {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.6;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1987,6 +2001,478 @@
       }
     };
 
+    // Sessions Page Component
+    const SessionsPage = {
+      template: `
+        <div>
+          <div class="content-card">
+            <div class="card-header">
+              <span class="card-title">User Sessions</span>
+              <div style="display:flex;gap:10px">
+                <el-button @click="loadSessions" :icon="Refresh">Refresh</el-button>
+              </div>
+            </div>
+
+            <!-- Filters -->
+            <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+              <el-input v-model="filters.userId" placeholder="User ID" clearable style="width:150px" />
+              <el-select v-model="filters.appId" placeholder="Select App" clearable style="width:200px">
+                <el-option v-for="app in apps" :key="app" :label="app" :value="app" />
+              </el-select>
+              <el-date-picker
+                v-model="dateRange"
+                type="datetimerange"
+                range-separator="To"
+                start-placeholder="Start"
+                end-placeholder="End"
+                format="YYYY-MM-DD HH:mm"
+                value-format="YYYY-MM-DD HH:mm"
+                style="width:350px"
+              />
+              <el-button @click="applyFilters">Apply Filters</el-button>
+              <el-button @click="resetFilters">Reset</el-button>
+            </div>
+
+            <!-- Sessions Table -->
+            <el-table :data="sessions" v-loading="loading" stripe size="small" @row-click="openSessionDetail">
+              <el-table-column prop="sessionId" label="Session ID" width="150">
+                <template #default="{ row }">
+                  <span style="font-family:monospace">{{ row.sessionId.slice(0, 12) }}...</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="appId" label="App" width="120" />
+              <el-table-column prop="userId" label="User ID" width="120" />
+              <el-table-column label="Duration" width="100">
+                <template #default="{ row }">{{ formatDuration(row.durationMs) }}</template>
+              </el-table-column>
+              <el-table-column prop="eventCount" label="Events" width="80" />
+              <el-table-column prop="errorCount" label="Errors" width="80">
+                <template #default="{ row }">
+                  <el-tag v-if="row.errorCount > 0" type="danger" size="small">{{ row.errorCount }}</el-tag>
+                  <span v-else style="color:#909399">0</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="lastUrl" label="Last URL" min-width="200">
+                <template #default="{ row }">{{ formatUrl(row.lastUrl) }}</template>
+              </el-table-column>
+              <el-table-column prop="startTime" label="Start Time" width="160">
+                <template #default="{ row }">{{ dayjs(row.startTime).format('YYYY-MM-DD HH:mm') }}</template>
+              </el-table-column>
+            </el-table>
+
+            <!-- Pagination -->
+            <div style="display:flex;justify-content:flex-end;margin-top:20px;gap:10px;align-items:center">
+              <span>Total: {{ total }}</span>
+              <el-pagination
+                v-model:current-page="pagination.page"
+                v-model:page-size="pagination.pageSize"
+                :page-sizes="[20, 50, 100]"
+                :total="total"
+                layout="sizes, prev, pager, next"
+                @size-change="loadSessions"
+                @current-change="loadSessions"
+              />
+            </div>
+          </div>
+
+          <!-- Session Detail Drawer -->
+          <el-drawer v-model="detailVisible" direction="rtl" size="70%" :title="'Session: ' + currentSession?.sessionId">
+            <template #header>
+              <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
+                <div>
+                  <div style="font-size:14px;color:#909399">Session Details</div>
+                  <div style="font-family:monospace;font-size:12px">{{ currentSession?.sessionId }}</div>
+                </div>
+                <el-button @click="detailVisible = false">Close</el-button>
+              </div>
+            </template>
+
+            <el-tabs v-model="activeTab" v-if="currentSession">
+              <!-- Events Tab -->
+              <el-tab-pane label="Events" name="events">
+                <div class="content-card">
+                  <div class="card-header">
+                    <span class="card-title">Session Events</span>
+                    <el-tag size="small">{{ sessionEvents.length }} events</el-tag>
+                  </div>
+                  <el-table :data="sessionEvents" stripe size="small" max-height="500">
+                    <el-table-column prop="created_at" label="Time" width="140">
+                      <template #default="{ row }">{{ dayjs(row.created_at).format('HH:mm:ss.SSS') }}</template>
+                    </el-table-column>
+                    <el-table-column prop="level" label="Level" width="80">
+                      <template #default="{ row }">
+                        <el-tag :type="getLevelType(row.level)" size="small">{{ row.level }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="type" label="Type" width="100" />
+                    <el-table-column prop="message" label="Message" min-width="300" show-overflow-tooltip />
+                    <el-table-column prop="url" label="URL" min-width="200" show-overflow-tooltip>
+                      <template #default="{ row }">{{ formatUrl(row.url) }}</template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+              </el-tab-pane>
+
+              <!-- Journey Tab -->
+              <el-tab-pane label="User Journey" name="journey">
+                <div class="content-card">
+                  <div class="card-header">
+                    <span class="card-title">Page Journey</span>
+                  </div>
+                  <div v-if="journeyLoading" style="text-align:center;padding:40px">
+                    <el-icon class="is-loading"><Loading /></el-icon>
+                  </div>
+                  <svg v-else-if="journeyData.nodes.length > 0" viewBox="0 0 800 400" style="width:100%;height:400px;background:var(--card-bg);border-radius:8px">
+                    <!-- Edges -->
+                    <defs>
+                      <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#909399" />
+                      </marker>
+                    </defs>
+                    <g v-for="edge in journeyData.edges" :key="'edge-' + edge.from + '-' + edge.to">
+                      <line
+                        :x1="getNodePos(edge.from).x"
+                        :y1="getNodePos(edge.from).y"
+                        :x2="getNodePos(edge.to).x"
+                        :y2="getNodePos(edge.to).y"
+                        stroke="#909399"
+                        stroke-width="2"
+                        marker-end="url(#arrowhead)"
+                      />
+                      <text
+                        :x="(getNodePos(edge.from).x + getNodePos(edge.to).x) / 2"
+                        :y="(getNodePos(edge.from).y + getNodePos(edge.to).y) / 2 - 10"
+                        fill="#909399"
+                        font-size="12"
+                        text-anchor="middle"
+                      >×{{ edge.count }}</text>
+                    </g>
+                    <!-- Nodes -->
+                    <g v-for="(node, idx) in journeyData.nodes" :key="'node-' + node.id">
+                      <circle
+                        :cx="getNodePos(idx).x"
+                        :cy="getNodePos(idx).y"
+                        r="30"
+                        :fill="node.errorCount > 0 ? '#f56c6c' : '#409eff'"
+                        :class="{ 'pulse-node': node.errorCount > 0 }"
+                      />
+                      <text
+                        :x="getNodePos(idx).x"
+                        :y="getNodePos(idx).y + 5"
+                        fill="white"
+                        font-size="12"
+                        font-weight="bold"
+                        text-anchor="middle"
+                      >{{ idx + 1 }}</text>
+                      <text
+                        :x="getNodePos(idx).x"
+                        :y="getNodePos(idx).y + 45"
+                        fill="var(--text-primary)"
+                        font-size="11"
+                        text-anchor="middle"
+                      >{{ node.label }}</text>
+                      <text
+                        v-if="node.errorCount > 0"
+                        :x="getNodePos(idx).x + 25"
+                        :y="getNodePos(idx).y - 25"
+                        fill="#f56c6c"
+                        font-size="16"
+                      >⚠️</text>
+                    </g>
+                  </svg>
+                  <div v-else style="text-align:center;padding:40px;color:#909399">
+                    No journey data available
+                  </div>
+
+                  <!-- Errors in journey -->
+                  <div v-if="journeyData.errors.length > 0" style="margin-top:20px">
+                    <h4 style="margin-bottom:10px">Errors ({{ journeyData.errors.length }})</h4>
+                    <el-timeline>
+                      <el-timeline-item v-for="err in journeyData.errors" :key="err.timestamp" :timestamp="dayjs(err.timestamp).format('HH:mm:ss')" placement="top">
+                        <el-card>
+                          <div style="font-size:12px;color:#f56c6c;margin-bottom:5px">{{ err.message.slice(0, 100) }}{{ err.message.length > 100 ? '...' : '' }}</div>
+                          <div style="font-size:11px;color:#909399">{{ formatUrl(err.url) }}</div>
+                        </el-card>
+                      </el-timeline-item>
+                    </el-timeline>
+                  </div>
+                </div>
+              </el-tab-pane>
+
+              <!-- Replay Tab -->
+              <el-tab-pane label="Replay" name="replay">
+                <div class="content-card" v-if="currentSession.recording?.exists">
+                  <div class="card-header">
+                    <span class="card-title">Session Replay</span>
+                    <el-tag type="success" size="small">Recording Available</el-tag>
+                  </div>
+
+                  <!-- Timeline -->
+                  <div style="margin-bottom:20px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                      <span style="font-size:12px;color:#909399">Timeline</span>
+                      <div style="display:flex;gap:5px">
+                        <el-button size="small" @click="seekToPrevError">⚠️ Jump to Error</el-button>
+                        <el-button-group size="small">
+                          <el-button @click="setSpeed(1)">1x</el-button>
+                          <el-button @click="setSpeed(2)">2x</el-button>
+                          <el-button @click="setSpeed(4)">4x</el-button>
+                        </el-button-group>
+                      </div>
+                    </div>
+                    <div v-if="timeline.length > 0" style="display:flex;gap:2px;height:30px;cursor:pointer" @click="onTimelineClick">
+                      <div
+                        v-for="(event, idx) in timeline"
+                        :key="idx"
+                        :title="\`\${event.label} @ \${formatOffset(event.offset)}\`"
+                        :style="{
+                          flex: 1,
+                          background: getEventColor(event.type),
+                          borderRadius: '2px',
+                          border: idx === currentTimelineIndex ? '2px solid #fff' : 'none'
+                        }"
+                      />
+                    </div>
+                    <div v-else style="height:30px;background:var(--border-color);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#909399">
+                      No timeline data
+                    </div>
+                  </div>
+
+                  <!-- Player placeholder -->
+                  <div style="aspect-ratio:16/9;background:#000;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff">
+                    <div style="text-align:center">
+                      <div style="font-size:48px;margin-bottom:10px">🎬</div>
+                      <div>Recording Player</div>
+                      <div style="font-size:12px;color:#909399;margin-top:5px">{{ formatOffset(currentOffset) }} / {{ formatDuration(currentSession.recording.durationMs) }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="content-card">
+                  <div class="card-header">
+                    <span class="card-title">Session Replay</span>
+                  </div>
+                  <div style="text-align:center;padding:60px;color:#909399">
+                    <div style="font-size:48px;margin-bottom:10px">📼</div>
+                    <div>No recording available for this session</div>
+                  </div>
+                </div>
+              </el-tab-pane>
+            </el-tabs>
+          </el-drawer>
+        </div>
+      `,
+      setup() {
+        const loading = ref(false);
+        const sessions = ref([]);
+        const apps = ref([]);
+        const total = ref(0);
+        const dateRange = ref([]);
+        const filters = reactive({
+          userId: '',
+          appId: ''
+        });
+        const pagination = reactive({
+          page: 1,
+          pageSize: 50
+        });
+
+        // Detail drawer
+        const detailVisible = ref(false);
+        const currentSession = ref(null);
+        const sessionEvents = ref([]);
+        const journeyData = reactive({ nodes: [], edges: [], errors: [] });
+        const journeyLoading = ref(false);
+        const activeTab = ref('events');
+        const timeline = ref([]);
+        const currentTimelineIndex = ref(0);
+        const currentOffset = ref(0);
+
+        onMounted(() => {
+          loadApps();
+          loadSessions();
+        });
+
+        const loadApps = async () => {
+          try {
+            const data = await apiCall('/api/query/apps');
+            apps.value = data.data || data || [];
+          } catch (e) {
+            apps.value = [];
+          }
+        };
+
+        const loadSessions = async () => {
+          loading.value = true;
+          try {
+            const params = new URLSearchParams({
+              limit: pagination.pageSize,
+              offset: (pagination.page - 1) * pagination.pageSize
+            });
+            if (filters.userId) params.append('user_id', filters.userId);
+            if (filters.appId) params.append('app_id', filters.appId);
+            if (dateRange.value && dateRange.value.length === 2) {
+              params.append('start_from', new Date(dateRange.value[0]).getTime());
+              params.append('start_to', new Date(dateRange.value[1]).getTime());
+            }
+            const data = await apiCall(\`/api/query/sessions?\${params}\`);
+            sessions.value = data.data || [];
+            total.value = data.total || 0;
+          } catch (e) {
+            ElMessage.error('Failed to load sessions');
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        const applyFilters = () => {
+          pagination.page = 1;
+          loadSessions();
+        };
+
+        const resetFilters = () => {
+          filters.userId = '';
+          filters.appId = '';
+          dateRange.value = [];
+          pagination.page = 1;
+          loadSessions();
+        };
+
+        const openSessionDetail = async (row) => {
+          currentSession.value = row;
+          detailVisible.value = true;
+          activeTab.value = 'events';
+          await loadSessionEvents(row.sessionId);
+        };
+
+        const loadSessionEvents = async (sessionId) => {
+          try {
+            const data = await apiCall(\`/api/query/sessions/\${sessionId}?event_limit=200\`);
+            currentSession.value = data.session;
+            sessionEvents.value = data.events || [];
+            currentSession.value.recording = data.session?.recording || { exists: false };
+          } catch (e) {
+            ElMessage.error('Failed to load session events');
+          }
+        };
+
+        const loadJourney = async () => {
+          if (!currentSession.value) return;
+          journeyLoading.value = true;
+          try {
+            const data = await apiCall(\`/api/query/sessions/\${currentSession.value.sessionId}/journey\`);
+            journeyData.nodes = data.nodes || [];
+            journeyData.edges = data.edges || [];
+            journeyData.errors = data.errors || [];
+          } catch (e) {
+            journeyData.nodes = [];
+            journeyData.edges = [];
+            journeyData.errors = [];
+          } finally {
+            journeyLoading.value = false;
+          }
+        };
+
+        const loadTimeline = async () => {
+          if (!currentSession.value?.recording?.exists) return;
+          try {
+            const data = await apiCall(\`/api/query/recordings/\${currentSession.value.sessionId}/timeline\`);
+            timeline.value = data.timeline || [];
+          } catch (e) {
+            timeline.value = [];
+          }
+        };
+
+        // Watch tab changes
+        watch(activeTab, (newTab) => {
+          if (newTab === 'journey' && journeyData.nodes.length === 0) {
+            loadJourney();
+          } else if (newTab === 'replay' && timeline.value.length === 0) {
+            loadTimeline();
+          }
+        });
+
+        // Helper functions
+        const formatDuration = (ms) => {
+          if (ms < 1000) return \`\${ms}ms\`;
+          const s = Math.floor(ms / 1000);
+          if (s < 60) return \`\${s}s\`;
+          const m = Math.floor(s / 60);
+          const rem = s % 60;
+          return \`\${m}m \${rem}s\`;
+        };
+
+        const formatUrl = (url) => {
+          if (!url) return '-';
+          try {
+            const u = new URL(url);
+            return u.pathname + u.search;
+          } catch {
+            return url;
+          }
+        };
+
+        const formatOffset = (ms) => {
+          const s = Math.floor(ms / 1000);
+          const m = Math.floor(s / 60);
+          const sec = s % 60;
+          if (m > 0) return \`\${m}:\${sec.toString().padStart(2, '0')}\`;
+          return \`\${sec}s\`;
+        };
+
+        const getLevelType = (level) => {
+          const map = { error: 'danger', warn: 'warning', info: 'info' };
+          return map[level] || '';
+        };
+
+        const getNodePos = (idx) => {
+          const positions = [
+            { x: 100, y: 200 },
+            { x: 300, y: 100 },
+            { x: 300, y: 300 },
+            { x: 500, y: 100 },
+            { x: 500, y: 300 },
+            { x: 700, y: 200 }
+          ];
+          return positions[idx] || { x: 100 + (idx % 3) * 200, y: 100 + Math.floor(idx / 3) * 100 };
+        };
+
+        const getEventColor = (type) => {
+          const colors = {
+            click: '#409eff',
+            scroll: '#909399',
+            input: '#67c23a',
+            navigation: '#e6a23c',
+            mutation: '#c0c4cc',
+            error: '#f56c6c'
+          };
+          return colors[type] || '#c0c4cc';
+        };
+
+        const onTimelineClick = (e) => {
+          // Implement timeline seeking
+        };
+
+        const seekToPrevError = () => {
+          // Implement jump to previous error
+        };
+
+        const setSpeed = (speed) => {
+          // Implement playback speed
+        };
+
+        return {
+          loading, sessions, apps, total, dateRange, filters, pagination,
+          detailVisible, currentSession, sessionEvents, journeyData, journeyLoading,
+          activeTab, timeline, currentTimelineIndex, currentOffset,
+          loadSessions, applyFilters, resetFilters, openSessionDetail,
+          formatDuration, formatUrl, formatOffset, getLevelType, getNodePos,
+          getEventColor, onTimelineClick, seekToPrevError, setSpeed,
+          Refresh: markRaw(ElementPlusIcons.Refresh),
+          Loading: markRaw(ElementPlusIcons.Loading)
+        };
+      }
+    };
+
     // Settings Page Component
     const SettingsPage = {
       template: `
@@ -2268,6 +2754,7 @@
         IssuesPage,
         AlertsPage,
         PerformancePage,
+        SessionsPage,
         AuditLogsPage,
         SettingsPage
       },
@@ -2363,6 +2850,7 @@
           { key: 'issues', label: 'Issues', icon: 'M12 2L1 21h22L12 2zm0 3.5L19.5 19H4.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z' },
           { key: 'alerts', label: 'Alerts', icon: 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z' },
           { key: 'performance', label: 'Performance', icon: 'M3.5 18.5l6-6.01 4 4L22 6.92l-1.07-1.05-7.44 7.44-4-4L2 16.44z' },
+          { key: 'sessions', label: 'Sessions', icon: 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z' },
           { key: 'audit', label: 'Audit Logs', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 14H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z' },
           { key: 'settings', label: 'Settings', icon: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z' }
         ];
@@ -2374,6 +2862,7 @@
             issues: 'IssuesPage',
             alerts: 'AlertsPage',
             performance: 'PerformancePage',
+            sessions: 'SessionsPage',
             audit: 'AuditLogsPage',
             settings: 'SettingsPage'
           };

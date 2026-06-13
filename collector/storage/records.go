@@ -29,6 +29,19 @@ type EventRecord struct {
 	CreatedAt   int64  `json:"created_at"`
 }
 
+// SessionSummary represents a summary of a user session
+type SessionSummary struct {
+	SessionID  string `json:"sessionId"`
+	AppID      string `json:"appId"`
+	UserID     string `json:"userId"`
+	StartTime  int64  `json:"startTime"`
+	EndTime    int64  `json:"endTime"`
+	DurationMs int64  `json:"durationMs"`
+	EventCount int64  `json:"eventCount"`
+	ErrorCount int64  `json:"errorCount"`
+	LastURL    string `json:"lastUrl"`
+}
+
 // QueryResult represents the result of a query
 type QueryResult struct {
 	Total    int64         `json:"total"`

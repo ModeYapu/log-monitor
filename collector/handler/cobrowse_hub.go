@@ -27,6 +27,7 @@ type CoBrowseDB interface {
 	GetRecordings(limit, offset int, filters map[string]interface{}) ([]storage.RecordingInfo, error)
 	GetRecordingEvents(sessionID string, limit, offset int) ([]storage.RecordingEventData, error)
 	GetRecordingStats(sessionID string) (interface{}, error)
+	GetRecordingTimeline(sessionID string) ([]storage.TimelineEvent, error)
 	DeleteRecording(sessionID string) error
 	UpdateRecording(sessionID string, endTime int64, durationMs int64, eventCount int, status string) error
 	GetSessionEvents(sessionID string, limit int) ([]storage.EventRecord, error)

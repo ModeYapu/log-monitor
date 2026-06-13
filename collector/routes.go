@@ -95,6 +95,7 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	if performanceHandler == nil {
 		performanceHandler = handler.NewPerformanceHandler(rc.DB)
 	}
+	sessionHandler := handler.NewSessionHandler(rc.DB)
 
 	sourceMapHandler.SetAllowedOrigins(rc.Config.Server.AllowedOrigins)
 
@@ -195,6 +196,10 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	// Health & analytics
 	readGroup.HandleFunc("GET /api/query/release-health", healthHandler.GetReleaseHealth)
 	readGroup.HandleFunc("GET /api/query/session-stats", healthHandler.GetSessionStats)
+
+	// User session tracking
+	readGroup.HandleFunc("GET /api/query/sessions", sessionHandler.ListSessions)
+	readGroup.HandleFunc("GET /api/query/sessions/", sessionHandler.GetSessionDetail)
 
 	// Alerts
 	readGroup.HandleFunc("GET /api/query/alerts", alertsHandler.GetAlerts)

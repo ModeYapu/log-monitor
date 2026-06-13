@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -29,6 +30,16 @@ type RecordingEventData struct {
 	Timestamp int64  `json:"timestamp"`
 	EventData string `json:"eventData"`
 	CreatedAt int64  `json:"createdAt"`
+}
+
+// TimelineEvent represents a significant event in the recording timeline
+type TimelineEvent struct {
+	Seq       int    `json:"seq"`
+	Timestamp int64  `json:"timestamp"`
+	Offset    int64  `json:"offsetMs"` // ms from session start
+	Type      string `json:"type"`     // e.g. "click", "scroll", "input", "navigation", "error", "custom"
+	Label     string `json:"label"`    // human-readable description
+	Data      string `json:"data"`     // raw event data JSON
 }
 
 // CreateRecording creates a new recording session
@@ -330,4 +341,153 @@ func (db *DB) GetRecordingStats(sessionID string) (interface{}, error) {
 			EndTime:   endTime,
 		},
 	}, nil
+}
+
+// GetRecordingTimeline extracts timeline events from recording events
+func (db *DB) GetRecordingTimeline(sessionID string) ([]TimelineEvent, error) {
+	if db.closed.Load() {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	rows, err := db.conn.Query(`
+		SELECT seq, timestamp, event_data
+		FROM recording_events
+		WHERE session_id = ?
+		ORDER BY seq ASC
+	`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recording events: %w", err)
+	}
+	defer rows.Close()
+
+	var timeline []TimelineEvent
+	var firstTimestamp int64 = 0
+
+	for rows.Next() {
+		var seq int
+		var timestamp int64
+		var eventData string
+
+		err := rows.Scan(&seq, &timestamp, &eventData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan recording event: %w", err)
+		}
+
+		// Track first timestamp for offset calculation
+		if firstTimestamp == 0 {
+			firstTimestamp = timestamp
+		}
+
+		// Parse rrweb event data
+		var rrwebEvent map[string]interface{}
+		if err := json.Unmarshal([]byte(eventData), &rrwebEvent); err != nil {
+			// If parsing fails, add as generic event
+			timeline = append(timeline, TimelineEvent{
+				Seq:       seq,
+				Timestamp: timestamp,
+				Offset:    timestamp - firstTimestamp,
+				Type:      "custom",
+				Label:     "Unknown Event",
+				Data:      eventData,
+			})
+			continue
+		}
+
+		// Extract rrweb event type
+		eventType, _ := rrwebEvent["type"].(float64)
+
+		// Classify event and extract label
+		timelineType := "custom"
+		label := "Event"
+
+		switch int(eventType) {
+		case 2: // DomContentLoaded
+			timelineType = "navigation"
+			label = "DOM Content Loaded"
+		case 4: // Meta
+			timelineType = "meta"
+			label = "Meta Update"
+		case 5: // Load
+			timelineType = "navigation"
+			label = "Page Loaded"
+		case 6: // FullSnapshot
+			timelineType = "snapshot"
+			label = "Full Snapshot"
+		case 7: // IncrementalSnapshot
+			// Look at data.source for more specific classification
+			if data, ok := rrwebEvent["data"].(map[string]interface{}); ok {
+				if source, ok := data["source"].(float64); ok {
+					switch int(source) {
+					case 0: // mutation
+						timelineType = "mutation"
+						label = "DOM Mutation"
+					case 1: // mouseMove
+						timelineType = "mousemove"
+						label = "Mouse Move"
+					case 2: // mouseInteraction
+						// Check interaction type
+						if typeVal, ok := data["type"].(float64); ok {
+							switch int(typeVal) {
+							case 0: // MouseUp (click)
+								timelineType = "click"
+								label = "Click"
+							case 1: // MouseDown
+								timelineType = "mousedown"
+								label = "Mouse Down"
+							case 2: // Click
+								timelineType = "click"
+								label = "Click"
+							case 3: // ContextMenu
+								timelineType = "contextmenu"
+								label = "Context Menu"
+							default:
+								timelineType = "interaction"
+								label = "Mouse Interaction"
+							}
+						}
+					case 3: // scroll
+						timelineType = "scroll"
+						label = "Scroll"
+					case 4: // viewportResize
+						timelineType = "resize"
+						label = "Viewport Resize"
+					case 5: // input
+						timelineType = "input"
+						label = "Input"
+						if inputType, ok := data["type"].(float64); ok {
+							switch int(inputType) {
+							case 0:
+								label = "Text Input"
+							case 1:
+								label = "Option Change"
+							}
+						}
+					case 6: // mediaInteraction
+						timelineType = "media"
+						label = "Media Interaction"
+					case 7: // styleSheetRule
+						timelineType = "style"
+						label = "Style Sheet Rule"
+					case 8: // canvasMutation
+						timelineType = "canvas"
+						label = "Canvas Mutation"
+					case 9: // font
+						timelineType = "font"
+						label = "Font Loading"
+					}
+				}
+			}
+		}
+
+		timeline = append(timeline, TimelineEvent{
+			Seq:       seq,
+			Timestamp: timestamp,
+			Offset:    timestamp - firstTimestamp,
+			Type:      timelineType,
+			Label:     label,
+			Data:      eventData,
+		})
+	}
+
+	return timeline, nil
 }

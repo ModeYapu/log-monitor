@@ -975,3 +975,181 @@ func (e EventRecord) MarshalJSON() ([]byte, error) {
 		"timestamp":   e.CreatedAt,
 	})
 }
+
+// GetSessionList retrieves a list of sessions with filters
+func (db *DB) GetSessionList(filters map[string]interface{}, limit, offset int) ([]SessionSummary, error) {
+	if db.closed.Load() {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	if limit <= 0 || limit > 1000 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Build WHERE clause
+	whereClause := "WHERE session_id != ''"
+	args := []interface{}{}
+
+	if appID, ok := filters["app_id"].(string); ok && appID != "" {
+		whereClause += " AND app_id = ?"
+		args = append(args, appID)
+	}
+
+	if userID, ok := filters["user_id"].(string); ok && userID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, userID)
+	}
+
+	if startFrom, ok := filters["start_from"].(int64); ok && startFrom > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, startFrom)
+	}
+
+	if startTo, ok := filters["start_to"].(int64); ok && startTo > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, startTo)
+	}
+
+	if projectID, ok := filters["project_id"].(int64); ok && projectID > 0 {
+		whereClause += " AND project_id = ?"
+		args = append(args, projectID)
+	}
+
+	query := `
+		SELECT
+			session_id,
+			app_id,
+			user_id,
+			MIN(created_at) as start_time,
+			MAX(created_at) as end_time,
+			COUNT(*) as event_count,
+			SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
+			MAX(url) as last_url
+		FROM events ` + whereClause + `
+		GROUP BY session_id, app_id, user_id
+		ORDER BY start_time DESC
+		LIMIT ? OFFSET ?
+	`
+
+	args = append(args, limit, offset)
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session list: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []SessionSummary
+	for rows.Next() {
+		var s SessionSummary
+		err := rows.Scan(
+			&s.SessionID,
+			&s.AppID,
+			&s.UserID,
+			&s.StartTime,
+			&s.EndTime,
+			&s.EventCount,
+			&s.ErrorCount,
+			&s.LastURL,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
+		}
+
+		// Calculate duration
+		s.DurationMs = s.EndTime - s.StartTime
+
+		sessions = append(sessions, s)
+	}
+
+	return sessions, nil
+}
+
+// GetSessionListCount returns the total count of sessions with filters
+func (db *DB) GetSessionListCount(filters map[string]interface{}) (int64, error) {
+	if db.closed.Load() {
+		return 0, fmt.Errorf("database is closed")
+	}
+
+	// Build WHERE clause (same as GetSessionList)
+	whereClause := "WHERE session_id != ''"
+	args := []interface{}{}
+
+	if appID, ok := filters["app_id"].(string); ok && appID != "" {
+		whereClause += " AND app_id = ?"
+		args = append(args, appID)
+	}
+
+	if userID, ok := filters["user_id"].(string); ok && userID != "" {
+		whereClause += " AND user_id = ?"
+		args = append(args, userID)
+	}
+
+	if startFrom, ok := filters["start_from"].(int64); ok && startFrom > 0 {
+		whereClause += " AND created_at >= ?"
+		args = append(args, startFrom)
+	}
+
+	if startTo, ok := filters["start_to"].(int64); ok && startTo > 0 {
+		whereClause += " AND created_at <= ?"
+		args = append(args, startTo)
+	}
+
+	if projectID, ok := filters["project_id"].(int64); ok && projectID > 0 {
+		whereClause += " AND project_id = ?"
+		args = append(args, projectID)
+	}
+
+	query := `
+		SELECT COUNT(DISTINCT session_id)
+		FROM events ` + whereClause
+
+	var count int64
+	err := db.conn.QueryRow(query, args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get session count: %w", err)
+	}
+
+	return count, nil
+}
+
+// GetSessionJourney retrieves ordered events for journey visualization
+func (db *DB) GetSessionJourney(sessionID string) ([]EventRecord, error) {
+	if db.closed.Load() {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	rows, err := db.conn.Query(`
+		SELECT id, app_id, release, env, build_id, user_id, session_id,
+		       type, level, message, stack, url, line, col,
+		       tags, extra, ua, screen, viewport, performance, ip, created_at
+		FROM events
+		WHERE session_id = ?
+		ORDER BY created_at ASC
+	`, sessionID)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session journey: %w", err)
+	}
+	defer rows.Close()
+
+	var events []EventRecord
+	for rows.Next() {
+		var e EventRecord
+		err := rows.Scan(
+			&e.ID, &e.AppID, &e.Release, &e.Env, &e.BuildID, &e.UserID, &e.SessionID,
+			&e.Type, &e.Level, &e.Message, &e.Stack,
+			&e.URL, &e.Line, &e.Col, &e.Tags, &e.Extra, &e.UA, &e.Screen,
+			&e.Viewport, &e.Performance, &e.IP, &e.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan event: %w", err)
+		}
+		events = append(events, e)
+	}
+
+	return events, nil
+}
