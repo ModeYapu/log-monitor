@@ -1,5 +1,9 @@
 package storage
 
+import (
+	"time"
+)
+
 // SQLiteStore implements Store interface using SQLite database
 type SQLiteStore struct {
 	db          *DB
@@ -79,6 +83,14 @@ func (w *systemStoreWrapper) SetLastCleanupTime(timestamp int64) error {
 
 func (w *systemStoreWrapper) CleanupOldDataWithDays(days int) CleanupResult {
 	return w.db.CleanupOldDataWithDays(days)
+}
+
+func (w *systemStoreWrapper) DeleteEventsBefore(before time.Time) (int64, error) {
+	return w.db.DeleteEventsBefore(before)
+}
+
+func (w *systemStoreWrapper) DeleteRecordingsBefore(before time.Time) (int64, error) {
+	return w.db.DeleteRecordingsBefore(before)
 }
 
 // Recordings returns the recording repository

@@ -98,6 +98,8 @@ type SystemStore interface {
 	GetLastCleanupTime() int64
 	SetLastCleanupTime(timestamp int64) error
 	CleanupOldDataWithDays(days int) CleanupResult
+	DeleteEventsBefore(before time.Time) (int64, error)
+	DeleteRecordingsBefore(before time.Time) (int64, error)
 }
 
 // RecordingRepository handles session recordings

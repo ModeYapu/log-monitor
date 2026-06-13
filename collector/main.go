@@ -64,6 +64,9 @@ func main() {
 
 	slog.Info("Database initialized successfully")
 
+	// Screenshot directory for cleanup
+	screenshotDir := "./data/screenshots"
+
 	// Get underlying DB for legacy handlers that still need direct access
 	// This will be gradually removed as we migrate all handlers to use repositories
 	db, err := storage.NewDB(storage.Config{
@@ -174,12 +177,19 @@ func main() {
 	// Initialize worker manager
 	workerManager := worker.NewManager()
 
-	// Register cleanup worker
+	// Register cleanup worker with retention policies from config
 	cleanupWorker := worker.NewCleanupWorker(
 		store.System(),
-		cfg.Database.RetentionDays,
+		cfg.Database.GetEventRetention(),
 		24*time.Hour, // Check daily
 	)
+	// Set recording retention from config
+	cleanupWorker.SetRecordingRetention(cfg.Database.GetRecordingRetention())
+	// Set screenshot retention from config
+	cleanupWorker.SetScreenshotRetention(cfg.Database.GetScreenshotRetention())
+	// Set screenshot directory for cleanup
+	cleanupWorker.SetScreenshotDir(screenshotDir)
+
 	workerManager.RegisterWorker(cleanupWorker)
 
 	// Register issue aggregator worker
@@ -235,11 +245,21 @@ func main() {
 
 	// Initialize config watcher
 	configWatcher := config.NewWatcher(*configPath, func(oldCfg, newCfg *config.Config) error {
-		slog.Info("Config reloaded", "retentionDays", newCfg.Database.RetentionDays)
+		slog.Info("Config reloaded",
+			"eventsRetention", newCfg.Database.GetEventRetention(),
+			"recordingsRetention", newCfg.Database.GetRecordingRetention(),
+			"screenshotsRetention", newCfg.Database.GetScreenshotRetention(),
+		)
 
-		// Update cleanup worker if retention days changed
-		if oldCfg.Database.RetentionDays != newCfg.Database.RetentionDays {
-			cleanupWorker.UpdateRetention(newCfg.Database.RetentionDays)
+		// Update cleanup worker if retention policies changed
+		if oldCfg.Database.GetEventRetention() != newCfg.Database.GetEventRetention() {
+			cleanupWorker.UpdateRetention(newCfg.Database.GetEventRetention())
+		}
+		if oldCfg.Database.GetRecordingRetention() != newCfg.Database.GetRecordingRetention() {
+			cleanupWorker.SetRecordingRetention(newCfg.Database.GetRecordingRetention())
+		}
+		if oldCfg.Database.GetScreenshotRetention() != newCfg.Database.GetScreenshotRetention() {
+			cleanupWorker.SetScreenshotRetention(newCfg.Database.GetScreenshotRetention())
 		}
 
 		return nil

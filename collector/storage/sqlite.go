@@ -280,6 +280,109 @@ func (db *DB) initSchema() error {
 	return nil
 }
 
+// DeleteEventsBefore deletes events older than the specified time
+func (db *DB) DeleteEventsBefore(before time.Time) (int64, error) {
+	if db.closed.Load() {
+		return 0, fmt.Errorf("database is closed")
+	}
+
+	cutoff := before.UnixMilli()
+	result, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete events: %w", err)
+	}
+
+	count, _ := result.RowsAffected()
+
+	// If we deleted more than 1000 records, run VACUUM to reclaim space
+	if count > 1000 {
+		slog.Info("Running VACUUM to reclaim space after large deletion", "deleted", count)
+		_, _ = db.conn.Exec("VACUUM")
+	}
+
+	return count, nil
+}
+
+// DeleteRecordingsBefore deletes recordings and their events older than the specified time
+func (db *DB) DeleteRecordingsBefore(before time.Time) (int64, error) {
+	if db.closed.Load() {
+		return 0, fmt.Errorf("database is closed")
+	}
+
+	cutoff := before.UnixMilli()
+
+	// First, get all session_ids that will be deleted
+	rows, err := db.conn.Query("SELECT session_id FROM recordings WHERE start_time < ?", cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query recordings: %w", err)
+	}
+	defer rows.Close()
+
+	var sessionIDs []string
+	for rows.Next() {
+		var sessionID string
+		if err := rows.Scan(&sessionID); err != nil {
+			return 0, fmt.Errorf("failed to scan session_id: %w", err)
+		}
+		sessionIDs = append(sessionIDs, sessionID)
+	}
+
+	if len(sessionIDs) == 0 {
+		return 0, nil
+	}
+
+	// Delete recording_events for these sessions
+	var totalDeleted int64
+
+	// Delete in batches to avoid too large SQL statements
+	const batchSize = 100
+	for i := 0; i < len(sessionIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(sessionIDs) {
+			end = len(sessionIDs)
+		}
+		batch := sessionIDs[i:end]
+
+		// Build placeholder string for IN clause
+		placeholders := make([]string, len(batch))
+		args := make([]interface{}, len(batch))
+		for j, id := range batch {
+			placeholders[j] = "?"
+			args[j] = id
+		}
+
+		query := fmt.Sprintf("DELETE FROM recording_events WHERE session_id IN (%s)",
+			strings.Join(placeholders, ","))
+		result, err := db.conn.Exec(query, args...)
+		if err != nil {
+			slog.Error("Failed to delete recording events batch", "error", err)
+		} else {
+			if n, _ := result.RowsAffected(); n > 0 {
+				totalDeleted += n
+			}
+		}
+	}
+
+	// Delete the recordings themselves
+	result, err := db.conn.Exec("DELETE FROM recordings WHERE start_time < ?", cutoff)
+	if err != nil {
+		return totalDeleted, fmt.Errorf("failed to delete recordings: %w", err)
+	}
+
+	recordingCount, _ := result.RowsAffected()
+	totalDeleted += recordingCount
+
+	slog.Info("Deleted old recordings", "recordings", recordingCount, "totalRows", totalDeleted)
+
+	// If we deleted more than 1000 records, run VACUUM to reclaim space
+	if totalDeleted > 1000 {
+		slog.Info("Running VACUUM to reclaim space after large deletion", "deleted", totalDeleted)
+		_, _ = db.conn.Exec("VACUUM")
+	}
+
+	return totalDeleted, nil
+}
+
 // Close closes the database connection
 func (db *DB) Close() error {
 	if db.closed.Swap(true) {

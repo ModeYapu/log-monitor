@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/logmonitor/collector/storage"
@@ -17,31 +19,59 @@ type CleanupSystemStore interface {
 	CleanupOldDataWithDays(days int) CleanupResult
 	GetLastCleanupTime() int64
 	SetLastCleanupTime(timestamp int64) error
+	DeleteEventsBefore(before time.Time) (int64, error)
+	DeleteRecordingsBefore(before time.Time) (int64, error)
 }
 
 // CleanupWorker handles retention cleanup
 type CleanupWorker struct {
-	retentionDays int
-	checkInterval time.Duration
-	systemStore   CleanupSystemStore
-	stopChan      chan struct{}
-	doneChan      chan struct{}
+	retentionDays      int
+	recordingDays      int
+	screenshotDays     int
+	checkInterval      time.Duration
+	systemStore        CleanupSystemStore
+	screenshotDir      string
+	stopChan           chan struct{}
+	doneChan           chan struct{}
 }
 
 // NewCleanupWorker creates a new cleanup worker
 func NewCleanupWorker(systemStore CleanupSystemStore, retentionDays int, checkInterval time.Duration) *CleanupWorker {
 	return &CleanupWorker{
-		retentionDays: retentionDays,
-		checkInterval: checkInterval,
-		systemStore:   systemStore,
-		stopChan:      make(chan struct{}),
-		doneChan:      make(chan struct{}),
+		retentionDays:  retentionDays,
+		recordingDays: 14,  // Default 14 days for recordings
+		screenshotDays: 30, // Default 30 days for screenshots
+		checkInterval:  checkInterval,
+		systemStore:    systemStore,
+		stopChan:       make(chan struct{}),
+		doneChan:       make(chan struct{}),
 	}
+}
+
+// SetScreenshotDir sets the screenshot directory for cleanup
+func (w *CleanupWorker) SetScreenshotDir(dir string) {
+	w.screenshotDir = dir
+}
+
+// SetRecordingRetention sets the recording retention days
+func (w *CleanupWorker) SetRecordingRetention(days int) {
+	w.recordingDays = days
+	slog.Info("Recording retention updated", "days", days)
+}
+
+// SetScreenshotRetention sets the screenshot retention days
+func (w *CleanupWorker) SetScreenshotRetention(days int) {
+	w.screenshotDays = days
+	slog.Info("Screenshot retention updated", "days", days)
 }
 
 // Start begins the cleanup worker
 func (w *CleanupWorker) Start(ctx context.Context) error {
-	slog.Info("Starting cleanup worker", "retentionDays", w.retentionDays, "interval", w.checkInterval)
+	slog.Info("Starting cleanup worker",
+		"eventsRetentionDays", w.retentionDays,
+		"recordingsRetentionDays", w.recordingDays,
+		"screenshotsRetentionDays", w.screenshotDays,
+		"interval", w.checkInterval)
 
 	ticker := time.NewTicker(w.checkInterval)
 	defer ticker.Stop()
@@ -99,18 +129,86 @@ func (w *CleanupWorker) runCleanup() {
 
 	startTime := time.Now()
 
-	// Perform cleanup
-	result := w.systemStore.CleanupOldDataWithDays(retentionDays)
-	result.Duration = time.Since(startTime)
+	// Clean events
+	eventsCutoff := time.Now().AddDate(0, 0, -retentionDays)
+	deletedEvents, err := w.systemStore.DeleteEventsBefore(eventsCutoff)
+	if err != nil {
+		slog.Error("Failed to delete old events", "error", err)
+	} else if deletedEvents > 0 {
+		slog.Info("Deleted old events", "count", deletedEvents, "olderThan", retentionDays)
+	}
 
-	// Update last cleanup time (cleanup succeeded if we got here)
+	// Clean recordings
+	recordingsCutoff := time.Now().AddDate(0, 0, -w.recordingDays)
+	deletedRecordings, err := w.systemStore.DeleteRecordingsBefore(recordingsCutoff)
+	if err != nil {
+		slog.Error("Failed to delete old recordings", "error", err)
+	} else if deletedRecordings > 0 {
+		slog.Info("Deleted old recordings", "count", deletedRecordings, "olderThan", w.recordingDays)
+	}
+
+	// Clean screenshots
+	deletedScreenshots := w.cleanupScreenshots()
+
+	duration := time.Since(startTime)
+
+	// Update last cleanup time
 	if err := w.systemStore.SetLastCleanupTime(now); err != nil {
 		slog.Error("Failed to update last cleanup time", "error", err)
 	}
+
 	slog.Info("Cleanup completed",
-		"deletedEvents", result.DeletedEvents,
-		"duration", result.Duration,
+		"deletedEvents", deletedEvents,
+		"deletedRecordings", deletedRecordings,
+		"deletedScreenshots", deletedScreenshots,
+		"duration", duration,
 		"retentionDays", retentionDays)
+}
+
+// cleanupScreenshots deletes screenshot files older than the retention period
+func (w *CleanupWorker) cleanupScreenshots() int64 {
+	if w.screenshotDir == "" {
+		return 0
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -w.screenshotDays)
+	var deletedCount int64
+
+	err := filepath.Walk(w.screenshotDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		// Only process image files
+		ext := filepath.Ext(path)
+		if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".gif" && ext != ".webp" {
+			return nil
+		}
+
+		// Check if file is older than cutoff
+		if info.ModTime().Before(cutoff) {
+			if err := os.Remove(path); err != nil {
+				slog.Warn("Failed to delete old screenshot", "path", path, "error", err)
+			} else {
+				deletedCount++
+				slog.Debug("Deleted old screenshot", "path", path, "age", time.Since(info.ModTime()))
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		slog.Error("Failed to walk screenshot directory", "error", err)
+	}
+
+	if deletedCount > 0 {
+		slog.Info("Deleted old screenshots", "count", deletedCount, "olderThan", w.screenshotDays)
+	}
+
+	return deletedCount
 }
 
 // UpdateRetention updates the retention days

@@ -26,8 +26,40 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
-	Path          string `yaml:"path"`
-	RetentionDays int    `yaml:"retention_days"`
+	Path          string               `yaml:"path"`
+	RetentionDays int                  `yaml:"retention_days"`
+	Retention     *DataRetentionPolicy `yaml:"retention"`
+}
+
+// DataRetentionPolicy holds retention policies for different data types
+type DataRetentionPolicy struct {
+	EventsDays      int `yaml:"events_days"`
+	RecordingsDays  int `yaml:"recordings_days"`
+	ScreenshotsDays int `yaml:"screenshots_days"`
+}
+
+// GetEventRetention returns the event retention days (with fallback to legacy config)
+func (c *DatabaseConfig) GetEventRetention() int {
+	if c.Retention != nil && c.Retention.EventsDays > 0 {
+		return c.Retention.EventsDays
+	}
+	return c.RetentionDays
+}
+
+// GetRecordingRetention returns the recording retention days (with fallback)
+func (c *DatabaseConfig) GetRecordingRetention() int {
+	if c.Retention != nil && c.Retention.RecordingsDays > 0 {
+		return c.Retention.RecordingsDays
+	}
+	return 14 // Default to 14 days for recordings
+}
+
+// GetScreenshotRetention returns the screenshot retention days (with fallback)
+func (c *DatabaseConfig) GetScreenshotRetention() int {
+	if c.Retention != nil && c.Retention.ScreenshotsDays > 0 {
+		return c.Retention.ScreenshotsDays
+	}
+	return c.RetentionDays // Default to same as general retention
 }
 
 // BufferConfig holds buffer configuration
@@ -84,6 +116,25 @@ func Load(path string) (*Config, error) {
 	if cfg.Database.RetentionDays == 0 {
 		cfg.Database.RetentionDays = 30
 	}
+	// Initialize retention policy if not set
+	if cfg.Database.Retention == nil {
+		cfg.Database.Retention = &DataRetentionPolicy{
+			EventsDays:      30,
+			RecordingsDays:  14,
+			ScreenshotsDays: 30,
+		}
+	} else {
+		// Set defaults for individual fields if not set
+		if cfg.Database.Retention.EventsDays == 0 {
+			cfg.Database.Retention.EventsDays = 30
+		}
+		if cfg.Database.Retention.RecordingsDays == 0 {
+			cfg.Database.Retention.RecordingsDays = 14
+		}
+		if cfg.Database.Retention.ScreenshotsDays == 0 {
+			cfg.Database.Retention.ScreenshotsDays = 30
+		}
+	}
 	if cfg.Buffer.Size == 0 {
 		cfg.Buffer.Size = 10000
 	}
@@ -111,6 +162,11 @@ func Default() *Config {
 		Database: DatabaseConfig{
 			Path:          "./data/logmonitor.db",
 			RetentionDays: 30,
+			Retention: &DataRetentionPolicy{
+				EventsDays:      30,
+				RecordingsDays:  14,
+				ScreenshotsDays: 30,
+			},
 		},
 		Buffer: BufferConfig{
 			Size:           10000,
