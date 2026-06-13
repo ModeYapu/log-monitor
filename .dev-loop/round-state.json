@@ -1,44 +1,39 @@
 {
   "schemaVersion": 1,
-  "roundId": "R003",
+  "roundId": "R004",
   "slice": {
-    "description": "补齐 SDK Web Vitals 采集（FCP/LCP/CLS）+ 后端性能分析 API（聚合查询+趋势+版本对比）",
+    "description": "SDK 增强：白屏检测 + 接口失败追踪(XHR/fetch) + 资源加载异常监控 + 后端回归检测 API",
     "sourceFiles": [
       "sdk/src/index.ts",
-      "collector/handler/performance_handler.go",
       "collector/storage/performance-store.go",
-      "collector/storage/performance-store_test.go",
-      "collector/model/performance.go"
+      "collector/handler/performance_handler.go",
+      "collector/model/performance.go",
+      "collector/storage/performance-store_test.go"
     ],
     "acceptanceCriteria": [
       "cd collector && go build ./... exit 0",
       "cd collector && go test ./storage/... ./handler/... exit 0",
-      "SDK 新增 FCP/LCP/CLS 采集（PerformanceObserver）",
-      "PerformanceMetric 模型：page_url, metric_name, value, rating(good/needs-improvement/poor), project_id",
-      "后端 API: GET /api/query/performance/summary — 按 page 聚合 Web Vitals P75",
-      "后端 API: GET /api/query/performance/trend — 时间趋势",
-      "后端 API: GET /api/query/performance/compare — 版本对比"
+      "SDK 白屏检测：DOM ready 后 3s 内 body 无可见内容 → 上报 blank_page 事件",
+      "SDK 接口追踪：拦截 fetch/XHR，记录失败请求（status>=400 或网络错误）",
+      "SDK 资源监控：PerformanceObserver entryTypes=['resource']，捕获 transferSize=0 或失败资源",
+      "后端 API: GET /api/query/performance/regressions — 自动检测版本间性能退化（P75 恶化>20%）"
     ],
     "maxFiles": 5,
     "estimatedComplexity": "medium"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T14:25:00+08:00",
+  "startedAt": "2026-06-13T14:35:00+08:00",
   "filesChanged": [
     "sdk/src/index.ts",
-    "collector/model/performance.go",
     "collector/storage/performance-store.go",
-    "collector/storage/performance-store_test.go",
-    "collector/storage/interfaces.go",
-    "collector/storage/sqlite_store.go",
     "collector/handler/performance_handler.go",
-    "collector/routes.go",
-    "collector/main.go"
+    "collector/model/performance.go",
+    "collector/storage/performance-store_test.go"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
   "verifySliceCmd": "cd collector && go test ./storage/... ./handler/...",
   "verifyBuildPassed": true,
   "verifySlicePassed": true,
-  "completedAt": "2026-06-13T14:31:00+08:00",
+  "completedAt": "2026-06-13T15:15:00+08:00",
   "commitSha": null
 }

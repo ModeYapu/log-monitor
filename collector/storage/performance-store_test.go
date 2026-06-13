@@ -442,3 +442,343 @@ func TestIsLowerBetter(t *testing.T) {
 		})
 	}
 }
+
+// ---- Test DetectPerformanceRegressions ----
+
+func TestDetectPerformanceRegressions_NoRegression(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	if err := db.EnsurePerformanceMetricsTable(); err != nil {
+		t.Fatalf("Failed to ensure performance_metrics table: %v", err)
+	}
+
+	now := time.Now()
+
+	// Insert previous release metrics (good performance)
+	for i := 0; i < 5; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "lcp",
+			Value:      2000 + float64(i*100),
+			Rating:     model.GetRating("lcp", 2000),
+			Release:    "v1.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	// Insert current release metrics (similar or better performance)
+	for i := 0; i < 5; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "lcp",
+			Value:      2100 + float64(i*100), // Only 5% worse
+			Rating:     model.GetRating("lcp", 2100),
+			Release:    "v2.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	regressions, err := db.DetectPerformanceRegressions(1, "v2.0.0", "v1.0.0")
+	if err != nil {
+		t.Fatalf("DetectPerformanceRegressions returned error: %v", err)
+	}
+
+	// Should have no regressions (only 5% change, threshold is 20%)
+	if len(regressions) != 0 {
+		t.Errorf("Expected 0 regressions, got %d", len(regressions))
+	}
+}
+
+func TestDetectPerformanceRegressions_MinorRegression(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	if err := db.EnsurePerformanceMetricsTable(); err != nil {
+		t.Fatalf("Failed to ensure performance_metrics table: %v", err)
+	}
+
+	now := time.Now()
+
+	// Insert previous release metrics (good performance)
+	for i := 0; i < 5; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "lcp",
+			Value:      2000 + float64(i*100),
+			Rating:     model.GetRating("lcp", 2000),
+			Release:    "v1.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	// Insert current release metrics (25% worse - minor regression)
+	for i := 0; i < 5; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "lcp",
+			Value:      2500 + float64(i*100), // 25% worse
+			Rating:     model.GetRating("lcp", 2500),
+			Release:    "v2.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	regressions, err := db.DetectPerformanceRegressions(1, "v2.0.0", "v1.0.0")
+	if err != nil {
+		t.Fatalf("DetectPerformanceRegressions returned error: %v", err)
+	}
+
+	// Should have 1 minor regression
+	if len(regressions) != 1 {
+		t.Errorf("Expected 1 regression, got %d", len(regressions))
+	}
+
+	reg := regressions[0]
+	if reg.MetricName != "lcp" {
+		t.Errorf("MetricName = %s, want lcp", reg.MetricName)
+	}
+	if reg.Severity != "minor" {
+		t.Errorf("Severity = %s, want minor", reg.Severity)
+	}
+	if reg.PageURL != "/page1" {
+		t.Errorf("PageURL = %s, want /page1", reg.PageURL)
+	}
+	if reg.Change < 20 || reg.Change >= 50 {
+		t.Errorf("Change = %f, want between 20 and 50", reg.Change)
+	}
+}
+
+func TestDetectPerformanceRegressions_CriticalRegression(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	if err := db.EnsurePerformanceMetricsTable(); err != nil {
+		t.Fatalf("Failed to ensure performance_metrics table: %v", err)
+	}
+
+	now := time.Now()
+
+	// Insert previous release metrics (good performance)
+	for i := 0; i < 5; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "fcp",
+			Value:      1000 + float64(i*50),
+			Rating:     model.GetRating("fcp", 1000),
+			Release:    "v1.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	// Insert current release metrics (150% worse - critical regression)
+	for i := 0; i < 5; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "fcp",
+			Value:      2500 + float64(i*100), // 2.5x worse
+			Rating:     model.GetRating("fcp", 2500),
+			Release:    "v2.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	regressions, err := db.DetectPerformanceRegressions(1, "v2.0.0", "v1.0.0")
+	if err != nil {
+		t.Fatalf("DetectPerformanceRegressions returned error: %v", err)
+	}
+
+	// Should have 1 critical regression
+	if len(regressions) != 1 {
+		t.Errorf("Expected 1 regression, got %d", len(regressions))
+	}
+
+	reg := regressions[0]
+	if reg.MetricName != "fcp" {
+		t.Errorf("MetricName = %s, want fcp", reg.MetricName)
+	}
+	if reg.Severity != "critical" {
+		t.Errorf("Severity = %s, want critical", reg.Severity)
+	}
+	if reg.Change < 100 {
+		t.Errorf("Change = %f, want >= 100 for critical", reg.Change)
+	}
+}
+
+func TestDetectPerformanceRegressions_MultiplePagesAndMetrics(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	if err := db.EnsurePerformanceMetricsTable(); err != nil {
+		t.Fatalf("Failed to ensure performance_metrics table: %v", err)
+	}
+
+	now := time.Now()
+
+	// Insert data for multiple pages and metrics
+	pages := []string{"/page1", "/page2", "/page3"}
+	metrics := []string{"lcp", "fcp"}
+
+	for _, page := range pages {
+		for _, metric := range metrics {
+			// Previous release
+			for i := 0; i < 5; i++ {
+				m := &model.PerformanceMetric{
+					ProjectID:  1,
+					AppID:      "test-app",
+					PageURL:    page,
+					MetricName: metric,
+					Value:      2000 + float64(i*100),
+					Rating:     model.GetRating(metric, 2000),
+					Release:    "v1.0.0",
+					CreatedAt:  now.UnixMilli(),
+				}
+				if err := db.InsertPerformanceMetric(m); err != nil {
+					t.Fatalf("Failed to insert metric: %v", err)
+				}
+			}
+
+			// Current release - some pages have regression, some don't
+			baseValue := 2000.0
+			if page == "/page2" {
+				baseValue = 3000 // 50% regression for page2
+			} else if page == "/page3" {
+				baseValue = 4500 // 125% regression for page3
+			}
+			// page1 stays similar (2100)
+
+			for i := 0; i < 5; i++ {
+				m := &model.PerformanceMetric{
+					ProjectID:  1,
+					AppID:      "test-app",
+					PageURL:    page,
+					MetricName: metric,
+					Value:      baseValue + float64(i*100),
+					Rating:     model.GetRating(metric, baseValue),
+					Release:    "v2.0.0",
+					CreatedAt:  now.UnixMilli(),
+				}
+				if err := db.InsertPerformanceMetric(m); err != nil {
+					t.Fatalf("Failed to insert metric: %v", err)
+				}
+			}
+		}
+	}
+
+	regressions, err := db.DetectPerformanceRegressions(1, "v2.0.0", "v1.0.0")
+	if err != nil {
+		t.Fatalf("DetectPerformanceRegressions returned error: %v", err)
+	}
+
+	// Should have regressions for page2 (major) and page3 (critical)
+	// page1 should not appear (only 5% change)
+	// Each page has 2 metrics (lcp and fcp)
+	if len(regressions) != 4 { // 2 pages x 2 metrics
+		t.Errorf("Expected 4 regressions, got %d", len(regressions))
+	}
+
+	// Verify sorting - critical should come before major
+	for i := 0; i < len(regressions)-1; i++ {
+		if regressions[i].Severity == "major" && regressions[i+1].Severity == "critical" {
+			t.Error("Regressions should be sorted by severity (critical first)")
+		}
+	}
+}
+
+func TestDetectPerformanceRegressions_InsufficientData(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	if err := db.EnsurePerformanceMetricsTable(); err != nil {
+		t.Fatalf("Failed to ensure performance_metrics table: %v", err)
+	}
+
+	now := time.Now()
+
+	// Insert only 2 data points for previous release (below threshold of 3)
+	for i := 0; i < 2; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "lcp",
+			Value:      2000 + float64(i*100),
+			Rating:     model.GetRating("lcp", 2000),
+			Release:    "v1.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	// Insert current release with sufficient data
+	for i := 0; i < 5; i++ {
+		metric := &model.PerformanceMetric{
+			ProjectID:  1,
+			AppID:      "test-app",
+			PageURL:    "/page1",
+			MetricName: "lcp",
+			Value:      3000 + float64(i*100), // 50% worse
+			Rating:     model.GetRating("lcp", 3000),
+			Release:    "v2.0.0",
+			CreatedAt:  now.UnixMilli(),
+		}
+		if err := db.InsertPerformanceMetric(metric); err != nil {
+			t.Fatalf("Failed to insert metric: %v", err)
+		}
+	}
+
+	regressions, err := db.DetectPerformanceRegressions(1, "v2.0.0", "v1.0.0")
+	if err != nil {
+		t.Fatalf("DetectPerformanceRegressions returned error: %v", err)
+	}
+
+	// Should have no regressions due to insufficient data points
+	if len(regressions) != 0 {
+		t.Errorf("Expected 0 regressions (insufficient data), got %d", len(regressions))
+	}
+}
+
+func TestDetectPerformanceRegressions_ClosedDB(t *testing.T) {
+	db := setupTestDB(t)
+	if err := db.EnsurePerformanceMetricsTable(); err != nil {
+		t.Fatalf("Failed to ensure performance_metrics table: %v", err)
+	}
+	db.Close()
+
+	_, err := db.DetectPerformanceRegressions(1, "v2.0.0", "v1.0.0")
+	if err == nil {
+		t.Error("expected error for closed database")
+	}
+}

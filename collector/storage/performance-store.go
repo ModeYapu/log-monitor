@@ -467,3 +467,130 @@ func (db *DB) MigratePerformanceEvents(limit int) (int, error) {
 
 	return migrated, nil
 }
+
+// DetectPerformanceRegressions detects performance regressions by comparing two releases
+func (db *DB) DetectPerformanceRegressions(projectID int64, currentRelease, previousRelease string) ([]*model.PerformanceRegression, error) {
+	if db.closed.Load() {
+		return nil, fmt.Errorf("database is closed")
+	}
+
+	// Use 7 days lookback for regression detection
+	threshold := time.Now().Add(-7 * 24 * time.Hour).UnixMilli()
+
+	// Get all metric names first
+	metricNames := []string{"fcp", "lcp", "cls", "inp", "ttfb"}
+
+	var regressions []*model.PerformanceRegression
+
+	// For each metric, compare P75 values between releases
+	for _, metricName := range metricNames {
+		// Get metrics for both releases
+		query := `
+			SELECT release, page_url, value
+			FROM performance_metrics
+			WHERE project_id = ?
+			AND metric_name = ?
+			AND release IN (?, ?)
+			AND created_at >= ?
+			ORDER BY release, page_url, value
+		`
+
+		rows, err := db.conn.Query(query, projectID, metricName, currentRelease, previousRelease, threshold)
+		if err != nil {
+			slog.Warn("Failed to query metrics for regression detection", "metric", metricName, "error", err)
+			continue
+		}
+
+		// Group by release and page
+		currentValues := make(map[string][]float64)
+		previousValues := make(map[string][]float64)
+
+		for rows.Next() {
+			var release string
+			var pageURL string
+			var value float64
+			if err := rows.Scan(&release, &pageURL, &value); err != nil {
+				slog.Warn("Failed to scan metric row", "error", err)
+				continue
+			}
+
+			if release == currentRelease {
+				currentValues[pageURL] = append(currentValues[pageURL], value)
+			} else if release == previousRelease {
+				previousValues[pageURL] = append(previousValues[pageURL], value)
+			}
+		}
+		rows.Close()
+
+		// Find pages that exist in both releases and check for regression
+		for pageURL, currentVals := range currentValues {
+			previousVals, exists := previousValues[pageURL]
+			if !exists {
+				continue
+			}
+
+			// Need at least 3 data points per release for meaningful comparison
+			if len(currentVals) < 3 || len(previousVals) < 3 {
+				continue
+			}
+
+			// Calculate P75 for each release
+			currentP75 := percentile(currentVals, 0.75)
+			previousP75 := percentile(previousVals, 0.75)
+
+			// Calculate percentage change (positive = worse for metrics where lower is better)
+			var change float64
+			if previousP75 > 0 {
+				change = ((currentP75 - previousP75) / previousP75) * 100
+			}
+
+			// Determine severity based on how much the metric degraded
+			var severity string
+			if change >= 100 {
+				severity = "critical" // More than 2x worse
+			} else if change >= 50 {
+				severity = "major" // 1.5x - 2x worse
+			} else if change >= 20 {
+				severity = "minor" // 1.2x - 1.5x worse
+			} else {
+				continue // Less than 20% change, not considered a regression
+			}
+
+			regressions = append(regressions, &model.PerformanceRegression{
+				MetricName:  metricName,
+				PageURL:     pageURL,
+				PreviousP75: previousP75,
+				CurrentP75:  currentP75,
+				Change:      change,
+				Severity:    severity,
+			})
+		}
+	}
+
+	// Sort by severity (critical > major > minor) and then by change percentage
+	for i := 0; i < len(regressions); i++ {
+		for j := i + 1; j < len(regressions); j++ {
+			if severityCompare(regressions[j].Severity, regressions[i].Severity) > 0 ||
+				(regressions[j].Severity == regressions[i].Severity && regressions[j].Change > regressions[i].Change) {
+				regressions[i], regressions[j] = regressions[j], regressions[i]
+			}
+		}
+	}
+
+	// Limit results
+	if len(regressions) > 100 {
+		regressions = regressions[:100]
+	}
+
+	return regressions, nil
+}
+
+// severityCompare returns positive if b has higher severity than a
+func severityCompare(a, b string) int {
+	severityOrder := map[string]int{
+		"critical": 3,
+		"major":    2,
+		"minor":    1,
+	}
+	return severityOrder[b] - severityOrder[a]
+}

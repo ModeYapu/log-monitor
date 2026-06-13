@@ -1,20 +1,18 @@
-# Scope Lock — LogMonitor P5: 性能监控增强
+# Scope Lock — LogMonitor P5+: 增强性能监控
 
 ## Original Requirement
-实现 LogMonitor 的 Web Vitals 性能监控增强，包括 Core Web Vitals 指标采集、白屏检测、长任务监控、接口失败追踪、资源加载异常、页面性能趋势图和版本对比。
+在 Web Vitals 基础上增加：白屏检测、长任务监控、接口失败追踪、资源加载异常监控、页面性能趋势图+回归提示
 
 ## In Scope
-- [ ] Web Vitals 指标采集（FCP/LCP/CLS/INP/TTFB）
-- [ ] Performance Event 模型和存储
-- [ ] 性能数据查询 API（聚合+趋势+对比）
-- [ ] SDK 采集 Web Vitals 数据
-- [ ] 性能 Dashboard 后端 API（Top pages/performance trends/version comparison）
+- [ ] 白屏检测（blank page detection）— SDK 端检测 + 后端记录
+- [ ] 接口失败追踪（API failure tracking）— 捕获 XHR/fetch 错误
+- [ ] 资源加载异常监控 — 捕获资源加载失败事件
+- [ ] 性能回归检测 — 版本对比自动检测性能退化
 
 ## Explicitly Out of Scope
-- 前端 Dashboard UI（先做后端 API + SDK）
-- 多浏览器兼容性测试
+- 前端 Dashboard UI
 - P6 后端职责拆分
-- AI 自动分析
+- 前端用户管理 UI
 
-## Locked At: 2026-06-13T14:24:00+08:00
-## Locked By: Round R003
+## Locked At: 2026-06-13T14:35:00+08:00
+## Locked By: Round R004

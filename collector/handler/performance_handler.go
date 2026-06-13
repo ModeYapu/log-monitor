@@ -26,6 +26,7 @@ func (h *PerformanceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/query/performance/summary-by-page", h.GetPerformanceSummary)
 	mux.HandleFunc("GET /api/query/performance/trend-by-page", h.GetPerformanceTrend)
 	mux.HandleFunc("GET /api/query/performance/compare-releases", h.GetPerformanceComparison)
+	mux.HandleFunc("GET /api/query/performance/regressions", h.GetPerformanceRegressions)
 }
 
 // GetPerformanceSummary returns performance metrics aggregated by page URL
@@ -214,5 +215,49 @@ func (h *PerformanceHandler) GetPerformanceComparison(w http.ResponseWriter, r *
 		"release_b":   releaseB,
 		"comparisons": comparison,
 		"count":       len(comparison),
+	})
+}
+
+// GetPerformanceRegressions detects performance regressions between two releases
+func (h *PerformanceHandler) GetPerformanceRegressions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Parse project_id
+	projectIDStr := r.URL.Query().Get("project_id")
+	if projectIDStr == "" {
+		http.Error(w, "Missing project_id parameter", http.StatusBadRequest)
+		return
+	}
+	projectID, err := strconv.ParseInt(projectIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid project_id", http.StatusBadRequest)
+		return
+	}
+
+	// Parse releases
+	currentRelease := r.URL.Query().Get("current_release")
+	if currentRelease == "" {
+		http.Error(w, "Missing current_release parameter", http.StatusBadRequest)
+		return
+	}
+
+	previousRelease := r.URL.Query().Get("previous_release")
+	if previousRelease == "" {
+		http.Error(w, "Missing previous_release parameter", http.StatusBadRequest)
+		return
+	}
+
+	regressions, err := h.db.DetectPerformanceRegressions(projectID, currentRelease, previousRelease)
+	if err != nil {
+		slog.Error("Failed to detect regressions", "error", err)
+		http.Error(w, "Failed to detect regressions", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"current_release":  currentRelease,
+		"previous_release": previousRelease,
+		"regressions":      regressions,
+		"count":            len(regressions),
 	})
 }

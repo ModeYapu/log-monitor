@@ -742,6 +742,98 @@ function setupEnhancedPerformance(): void {
     collectedPerformance['domInteractive'] = nav.domInteractive;
     collectedPerformance['fullLoadTime'] = nav.loadEventEnd - nav.startTime;
   }
+
+  // ==================== Resource Error Monitoring ====================
+  try {
+    const resourceObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const resource = entry as PerformanceResourceTiming;
+
+        // Detect failed resources (transferSize === 0 and decodedBodySize === 0)
+        // or very slow resources (duration > 10 seconds)
+        const isFailed = resource.transferSize === 0 && resource.decodedBodySize === 0;
+        const isVerySlow = resource.duration > 10000;
+
+        if (isFailed || isVerySlow) {
+          const resourceType = getResourceType(resource.initiatorType);
+          addEvent({
+            type: 'performance',
+            level: isFailed ? 'error' : 'warn',
+            message: `Resource ${isFailed ? 'failed to load' : 'very slow'}: ${resource.name}`,
+            url: window.location.href,
+            extra: {
+              resourceError: true,
+              resourceUrl: privacyEngine?.maskUrl(resource.name) || resource.name,
+              resourceType,
+              duration: resource.duration,
+              transferSize: resource.transferSize,
+              decodedBodySize: resource.decodedBodySize,
+            },
+            tags: { ...config?.userAttributes },
+          });
+        }
+      }
+    });
+    resourceObserver.observe({ entryTypes: ['resource'] });
+  } catch (err) {
+    // Resource observer not supported
+  }
+
+  // ==================== White Screen Detection ====================
+  // Check 3 seconds after DOMContentLoaded for visible content
+  const checkWhiteScreen = () => {
+    setTimeout(() => {
+      try {
+        const body = document.body;
+        if (!body) return;
+
+        // Check if body has visible content
+        const hasContent = body.innerText?.trim().length > 1 || body.children.length > 1;
+
+        if (!hasContent) {
+          addEvent({
+            type: 'performance',
+            level: 'error',
+            message: 'White screen detected - no visible content after page load',
+            url: window.location.href,
+            extra: {
+              blankPage: true,
+              url: window.location.href,
+              timestamp: Date.now(),
+              bodyTextLength: body.innerText?.length || 0,
+              childrenCount: body.children.length,
+            },
+            tags: { ...config?.userAttributes },
+          });
+        }
+      } catch (err) {
+        // Ignore errors during white screen detection
+      }
+    }, 3000);
+  };
+
+  // Wait for DOMContentLoaded or check immediately if already loaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkWhiteScreen);
+  } else {
+    checkWhiteScreen();
+  }
+}
+
+/**
+ * Get human-readable resource type from PerformanceResourceTiming.initiatorType
+ */
+function getResourceType(initiatorType: string): string {
+  const typeMap: Record<string, string> = {
+    'script': 'script',
+    'link': 'stylesheet',
+    'img': 'image',
+    'css': 'stylesheet',
+    'fetch': 'fetch',
+    'xmlhttprequest': 'xhr',
+    'other': 'other',
+  };
+  return typeMap[initiatorType] || initiatorType;
 }
 
 // ==================== Core Functions ====================

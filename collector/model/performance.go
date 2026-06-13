@@ -46,6 +46,16 @@ type ReleaseComparison struct {
 	Improved   bool    `json:"improved"`   // true if value decreased (better)
 }
 
+// PerformanceRegression represents a performance regression detected between releases
+type PerformanceRegression struct {
+	MetricName  string  `json:"metric_name"`
+	PageURL     string  `json:"page_url"`
+	PreviousP75 float64 `json:"previous_p75"`
+	CurrentP75  float64 `json:"current_p75"`
+	Change      float64 `json:"change"`   // percentage change (positive = worse)
+	Severity    string  `json:"severity"` // minor (20-50%) / major (50-100%) / critical (>100%)
+}
+
 // Web Vitals rating thresholds (from web-vitals library)
 // FCP: good<=1800ms, needs-improvement<=3000ms, poor>3000ms
 // LCP: good<=2500ms, needs-improvement<=4000ms, poor>4000ms
