@@ -302,7 +302,11 @@ func (n *Notifier) SendEmail(to, title, message string) error {
 	}
 
 	// Otherwise, just log the email (for testing/debugging)
-	slog.Error("[Email] Email log", "to", addr.Address, "subject", subject, "body", body[:min(200, len(body))])
+	bodyPreview := body
+	if len(body) > 200 {
+		bodyPreview = body[:200]
+	}
+	slog.Error("[Email] Email log", "to", addr.Address, "subject", subject, "body", bodyPreview)
 	return nil
 }
 

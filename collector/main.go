@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/logmonitor/collector/alerter"
 	"github.com/logmonitor/collector/buffer"
 	"github.com/logmonitor/collector/config"
 	"github.com/logmonitor/collector/handler"
@@ -151,18 +152,36 @@ func main() {
 
 	slog.Info("Buffer writer initialized", "size", cfg.Buffer.Size, "intervalMs", cfg.Buffer.FlushInterval, "batch", cfg.Buffer.FlushBatchSize)
 
+	// Initialize R012 components: rule engine, channel manager, clusterer
+	ruleEngine := alerter.NewRuleEngine(db, store.Events())
+	channelMgr := alerter.NewChannelManager()
+	clusterer := alerter.NewClusterer(store.Events())
+	ruleEngine.SetChannelManager(channelMgr)
+	ruleEngine.SetClusterer(clusterer)
+	ruleEngine.Start()
+	clusterer.Start()
+	defer ruleEngine.Stop()
+	defer clusterer.Stop()
+
+	ruleEngineHandler := handler.NewRuleEngineHandler(db, ruleEngine)
+	channelMgrHandler := handler.NewChannelManagerHandler(channelMgr)
+	clustererHandler := handler.NewClustererHandler(clusterer, store.Events())
+
 	// Setup HTTP routes
 	mux := SetupRoutes(&RouterConfig{
-		DB:             db,
-		Store:          store,
-		UserStorage:    userStorage,
-		SMStorage:      smStorage,
-		Writer:         writer,
-		Config:         cfg,
-		JWT:            jwtMiddleware,
-		CORS:           corsMiddleware,
-		WebhookManager: webhookManager,
-		OpenAPISpec:    openapiSpec,
+		DB:                   db,
+		Store:                store,
+		UserStorage:          userStorage,
+		SMStorage:            smStorage,
+		Writer:               writer,
+		Config:               cfg,
+		JWT:                  jwtMiddleware,
+		CORS:                 corsMiddleware,
+		WebhookManager:       webhookManager,
+		OpenAPISpec:          openapiSpec,
+		RuleEngineHandler:    ruleEngineHandler,
+		ChannelManagerHandler: channelMgrHandler,
+		ClustererHandler:     clustererHandler,
 	})
 
 	// Initialize worker manager

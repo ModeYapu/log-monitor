@@ -1425,158 +1425,424 @@
       }
     };
 
-    // Alerts Page Component
+    // Alerts Page Component (R012 Enhanced)
     const AlertsPage = {
       template: `
         <div>
-          <div class="content-card">
-            <div class="card-header">
-              <span class="card-title">Alert Rules</span>
-              <el-button type="primary" @click="showCreateDialog = true">
-                <el-icon><Plus /></el-icon> Create Alert
-              </el-button>
-            </div>
+          <el-tabs v-model="activeTab" class="alert-tabs">
+            <!-- Rules Management Tab -->
+            <el-tab-pane label="Rules" name="rules">
+              <div class="content-card">
+                <div class="card-header">
+                  <span class="card-title">Alert Rules</span>
+                  <el-button type="primary" @click="showRuleDialog = true">
+                    <el-icon><Plus /></el-icon> Create Rule
+                  </el-button>
+                </div>
 
-            <el-table :data="alerts" v-loading="loading" stripe>
-              <el-table-column prop="name" label="Name" min-width="200" />
-              <el-table-column prop="condition_type" label="Condition" width="150">
-                <template #default="{ row }">
-                  {{ formatCondition(row) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="notify_type" label="Notification" width="120" />
-              <el-table-column prop="enabled" label="Status" width="80">
-                <template #default="{ row }">
-                  <el-tag :type="row.enabled || row.enabled !== 0 ? 'success' : 'info'">
-                    {{ row.enabled || row.enabled !== 0 ? 'Active' : 'Inactive' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="last_triggered_at" label="Last Triggered" width="160">
-                <template #default="{ row }">
-                  {{ row.last_triggered_at ? dayjs(row.last_triggered_at).fromNow() : 'Never' }}
-                </template>
-              </el-table-column>
-              <el-table-column label="Actions" width="120">
-                <template #default="{ row }">
-                  <el-button-group size="small">
-                    <el-button type="danger" @click="deleteAlert(row)">Delete</el-button>
-                  </el-button-group>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
+                <el-table :data="rules" v-loading="rulesLoading" stripe>
+                  <el-table-column prop="name" label="Name" min-width="180" />
+                  <el-table-column label="Condition" min-width="150">
+                    <template #default="{ row }">
+                      <el-tag size="small">{{ formatConditionType(row.condition?.type || row.condition_type) }}</el-tag>
+                      <span style="margin-left:8px">{{ formatConditionDetail(row) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="severity" label="Severity" width="100">
+                    <template #default="{ row }">
+                      <el-tag :type="getSeverityType(row.severity || 'warning')">
+                        {{ (row.severity || 'warning').toUpperCase() }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="enabled" label="Status" width="80">
+                    <template #default="{ row }">
+                      <el-switch :model-value="row.enabled ?? (row.enabled !== 0)" @change="toggleRule(row)" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="last_triggered_at" label="Last Triggered" width="160">
+                    <template #default="{ row }">
+                      {{ row.last_triggered_at ? dayjs(row.last_triggered_at).fromNow() : 'Never' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Actions" width="150">
+                    <template #default="{ row }">
+                      <el-button-group size="small">
+                        <el-button @click="editRule(row)">Edit</el-button>
+                        <el-button type="danger" @click="deleteRule(row)">Delete</el-button>
+                      </el-button-group>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
 
-          <el-dialog v-model="showCreateDialog" title="Create Alert Rule" width="500px">
-            <el-form :model="form" label-width="120px">
+            <!-- Channels Tab -->
+            <el-tab-pane label="Channels" name="channels">
+              <div class="content-card">
+                <div class="card-header">
+                  <span class="card-title">Notification Channels</span>
+                  <el-button type="primary" @click="showChannelDialog = true">
+                    <el-icon><Plus /></el-icon> Add Channel
+                  </el-button>
+                </div>
+
+                <el-table :data="channels" v-loading="channelsLoading" stripe>
+                  <el-table-column prop="name" label="Name" min-width="150" />
+                  <el-table-column prop="type" label="Type" width="120">
+                    <template #default="{ row }">
+                      <el-tag>{{ getChannelTypeName(row.type) }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Config" min-width="200">
+                    <template #default="{ row }">
+                      <span style="color:#909399">{{ maskSensitiveConfig(row.config) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="enabled" label="Status" width="80">
+                    <template #default="{ row }">
+                      <el-switch :model-value="row.enabled" @change="toggleChannel(row)" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Actions" width="180">
+                    <template #default="{ row }">
+                      <el-button-group size="small">
+                        <el-button @click="testChannel(row)">Test</el-button>
+                        <el-button @click="editChannel(row)">Edit</el-button>
+                        <el-button type="danger" @click="deleteChannel(row)">Delete</el-button>
+                      </el-button-group>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <!-- Clusters Tab -->
+            <el-tab-pane label="Anomaly Clusters" name="clusters">
+              <div class="content-card">
+                <div class="card-header">
+                  <span class="card-title">Active Anomaly Clusters</span>
+                  <el-button @click="loadClusters">
+                    <el-icon><Refresh /></el-icon> Refresh
+                  </el-button>
+                </div>
+
+                <el-table :data="clusters" v-loading="clustersLoading" stripe>
+                  <el-table-column label="Severity" width="100">
+                    <template #default="{ row }">
+                      <el-tag :type="getSeverityType(row.severity)">
+                        {{ row.severity.toUpperCase() }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="message" label="Message" min-width="300">
+                    <template #default="{ row }">
+                      <div style="max-height:60px;overflow:hidden;text-overflow:ellipsis">
+                        {{ row.message }}
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="count" label="Count" width="80" sortable />
+                  <el-table-column prop="unique_users" label="Users" width="80" />
+                  <el-table-column prop="last_seen" label="Last Seen" width="160">
+                    <template #default="{ row }">
+                      {{ dayjs(row.last_seen).fromNow() }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="Actions" width="100">
+                    <template #default="{ row }">
+                      <el-button size="small" @click="viewCluster(row)">View</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+
+          <!-- Rule Create/Edit Dialog -->
+          <el-dialog v-model="showRuleDialog" :title="editingRule ? 'Edit Rule' : 'Create Rule'" width="600px">
+            <el-form :model="ruleForm" label-width="120px">
               <el-form-item label="Name">
-                <el-input v-model="form.name" placeholder="Alert name" />
+                <el-input v-model="ruleForm.name" placeholder="Rule name" />
               </el-form-item>
-              <el-form-item label="Condition">
-                <el-select v-model="form.condition_type" style="width:100%">
-                  <el-option label="Error Count" value="error_count" />
-                  <el-option label="Error Rate" value="error_rate" />
-                  <el-option label="New Error" value="new_error" />
+              <el-form-item label="Condition Type">
+                <el-select v-model="ruleForm.condition.type" style="width:100%">
+                  <el-option label="Threshold" value="threshold" />
+                  <el-option label="Trend" value="trend" />
+                  <el-option label="Missing" value="missing" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="Threshold">
-                <el-input-number v-model="form.threshold" :min="1" />
-                <span style="margin-left:10px;color:#909399">events per minute</span>
+              <el-form-item label="Metric" v-if="ruleForm.condition.type === 'threshold' || ruleForm.condition.type === 'trend'">
+                <el-select v-model="ruleForm.condition.metric" style="width:100%">
+                  <el-option label="Error Count" value="error_count" />
+                  <el-option label="Error Rate" value="error_rate" />
+                  <el-option label="Event Count" value="event_count" />
+                  <el-option label="Page Load" value="page_load" />
+                </el-select>
               </el-form-item>
-              <el-form-item label="Notification">
-                <el-select v-model="form.notify_type" style="width:100%">
+              <el-form-item label="Operator" v-if="ruleForm.condition.type === 'threshold'">
+                <el-select v-model="ruleForm.condition.operator" style="width:100%">
+                  <el-option label="Greater than (>)" value=">" />
+                  <el-option label="Greater or equal (>=)" value=">=" />
+                  <el-option label="Less than (<)" value="<" />
+                  <el-option label="Less or equal (<=)" value="<=" />
+                  <el-option label="Equal (=)" value="==" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="Threshold Value" v-if="ruleForm.condition.type === 'threshold'">
+                <el-input-number v-model="ruleForm.condition.value" :min="0" :step="0.01" />
+              </el-form-item>
+              <el-form-item label="Window (minutes)">
+                <el-input-number v-model="ruleForm.condition.windowMin" :min="1" :max="1440" />
+              </el-form-item>
+              <el-form-item label="Trend Direction" v-if="ruleForm.condition.type === 'trend'">
+                <el-select v-model="ruleForm.condition.trendDir" style="width:100%">
+                  <el-option label="Up" value="up" />
+                  <el-option label="Down" value="down" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="Consecutive Times" v-if="ruleForm.condition.type === 'trend'">
+                <el-input-number v-model="ruleForm.condition.trendCount" :min="2" :max="10" />
+              </el-form-item>
+              <el-form-item label="Severity">
+                <el-select v-model="ruleForm.severity" style="width:100%">
+                  <el-option label="Critical" value="critical" />
+                  <el-option label="Warning" value="warning" />
+                  <el-option label="Info" value="info" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="Cooldown (minutes)">
+                <el-input-number v-model="ruleForm.cooldownMinutes" :min="1" :max="10080" />
+              </el-form-item>
+              <el-form-item label="Enabled">
+                <el-switch v-model="ruleForm.enabled" />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="showRuleDialog = false">Cancel</el-button>
+              <el-button type="primary" @click="saveRule" :loading="savingRule">
+                {{ editingRule ? 'Update' : 'Create' }}
+              </el-button>
+            </template>
+          </el-dialog>
+
+          <!-- Channel Create/Edit Dialog -->
+          <el-dialog v-model="showChannelDialog" :title="editingChannel ? 'Edit Channel' : 'Add Channel'" width="500px">
+            <el-form :model="channelForm" label-width="120px">
+              <el-form-item label="Name">
+                <el-input v-model="channelForm.name" placeholder="Channel name" />
+              </el-form-item>
+              <el-form-item label="Type">
+                <el-select v-model="channelForm.type" style="width:100%">
+                  <el-option label="Feishu" value="feishu" />
+                  <el-option label="WeCom" value="wecom" />
+                  <el-option label="DingTalk" value="dingtalk" />
+                  <el-option label="Telegram" value="telegram" />
                   <el-option label="Webhook" value="webhook" />
                   <el-option label="Email" value="email" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="Webhook URL" v-if="form.notify_type === 'webhook'">
-                <el-input v-model="form.notify_config" placeholder="https://..." />
+              <el-form-item label="Webhook URL" v-if="['feishu', 'wecom', 'dingtalk', 'webhook'].includes(channelForm.type)">
+                <el-input v-model="channelForm.config.url" placeholder="https://..." />
+              </el-form-item>
+              <el-form-item label="Bot Token" v-if="channelForm.type === 'telegram'">
+                <el-input v-model="channelForm.config.bot_token" placeholder="Telegram bot token" />
+              </el-form-item>
+              <el-form-item label="Chat ID" v-if="channelForm.type === 'telegram'">
+                <el-input v-model="channelForm.config.chat_id" placeholder="Telegram chat ID" />
+              </el-form-item>
+              <el-form-item label="Email" v-if="channelForm.type === 'email'">
+                <el-input v-model="channelForm.config.email" placeholder="recipient@example.com" />
+              </el-form-item>
+              <el-form-item label="Enabled">
+                <el-switch v-model="channelForm.enabled" />
               </el-form-item>
             </el-form>
             <template #footer>
-              <el-button @click="showCreateDialog = false">Cancel</el-button>
-              <el-button type="primary" @click="createAlert" :loading="creating">Create</el-button>
+              <el-button @click="showChannelDialog = false">Cancel</el-button>
+              <el-button type="primary" @click="saveChannel" :loading="savingChannel">Save</el-button>
             </template>
+          </el-dialog>
+
+          <!-- Cluster Detail Dialog -->
+          <el-dialog v-model="showClusterDetail" title="Cluster Details" width="800px">
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="Fingerprint">{{ selectedCluster.fingerprint }}</el-descriptions-item>
+              <el-descriptions-item label="Severity">
+                <el-tag :type="getSeverityType(selectedCluster.severity)">
+                  {{ selectedCluster.severity?.toUpperCase() }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="Count">{{ selectedCluster.count }}</el-descriptions-item>
+              <el-descriptions-item label="Unique Users">{{ selectedCluster.unique_users }}</el-descriptions-item>
+              <el-descriptions-item label="First Seen">{{ dayjs(selectedCluster.first_seen).format('YYYY-MM-DD HH:mm:ss') }}</el-descriptions-item>
+              <el-descriptions-item label="Last Seen">{{ dayjs(selectedCluster.last_seen).format('YYYY-MM-DD HH:mm:ss') }}</el-descriptions-item>
+            </el-descriptions>
+            <el-divider>Sample Events</el-divider>
+            <el-table :data="clusterEvents" v-loading="clusterEventsLoading" stripe max-height="400">
+              <el-table-column prop="message" label="Message" min-width="300" />
+              <el-table-column prop="url" label="URL" width="200" />
+              <el-table-column prop="created_at" label="Time" width="160">
+                <template #default="{ row }">
+                  {{ dayjs(row.created_at).format('YYYY-MM-DD HH:mm:ss') }}
+                </template>
+              </el-table-column>
+            </el-table>
           </el-dialog>
         </div>
       `,
       setup() {
-        const loading = ref(false);
-        const creating = ref(false);
-        const alerts = ref([]);
-        const showCreateDialog = ref(false);
-        const form = reactive({
+        const activeTab = ref('rules');
+        const rulesLoading = ref(false);
+        const channelsLoading = ref(false);
+        const clustersLoading = ref(false);
+        const clusterEventsLoading = ref(false);
+        const rules = ref([]);
+        const channels = ref([]);
+        const clusters = ref([]);
+        const clusterEvents = ref([]);
+
+        const showRuleDialog = ref(false);
+        const showChannelDialog = ref(false);
+        const showClusterDetail = ref(false);
+        const editingRule = ref(null);
+        const editingChannel = ref(null);
+        const savingRule = ref(false);
+        const savingChannel = ref(false);
+        const selectedCluster = ref({});
+
+        const ruleForm = reactive({
           name: '',
-          condition_type: 'error_count',
-          threshold: 10,
-          notify_type: 'webhook',
-          notify_config: ''
+          condition: {
+            type: 'threshold',
+            metric: 'error_count',
+            operator: '>=',
+            value: 10,
+            windowMin: 5,
+            trendDir: 'up',
+            trendCount: 3
+          },
+          severity: 'warning',
+          cooldownMinutes: 30,
+          enabled: true,
+          channels: []
         });
 
-        const loadData = async () => {
+        const channelForm = reactive({
+          name: '',
+          type: 'webhook',
+          config: {},
+          enabled: true
+        });
+
+        const loadRules = async () => {
           if (!store.currentProject) return;
-
-          loading.value = true;
+          rulesLoading.value = true;
           try {
-            const data = await apiCall(`/api/query/alerts?app_id=${encodeURIComponent(store.currentProject.name)}`);
-            alerts.value = data.data || data || [];
+            const data = await apiCall('/api/alerts/rules');
+            const allRules = data.rules || data || [];
+            rules.value = allRules.filter(r => r.app_id === store.currentProject.name);
           } catch (error) {
-            alerts.value = [];
+            rules.value = [];
           } finally {
-            loading.value = false;
+            rulesLoading.value = false;
           }
         };
 
-        const formatCondition = (alert) => {
-          const conditions = {
-            error_count: 'Error Count',
-            error_rate: 'Error Rate',
-            new_error: 'New Error'
-          };
-          return conditions[alert.condition_type] || alert.condition_type;
-        };
-
-        const createAlert = async () => {
-          if (!form.name) {
-            ElMessage.warning('Please enter alert name');
-            return;
-          }
-
-          creating.value = true;
+        const loadChannels = async () => {
+          channelsLoading.value = true;
           try {
-            await apiCall('/api/query/alerts', {
-              method: 'POST',
-              body: JSON.stringify({
-                app_id: store.currentProject.name,
-                name: form.name,
-                condition_type: form.condition_type,
-                condition_config: JSON.stringify({ threshold: form.threshold }),
-                notify_type: form.notify_type,
-                notify_config: form.notify_config
-              })
-            });
+            const data = await apiCall('/api/alerts/channels');
+            channels.value = data.channels || data || [];
+          } catch (error) {
+            channels.value = [];
+          } finally {
+            channelsLoading.value = false;
+          }
+        };
 
-            ElNotification({ title: 'Alert Created', type: 'success' });
-            showCreateDialog.value = false;
-            form.name = '';
-            form.threshold = 10;
-            loadData();
+        const loadClusters = async () => {
+          if (!store.currentProject) return;
+          clustersLoading.value = true;
+          try {
+            const data = await apiCall(`/api/alerts/clusters?appId=${encodeURIComponent(store.currentProject.name)}&limit=20`);
+            clusters.value = data.clusters || data || [];
+          } catch (error) {
+            clusters.value = [];
+          } finally {
+            clustersLoading.value = false;
+          }
+        };
+
+        const formatConditionType = (type) => {
+          const types = { threshold: 'Threshold', trend: 'Trend', missing: 'Missing' };
+          return types[type] || type;
+        };
+
+        const formatConditionDetail = (row) => {
+          const c = row.condition || {};
+          if (c.type === 'threshold') {
+            return `${c.metric || ''} ${c.operator || ''} ${c.value || 0}`;
+          } else if (c.type === 'trend') {
+            return `${c.metric || ''} ${c.trendDir || ''} x${c.trendCount || 3}`;
+          } else if (c.type === 'missing') {
+            return `No ${c.metric || 'events'} for ${c.windowMin || 5}m`;
+          }
+          return row.condition_config || '';
+        };
+
+        const getSeverityType = (severity) => {
+          const types = { critical: 'danger', warning: 'warning', info: 'info' };
+          return types[severity] || 'info';
+        };
+
+        const getChannelTypeName = (type) => {
+          const names = {
+            feishu: 'Feishu', wecom: 'WeCom', dingtalk: 'DingTalk',
+            telegram: 'Telegram', webhook: 'Webhook', email: 'Email'
+          };
+          return names[type] || type;
+        };
+
+        const maskSensitiveConfig = (config) => {
+          if (!config) return '';
+          const keys = Object.keys(config);
+          if (keys.length === 0) return 'No config';
+          return keys.map(k => k === 'url' ? config.url : '***').join(', ');
+        };
+
+        const toggleRule = async (row) => {
+          try {
+            const newEnabled = !(row.enabled ?? (row.enabled !== 0));
+            await apiCall(`/api/alerts/rules/${row.id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ enabled: newEnabled })
+            });
+            row.enabled = newEnabled;
           } catch (error) {
             // Error handled by apiCall
-          } finally {
-            creating.value = false;
           }
         };
 
-        const deleteAlert = async (alert) => {
-          try {
-            await ElMessageBox.confirm('Delete this alert?', 'Confirm', {
-              type: 'warning'
-            });
+        const editRule = (row) => {
+          editingRule.value = row;
+          Object.assign(ruleForm, {
+            name: row.name,
+            condition: row.condition || { type: 'threshold', metric: 'error_count', operator: '>=', value: 10, windowMin: 5 },
+            severity: row.severity || 'warning',
+            cooldownMinutes: row.cooldown_minutes || 30,
+            enabled: row.enabled ?? (row.enabled !== 0),
+            channels: row.channels || []
+          });
+          showRuleDialog.value = true;
+        };
 
-            await apiCall(`/api/query/alerts/${alert.id}`, { method: 'DELETE' });
-            ElNotification({ title: 'Alert Deleted', type: 'success' });
-            loadData();
+        const deleteRule = async (row) => {
+          try {
+            await ElMessageBox.confirm('Delete this rule?', 'Confirm', { type: 'warning' });
+            await apiCall(`/api/alerts/rules/${row.id}`, { method: 'DELETE' });
+            ElNotification({ title: 'Rule Deleted', type: 'success' });
+            loadRules();
           } catch (error) {
             if (error !== 'cancel') {
               // Error handled by apiCall
@@ -1584,13 +1850,168 @@
           }
         };
 
+        const saveRule = async () => {
+          if (!ruleForm.name) {
+            ElMessage.warning('Please enter rule name');
+            return;
+          }
+          savingRule.value = true;
+          try {
+            if (editingRule.value) {
+              await apiCall(`/api/alerts/rules/${editingRule.value.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(ruleForm)
+              });
+            } else {
+              await apiCall('/api/alerts/rules', {
+                method: 'POST',
+                body: JSON.stringify({
+                  app_id: store.currentProject.name,
+                  ...ruleForm
+                })
+              });
+            }
+            ElNotification({ title: 'Rule Saved', type: 'success' });
+            showRuleDialog.value = false;
+            editingRule.value = null;
+            resetRuleForm();
+            loadRules();
+          } catch (error) {
+            // Error handled by apiCall
+          } finally {
+            savingRule.value = false;
+          }
+        };
+
+        const resetRuleForm = () => {
+          Object.assign(ruleForm, {
+            name: '',
+            condition: { type: 'threshold', metric: 'error_count', operator: '>=', value: 10, windowMin: 5 },
+            severity: 'warning',
+            cooldownMinutes: 30,
+            enabled: true,
+            channels: []
+          });
+        };
+
+        const toggleChannel = async (row) => {
+          try {
+            const newEnabled = !row.enabled;
+            await apiCall(`/api/alerts/channels/${row.id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ enabled: newEnabled })
+            });
+            row.enabled = newEnabled;
+          } catch (error) {
+            // Error handled by apiCall
+          }
+        };
+
+        const editChannel = (row) => {
+          editingChannel.value = row;
+          Object.assign(channelForm, {
+            name: row.name,
+            type: row.type,
+            config: row.config || {},
+            enabled: row.enabled
+          });
+          showChannelDialog.value = true;
+        };
+
+        const saveChannel = async () => {
+          if (!channelForm.name) {
+            ElMessage.warning('Please enter channel name');
+            return;
+          }
+          savingChannel.value = true;
+          try {
+            if (editingChannel.value) {
+              await apiCall(`/api/alerts/channels/${editingChannel.value.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(channelForm)
+              });
+            } else {
+              await apiCall('/api/alerts/channels', {
+                method: 'POST',
+                body: JSON.stringify(channelForm)
+              });
+            }
+            ElNotification({ title: 'Channel Saved', type: 'success' });
+            showChannelDialog.value = false;
+            editingChannel.value = null;
+            resetChannelForm();
+            loadChannels();
+          } catch (error) {
+            // Error handled by apiCall
+          } finally {
+            savingChannel.value = false;
+          }
+        };
+
+        const resetChannelForm = () => {
+          Object.assign(channelForm, { name: '', type: 'webhook', config: {}, enabled: true });
+        };
+
+        const testChannel = async (row) => {
+          try {
+            await apiCall('/api/alerts/test', {
+              method: 'POST',
+              body: JSON.stringify({ channel_id: row.id })
+            });
+            ElNotification({ title: 'Test Notification Sent', type: 'success' });
+          } catch (error) {
+            // Error handled by apiCall
+          }
+        };
+
+        const deleteChannel = async (row) => {
+          try {
+            await ElMessageBox.confirm('Delete this channel?', 'Confirm', { type: 'warning' });
+            await apiCall(`/api/alerts/channels/${row.id}`, { method: 'DELETE' });
+            ElNotification({ title: 'Channel Deleted', type: 'success' });
+            loadChannels();
+          } catch (error) {
+            if (error !== 'cancel') {
+              // Error handled by apiCall
+            }
+          }
+        };
+
+        const viewCluster = async (row) => {
+          selectedCluster.value = row;
+          showClusterDetail.value = true;
+          clusterEventsLoading.value = true;
+          try {
+            const data = await apiCall(`/api/alerts/clusters/${row.fingerprint}?appId=${encodeURIComponent(store.currentProject.name)}&pageSize=20`);
+            clusterEvents.value = data.events?.data || data || [];
+          } catch (error) {
+            clusterEvents.value = [];
+          } finally {
+            clusterEventsLoading.value = false;
+          }
+        };
+
+        watch(activeTab, (tab) => {
+          if (tab === 'rules') loadRules();
+          if (tab === 'channels') loadChannels();
+          if (tab === 'clusters') loadClusters();
+        });
+
         onMounted(() => {
-          loadData();
+          loadRules();
         });
 
         return {
-          loading, creating, alerts, showCreateDialog, form,
-          loadData, formatCondition, createAlert, deleteAlert
+          activeTab, rulesLoading, channelsLoading, clustersLoading, clusterEventsLoading,
+          rules, channels, clusters, clusterEvents,
+          showRuleDialog, showChannelDialog, showClusterDetail,
+          editingRule, editingChannel, savingRule, savingChannel,
+          ruleForm, channelForm, selectedCluster,
+          formatConditionType, formatConditionDetail,
+          getSeverityType, getChannelTypeName, maskSensitiveConfig,
+          toggleRule, editRule, deleteRule, saveRule,
+          toggleChannel, editChannel, saveChannel, testChannel, deleteChannel,
+          loadClusters, viewCluster
         };
       }
     };

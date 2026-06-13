@@ -25,6 +25,9 @@ type RouterConfig struct {
 	WebhookManager *webhook.Manager
 	OpenAPISpec    []byte
 	PerformanceHandler *handler.PerformanceHandler
+	RuleEngineHandler   *handler.RuleEngineHandler
+	ChannelManagerHandler *handler.ChannelManagerHandler
+	ClustererHandler    *handler.ClustererHandler
 }
 
 // Route represents a single HTTP route.
@@ -206,6 +209,17 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	readGroup.HandleFunc("POST /api/query/alerts", alertsHandler.CreateAlert)
 	readGroup.HandleFunc("DELETE /api/query/alerts/", alertsHandler.DeleteAlert)
 	readGroup.HandleFunc("POST /api/alerts/test", alertsHandler.TestAlert)
+
+	// Rule Engine (R012)
+	if rc.RuleEngineHandler != nil {
+		rc.RuleEngineHandler.RegisterRoutes(mux)
+	}
+	if rc.ChannelManagerHandler != nil {
+		rc.ChannelManagerHandler.RegisterRoutes(mux)
+	}
+	if rc.ClustererHandler != nil {
+		rc.ClustererHandler.RegisterRoutes(mux)
+	}
 
 	// System
 	readGroup.HandleFunc("GET /api/system/info", systemHandler.GetSystemInfo)
