@@ -85,6 +85,9 @@ func main() {
 	// Ensure source maps table exists
 	db.EnsureSourceMapsTable()
 
+	// Ensure audit logs table exists
+	db.EnsureAuditLogsTable()
+
 	// Initialize source map storage
 	smStorage, err := storage.NewSourceMapStorage("/opt/logmonitor/data")
 	if err != nil {

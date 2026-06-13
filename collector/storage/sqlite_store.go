@@ -108,6 +108,11 @@ func (s *SQLiteStore) Users() UserRepository {
 	return s.userStorage
 }
 
+// AuditLogs returns the audit store
+func (s *SQLiteStore) AuditLogs() AuditStore {
+	return s.db
+}
+
 // Close closes the database connection
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()

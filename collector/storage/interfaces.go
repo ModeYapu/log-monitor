@@ -137,6 +137,12 @@ type UserRepository interface {
 	CountUsers() (int64, error)
 }
 
+// AuditStore handles audit log operations
+type AuditStore interface {
+	InsertAuditLog(log *model.AuditLog) error
+	QueryAuditLogs(filter model.AuditFilter) ([]*model.AuditLog, int64, error)
+}
+
 // Store combines all repositories for easy dependency injection
 type Store interface {
 	Events() EventStore
@@ -148,5 +154,6 @@ type Store interface {
 	Recordings() RecordingRepository
 	SourceMaps() SourceMapRepository
 	Users() UserRepository
+	AuditLogs() AuditStore
 	Close() error
 }

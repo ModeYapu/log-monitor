@@ -1,42 +1,44 @@
 {
   "schemaVersion": 1,
-  "roundId": "R001",
+  "roundId": "R002",
   "slice": {
-    "description": "实现项目级数据隔离：所有查询（events/issues/alerts/recordings）强制按 project_id 过滤 + 角色权限增强（owner/developer/viewer 三级）",
+    "description": "实现审计日志系统：记录谁在什么时候对哪个项目做了什么操作，提供查询 API",
     "sourceFiles": [
-      "collector/middleware/project.go",
-      "collector/middleware/authorization.go",
-      "collector/middleware/authorization_test.go",
-      "collector/handler/query_handler.go",
-      "collector/handler/query_logs.go"
+      "collector/model/audit.go",
+      "collector/storage/audit-store.go",
+      "collector/storage/audit-store_test.go",
+      "collector/middleware/audit.go",
+      "collector/handler/audit_handler.go"
     ],
     "acceptanceCriteria": [
       "go build ./collector/... exit 0",
-      "go test ./collector/middleware/... exit 0 — authorization 中间件测试全绿",
-      "ProjectContext 中间件从 API Key 或 JWT 提取 project_id 注入 context",
-      "Authorization 中间件检查角色：viewer 只能 GET，developer 可 POST/PUT，owner 全权限",
-      "query_handler 和 query_logs 中的查询都按 project_id 过滤"
+      "go test ./collector/storage/... exit 0",
+      "AuditLog 模型包含 id, project_id, user_id, action, resource, detail, ip, user_agent, created_at",
+      "AuditMiddleware 自动记录写操作",
+      "查询 API 支持分页和过滤",
+      "SQLite 自动建表 audit_logs"
     ],
     "maxFiles": 5,
     "estimatedComplexity": "medium"
   },
   "phase": "completed",
-  "startedAt": "2026-06-13T14:10:00+08:00",
+  "startedAt": "2026-06-13T14:20:00+08:00",
   "filesChanged": [
-    "collector/middleware/project.go",
-    "collector/middleware/authorization.go",
-    "collector/middleware/authorization_test.go",
-    "collector/handler/query_logs.go",
-    "collector/handler/system.go",
-    "collector/storage/queryparams.go",
-    "collector/storage/event-store.go",
-    "collector/storage/analytics.go",
-    "collector/storage/interfaces.go"
+    "collector/model/audit.go",
+    "collector/storage/audit-store.go",
+    "collector/storage/audit-store_test.go",
+    "collector/middleware/audit.go",
+    "collector/handler/audit_handler.go",
+    "collector/storage/interfaces.go",
+    "collector/storage/sqlite_store.go",
+    "collector/routes.go",
+    "collector/main.go",
+    "collector/storage/event-store_test.go"
   ],
   "verifyBuildCmd": "cd collector && go build ./...",
-  "verifySliceCmd": "cd collector && go test ./middleware/... ./handler/...",
+  "verifySliceCmd": "cd collector && go test ./storage/... ./middleware/... ./handler/...",
   "verifyBuildPassed": true,
   "verifySlicePassed": true,
-  "completedAt": "2026-06-13T14:15:00+08:00",
+  "completedAt": "2026-06-13T14:25:00+08:00",
   "commitSha": null
 }

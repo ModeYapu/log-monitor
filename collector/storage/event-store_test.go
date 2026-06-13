@@ -194,7 +194,7 @@ func TestGetEventStats(t *testing.T) {
 	}
 
 	// Get stats
-	stats, err := db.GetStats("stats-app")
+	stats, err := db.GetStats("stats-app", 0)
 	if err != nil {
 		t.Fatalf("Failed to get stats: %v", err)
 	}

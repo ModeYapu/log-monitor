@@ -46,6 +46,7 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	openapiHandler := handler.NewOpenAPIHandler(rc.OpenAPISpec)
 	screenshotHandler := handler.NewScreenshotHandler("./data/screenshots")
 	screenshotFileHandler := handler.NewScreenshotFileHandler("./data/screenshots")
+	auditHandler := handler.NewAuditHandler(rc.DB)
 
 	sourceMapHandler.SetAllowedOrigins(rc.Config.Server.AllowedOrigins)
 
@@ -178,6 +179,9 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 		{"PUT /api/admin/webhooks/", webhooksHandler.UpdateWebhook},
 		{"DELETE /api/admin/webhooks/", webhooksHandler.DeleteWebhook},
 		{"POST /api/admin/webhooks/test", webhooksHandler.TestWebhook},
+
+		// Audit logs
+		{"GET /api/admin/audit-logs", auditHandler.GetAuditLogs},
 	}
 
 	for _, route := range adminRoutes {
