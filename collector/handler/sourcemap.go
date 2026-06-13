@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/logmonitor/collector/sourcemap"
@@ -19,18 +20,29 @@ const (
 	maxSourceMapSize = 10 << 20 // 10MB
 )
 
+// cachedParser wraps a parser with its source map key for caching
+type cachedParser struct {
+	parser     *sourcemap.Parser
+	cachedAt   time.Time
+	record     *storage.SourceMapRecord
+}
+
 // SourceMapHandler handles source map upload and retrieval
 type SourceMapHandler struct {
 	db             *storage.DB
 	smStorage      *storage.SourceMapStorage
 	allowedOrigins []string
+	// parserCache caches parsed source maps by key (appId:release:buildId)
+	parserCache map[string]*cachedParser
+	cacheMutex  sync.RWMutex
 }
 
 // NewSourceMapHandler creates a new source map handler
 func NewSourceMapHandler(db *storage.DB, smStorage *storage.SourceMapStorage) *SourceMapHandler {
 	return &SourceMapHandler{
-		db:        db,
-		smStorage: smStorage,
+		db:          db,
+		smStorage:   smStorage,
+		parserCache: make(map[string]*cachedParser),
 	}
 }
 
@@ -46,6 +58,7 @@ func (h *SourceMapHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sourcemaps/download", h.Download)
 	mux.HandleFunc("DELETE /api/sourcemaps/", h.Delete)
 	mux.HandleFunc("POST /api/sourcemaps/deobfuscate", h.Deobfuscate)
+	mux.HandleFunc("POST /api/sourcemaps/resolve", h.Resolve)
 }
 
 // Upload handles source map file upload (supports batch upload)
@@ -465,4 +478,180 @@ func validateSourceMapV3(content []byte) (int, error) {
 func isValidSourceMap(content []byte) bool {
 	ver, err := validateSourceMapV3(content)
 	return err == nil && ver > 0
+}
+
+// Resolve resolves a stack trace to original positions using source maps
+// Request: { appId, release, stacktrace: [{file, line, column}] }
+// Response: { success, resolved: [{originalFile, originalLine, originalColumn, originalName}] }
+func (h *SourceMapHandler) Resolve(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		AppID      string `json:"appId"`
+		Release    string `json:"release"`
+		Env        string `json:"env,omitempty"`
+		Stacktrace []struct {
+			File   string `json:"file"`
+			Line   int    `json:"line"`
+			Column int    `json:"column"`
+		} `json:"stacktrace"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.AppID == "" || req.Release == "" {
+		http.Error(w, "Missing required fields: appId, release", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Stacktrace) == 0 {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":  true,
+			"resolved": []interface{}{},
+		})
+		return
+	}
+
+	// Default env to production if not specified
+	env := req.Env
+	if env == "" {
+		env = "production"
+	}
+
+	// List source maps for this app/release to find matching build IDs
+	records, err := h.db.ListSourceMaps(req.AppID, 100)
+	if err != nil {
+		slog.Error("Failed to list source maps", "error", err)
+		http.Error(w, "Failed to query source maps", http.StatusInternalServerError)
+		return
+	}
+
+	// Find matching source map records for the release
+	var matchingRecords []storage.SourceMapRecord
+	for _, rec := range records {
+		if rec.Release == req.Release && (env == "" || rec.Env == env) {
+			matchingRecords = append(matchingRecords, rec)
+		}
+	}
+
+	if len(matchingRecords) == 0 {
+		// No source map found - return original frames with resolved: false
+		resolved := make([]map[string]interface{}, len(req.Stacktrace))
+		for i, frame := range req.Stacktrace {
+			resolved[i] = map[string]interface{}{
+				"originalFile": frame.File,
+				"originalLine": frame.Line,
+				"originalColumn": frame.Column,
+				"resolved": false,
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":  false,
+			"message": "No source map found for the given app and release",
+			"resolved": resolved,
+		})
+		return
+	}
+
+	// For this implementation, we'll use the first matching source map
+	// In a more sophisticated version, you might match by file name patterns
+	record := &matchingRecords[0]
+
+	// Check cache for existing parser
+	cacheKey := fmt.Sprintf("%s:%s:%s", req.AppID, req.Release, record.BuildID)
+	h.cacheMutex.RLock()
+	cached := h.parserCache[cacheKey]
+	h.cacheMutex.RUnlock()
+
+	var parser *sourcemap.Parser
+	if cached != nil && time.Since(cached.cachedAt) < 10*time.Minute {
+		// Use cached parser (within 10 minutes)
+		parser = cached.parser
+	} else {
+		// Parse and cache
+		smContent, err := h.smStorage.GetByPath(record.FilePath)
+		if err != nil {
+			slog.Error("Failed to read source map file", "error", err)
+			http.Error(w, "Failed to read source map", http.StatusInternalServerError)
+			return
+		}
+
+		parser, err = sourcemap.NewParser(smContent)
+		if err != nil {
+			slog.Error("Failed to parse source map", "error", err)
+			resolved := make([]map[string]interface{}, len(req.Stacktrace))
+			for i, frame := range req.Stacktrace {
+				resolved[i] = map[string]interface{}{
+					"originalFile": frame.File,
+					"originalLine": frame.Line,
+					"originalColumn": frame.Column,
+					"resolved": false,
+				}
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success":  false,
+				"message": "Failed to parse source map",
+				"resolved": resolved,
+			})
+			return
+		}
+
+		// Update cache
+		h.cacheMutex.Lock()
+		h.parserCache[cacheKey] = &cachedParser{
+			parser:   parser,
+			cachedAt: time.Now(),
+			record:   record,
+		}
+		h.cacheMutex.Unlock()
+	}
+
+	// Resolve each frame
+	resolved := make([]map[string]interface{}, len(req.Stacktrace))
+	for i, frame := range req.Stacktrace {
+		if frame.Line <= 0 {
+			resolved[i] = map[string]interface{}{
+				"originalFile": frame.File,
+				"originalLine": frame.Line,
+				"originalColumn": frame.Column,
+				"resolved": false,
+			}
+			continue
+		}
+
+		col := frame.Column
+		if col <= 0 {
+			col = 1
+		}
+
+		origPos, err := parser.FindOriginal(frame.Line, col)
+		if err != nil {
+			// No mapping found - keep original values
+			resolved[i] = map[string]interface{}{
+				"originalFile": frame.File,
+				"originalLine": frame.Line,
+				"originalColumn": frame.Column,
+				"resolved": false,
+			}
+			continue
+		}
+
+		resolved[i] = map[string]interface{}{
+			"originalFile": origPos.Source,
+			"originalLine": origPos.Line,
+			"originalColumn": origPos.Column,
+			"originalName": origPos.Name,
+			"resolved": true,
+		}
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"resolved": resolved,
+		"buildId": record.BuildID,
+		"env": record.Env,
+	})
 }

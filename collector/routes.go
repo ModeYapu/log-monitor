@@ -130,6 +130,7 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 		{"GET /api/sourcemaps/download", sourceMapHandler.Download},
 		{"DELETE /api/sourcemaps/", sourceMapHandler.Delete},
 		{"POST /api/sourcemaps/deobfuscate", sourceMapHandler.Deobfuscate},
+		{"POST /api/sourcemaps/resolve", sourceMapHandler.Resolve},
 	}
 
 	for _, route := range authRoutes {
