@@ -20,6 +20,126 @@
       </el-col>
     </el-row>
 
+    <!-- 7-Day Error Trend Chart (CSS Bar Chart) -->
+    <el-row :gutter="20" class="mt-4">
+      <el-col :span="24">
+        <el-card class="chart-card trend-card">
+          <template #header>
+            <div class="card-header">
+              <span>近7天错误趋势</span>
+              <el-button size="small" @click="refreshStats">刷新</el-button>
+            </div>
+          </template>
+          <div v-loading="loadingTrend" class="trend-chart-container">
+            <div v-if="dailyTrend.length === 0" class="empty-state">
+              <el-empty description="暂无趋势数据" :image-size="60" />
+            </div>
+            <div v-else class="trend-chart">
+              <div class="trend-bars">
+                <div
+                  v-for="(day, index) in dailyTrend"
+                  :key="index"
+                  class="trend-bar-wrapper"
+                >
+                  <div
+                    class="trend-bar"
+                    :style="{
+                      height: getBarHeight(day.count, maxDailyCount) + '%',
+                      background: getBarColor(day.count)
+                    }"
+                    @mouseenter="hoveredBar = index"
+                    @mouseleave="hoveredBar = -1"
+                  >
+                    <div v-if="hoveredBar === index" class="bar-tooltip">
+                      <div class="tooltip-date">{{ formatDate(day.timestamp) }}</div>
+                      <div class="tooltip-count">{{ day.count }} 次错误</div>
+                    </div>
+                  </div>
+                  <div class="trend-label">{{ formatDayLabel(day.timestamp) }}</div>
+                  <div class="trend-count">{{ day.count }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- Top 5 Errors & Recent Alerts -->
+    <el-row :gutter="20" class="mt-4">
+      <el-col :span="12">
+        <el-card class="ranking-card">
+          <template #header>
+            <div class="card-header">
+              <span>Top 5 错误</span>
+              <el-button size="small" link @click="goToIssues">查看全部</el-button>
+            </div>
+          </template>
+          <div v-loading="loadingTopErrors" class="ranking-content">
+            <div v-if="topErrors.length === 0" class="empty-state">
+              <el-empty description="暂无错误数据" :image-size="40" />
+            </div>
+            <div v-else class="top-errors-list">
+              <div
+                v-for="(error, index) in topErrors"
+                :key="index"
+                class="top-error-item"
+                @click="goToIssue(error.id)"
+              >
+                <div class="error-rank" :class="`rank-${index + 1}`">{{ index + 1 }}</div>
+                <div class="error-content">
+                  <div class="error-title" :title="error.title">{{ truncateMessage(error.title, 80) }}</div>
+                  <div class="error-meta">
+                    <span class="error-count">{{ error.event_count }} 次</span>
+                    <span class="error-users">{{ error.user_count }} 用户</span>
+                    <span class="error-time">{{ formatRelativeTime(error.last_seen_at) }}</span>
+                  </div>
+                </div>
+                <el-icon class="arrow-icon"><ArrowRight /></el-icon>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :span="12">
+        <el-card class="ranking-card">
+          <template #header>
+            <div class="card-header">
+              <span>最近告警</span>
+              <el-button size="small" link @click="goToAlerts">查看全部</el-button>
+            </div>
+          </template>
+          <div v-loading="loadingAlerts" class="ranking-content">
+            <div v-if="recentAlerts.length === 0" class="empty-state">
+              <el-empty description="暂无告警记录" :image-size="40" />
+            </div>
+            <div v-else class="alerts-list">
+              <div
+                v-for="(alert, index) in recentAlerts"
+                :key="index"
+                class="alert-item"
+                @click="goToAlerts"
+              >
+                <div class="alert-icon" :class="getAlertIconClass(alert)">
+                  <el-icon><WarningFilled v-if="alert.severity === 'critical'" /><Warning v-else /></el-icon>
+                </div>
+                <div class="alert-content">
+                  <div class="alert-name">{{ alert.alert_name || `告警 #${alert.alert_id}` }}</div>
+                  <div class="alert-meta">
+                    <span class="alert-time">{{ formatRelativeTime(alert.triggered_at) }}</span>
+                    <el-tag :type="getAlertTagType(alert.severity)" size="small">
+                      {{ alert.severity }}
+                    </el-tag>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <!-- Anomaly Workstation Area -->
     <el-row :gutter="20" class="mt-4">
       <el-col :span="8">
@@ -50,41 +170,6 @@
                   </div>
                 </div>
                 <el-tag size="small" type="danger">NEW</el-tag>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :span="8">
-        <el-card class="anomaly-card">
-          <template #header>
-            <div class="card-header">
-              <span>最近告警</span>
-              <el-button size="small" link @click="goToAlerts">查看全部</el-button>
-            </div>
-          </template>
-          <div v-loading="loadingAlerts" class="anomaly-content">
-            <div v-if="alertTriggers.length === 0" class="empty-state">
-              <el-empty description="暂无告警触发" :image-size="40" />
-            </div>
-            <div v-else class="alert-list">
-              <div
-                v-for="(alert, index) in alertTriggers"
-                :key="index"
-                class="alert-item"
-                :class="getAlertClass(alert.severity)"
-                @click="goToAlerts"
-              >
-                <div class="alert-info">
-                  <div class="alert-name">{{ alert.alert_name || `告警 #${alert.alert_id}` }}</div>
-                  <div class="alert-meta">
-                    <span>{{ formatRelativeTime(alert.triggered_at) }}</span>
-                  </div>
-                </div>
-                <el-tag :type="getAlertTagType(alert.severity)" size="small">
-                  {{ alert.severity }}
-                </el-tag>
               </div>
             </div>
           </div>
@@ -139,12 +224,9 @@
           </div>
         </el-card>
       </el-col>
-    </el-row>
 
-    <!-- Quick Actions Area -->
-    <el-row :gutter="20" class="mt-4">
-      <el-col :span="24">
-        <el-card class="quick-actions-card">
+      <el-col :span="8">
+        <el-card class="anomaly-card">
           <template #header>
             <span>快捷操作</span>
           </template>
@@ -163,19 +245,9 @@
       </el-col>
     </el-row>
 
+    <!-- Top Statistics -->
     <el-row :gutter="20" class="mt-4">
-      <el-col :span="16">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>24h 错误趋势</span>
-              <el-button size="small" @click="refreshStats">刷新</el-button>
-            </div>
-          </template>
-          <div ref="trendChartRef" style="height: 300px"></div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
+      <el-col :span="24">
         <el-card class="chart-card">
           <template #header>
             <span>Top 统计</span>
@@ -260,31 +332,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import * as echarts from 'echarts'
 import { logApi } from '../api'
 import { formatNumber, formatRelativeTime, truncateMessage, formatPriority } from '../utils/formatters'
-import { Warning, InfoFilled, WarningFilled, CircleCheck } from '@element-plus/icons-vue'
+import { Warning, InfoFilled, WarningFilled, CircleCheck, ArrowRight } from '@element-plus/icons-vue'
 
 const router = useRouter()
-const trendChartRef = ref<HTMLElement>()
 const apps = ref<any[]>([])
 const stats = ref<any>(null)
 const topTab = ref('errors')
 const topOrderBy = ref('count')
 const topData = ref<any[]>([])
 const loadingTop = ref(false)
-let trendChart: echarts.ECharts | null = null
+
+// Trend chart data
+const dailyTrend = ref<Array<{ timestamp: number; count: number }>>([])
+const hoveredBar = ref(-1)
+const loadingTrend = ref(false)
 
 // Anomaly workstation data
 const newErrors = ref<any[]>([])
-const alertTriggers = ref<any[]>([])
+const recentAlerts = ref<any[]>([])
 const activeSessions = ref<any[]>([])
 const statsComparison = ref<any>(null)
 const loadingNewErrors = ref(false)
 const loadingAlerts = ref(false)
 const loadingSessions = ref(false)
+
+// Top Errors data
+const topErrors = ref<any[]>([])
+const loadingTopErrors = ref(false)
 
 // Issues data
 const issueStats = ref<any>({
@@ -327,7 +405,7 @@ const statsCards = computed(() => [
     value: formatNumber(stats.value?.warnCount || 0),
     icon: Warning,
     color: 'linear-gradient(135deg, #f59e0b, #d97706)',
-    comparison: null, // No comparison for warnings
+    comparison: null,
     trend: null
   },
   {
@@ -336,7 +414,7 @@ const statsCards = computed(() => [
     value: formatNumber(stats.value?.infoCount || 0),
     icon: CircleCheck,
     color: 'linear-gradient(135deg, #10b981, #059669)',
-    comparison: null, // No comparison for info
+    comparison: null,
     trend: null
   },
   {
@@ -349,6 +427,11 @@ const statsCards = computed(() => [
     trend: getTrendDirection('affected_users')
   }
 ])
+
+const maxDailyCount = computed(() => {
+  const counts = dailyTrend.value.map(d => d.count)
+  return counts.length > 0 ? Math.max(...counts) : 1
+})
 
 // Helper functions for stat card enhancements
 const getComparisonDisplay = (metric: string) => {
@@ -372,8 +455,6 @@ const getTrendDirection = (metric: string) => {
 
   if (change === undefined || change === 0) return null
 
-  // For errors, positive change is bad (red), negative is good (green)
-  // For events and affected users, positive change is usually neutral
   if (metric === 'errors') {
     return change > 0 ? 'bad' : 'good'
   }
@@ -390,46 +471,68 @@ const getTrendClass = (trend: string | null) => {
   return classes[trend] || ''
 }
 
-const topErrors = computed(() => stats.value?.topErrors || [])
-
 const currentAppId = computed(() => apps.value.length > 0 ? apps.value[0].app_id : '')
+
+// Bar chart helpers
+const getBarHeight = (count: number, max: number): number => {
+  if (max === 0) return 0
+  return Math.max((count / max) * 100, 5) // Minimum 5% height for visibility
+}
+
+const getBarColor = (count: number): string => {
+  if (count === 0) return '#e5e7eb'
+  const ratio = count / maxDailyCount.value
+  if (ratio > 0.7) return 'linear-gradient(180deg, #ef4444, #dc2626)'
+  if (ratio > 0.4) return 'linear-gradient(180deg, #f59e0b, #d97706)'
+  return 'linear-gradient(180deg, #10b981, #059669)'
+}
+
+const formatDate = (timestamp: number): string => {
+  const date = new Date(timestamp)
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
+const formatDayLabel = (timestamp: number): string => {
+  const date = new Date(timestamp)
+  const days = ['日', '一', '二', '三', '四', '五', '六']
+  return days[date.getDay()]
+}
 
 // Fetch Top N data
 const fetchTopData = async () => {
-	if (!currentAppId.value) return
+  if (!currentAppId.value) return
 
-	loadingTop.value = true
-	try {
-		const { data } = await logApi.getTop({
-			appId: currentAppId.value,
-			type: topTab.value,
-			orderBy: topOrderBy.value,
-			limit: 10
-		})
-		topData.value = data.data || []
-	} catch (error) {
-		console.error('Failed to fetch top data:', error)
-		topData.value = []
-	} finally {
-		loadingTop.value = false
-	}
+  loadingTop.value = true
+  try {
+    const { data } = await logApi.getTop({
+      appId: currentAppId.value,
+      type: topTab.value,
+      orderBy: topOrderBy.value,
+      limit: 10
+    })
+    topData.value = data.data || []
+  } catch (error) {
+    console.error('Failed to fetch top data:', error)
+    topData.value = []
+  } finally {
+    loadingTop.value = false
+  }
 }
 
 const handleTopTabChange = () => {
-	fetchTopData()
+  fetchTopData()
 }
 
 const truncateTopKey = (key: string, type: string) => {
-	if (type === 'pages') {
-		// For URLs, show the path part
-		try {
-			const url = new URL(key)
-			return url.pathname + url.search
-		} catch {
-			return key
-		}
-	}
-	return truncateMessage(key, 40)
+  if (type === 'pages') {
+    try {
+      const url = new URL(key)
+      return url.pathname + url.search
+    } catch {
+      return key
+    }
+  }
+  return truncateMessage(key, 40)
 }
 
 const fetchData = async () => {
@@ -437,71 +540,108 @@ const fetchData = async () => {
     const appsRes = await logApi.getApps()
     apps.value = appsRes.data
 
-    // Use first app for stats, or 'all' if no apps
     const appId = apps.value.length > 0 ? apps.value[0].app_id : 'all'
     try {
       const statsRes = await logApi.getStats(appId)
       stats.value = statsRes.data
-      renderTrendChart()
     } catch (statsErr) {
-      // Stats may fail if no appId matches, use defaults
       stats.value = { totalEvents: 0, errorCount: 0, warnCount: 0, infoCount: 0, topErrors: [], errorTrend: [] }
-      renderTrendChart()
     }
   } catch (error) {
     console.error('Failed to fetch overview data:', error)
   }
 }
 
-const refreshStats = () => {
-  fetchData()
+// Fetch 7-day trend data
+const fetchTrendData = async () => {
+  if (!currentAppId.value) return
+
+  loadingTrend.value = true
+  try {
+    // Calculate 7 days ago timestamp
+    const now = Date.now()
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
+
+    // Use stats API which returns errorTrend
+    const { data } = await logApi.getStats(currentAppId.value)
+
+    // Filter error trend for last 7 days
+    const trendData = data.errorTrend || []
+
+    // Group by day
+    const dailyData = new Map<string, number>()
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(now - i * 24 * 60 * 60 * 1000)
+      const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+      dailyData.set(dateKey, 0)
+    }
+
+    // Aggregate trend data by day
+    trendData.forEach((t: any) => {
+      const date = new Date(t.timestamp)
+      const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+      if (dailyData.has(dateKey)) {
+        dailyData.set(dateKey, (dailyData.get(dateKey) || 0) + t.count)
+      }
+    })
+
+    // Convert to array and sort by date
+    dailyTrend.value = Array.from(dailyData.entries())
+      .map(([key, count]) => {
+        const [year, month, day] = key.split('-').map(Number)
+        const timestamp = new Date(year, month, day).getTime()
+        return { timestamp, count }
+      })
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-7)
+  } catch (error) {
+    console.error('Failed to fetch trend data:', error)
+    dailyTrend.value = []
+  } finally {
+    loadingTrend.value = false
+  }
 }
 
-const renderTrendChart = () => {
-  if (!trendChartRef.value) return
-  const trend = stats.value?.errorTrend || []
-  if (trend.length === 0) return
+// Fetch Top 5 Errors
+const fetchTopErrors = async () => {
+  if (!currentAppId.value) return
 
-  // Dispose previous chart instance to prevent memory leak
-  if (trendChart) {
-    trendChart.dispose()
-    trendChart = null
+  loadingTopErrors.value = true
+  try {
+    const { data } = await logApi.getIssues({
+      app_id: currentAppId.value,
+      sort: 'count',
+      page: 1,
+      page_size: 5
+    })
+    topErrors.value = data.data || []
+  } catch (error) {
+    console.error('Failed to fetch top errors:', error)
+    topErrors.value = []
+  } finally {
+    loadingTopErrors.value = false
   }
+}
 
-  trendChart = echarts.init(trendChartRef.value)
-  const option = {
-    backgroundColor: 'transparent',
-    grid: { top: 20, right: 20, bottom: 30, left: 50 },
-    xAxis: {
-      type: 'category',
-      data: trend.map((t: any) => {
-        const date = new Date(t.timestamp)
-        return `${date.getHours().toString().padStart(2, '0')}:00`
-      }),
-      axisLine: { lineStyle: { color: 'var(--color-border)' } },
-      axisLabel: { color: '#94a3b8' }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: 'var(--color-border)' } },
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: 'var(--color-border)' } }
-    },
-    series: [{
-      data: trend.map((t: any) => t.count),
-      type: 'line',
-      smooth: true,
-      areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(99, 102, 241, 0.3)' },
-          { offset: 1, color: 'rgba(99, 102, 241, 0)' }
-        ])
-      },
-      lineStyle: { color: '#6366f1', width: 2 },
-      itemStyle: { color: '#6366f1' }
-    }]
+// Fetch recent alerts
+const fetchRecentAlerts = async () => {
+  loadingAlerts.value = true
+  try {
+    const { data } = await logApi.getAlertTriggers({ limit: 5 })
+    recentAlerts.value = data.data || []
+  } catch (error) {
+    console.error('Failed to fetch alert triggers:', error)
+    recentAlerts.value = []
+  } finally {
+    loadingAlerts.value = false
   }
-  trendChart.setOption(option)
+}
+
+const refreshStats = () => {
+  fetchData()
+  fetchTrendData()
+  fetchTopErrors()
+  fetchRecentAlerts()
 }
 
 const goToLogs = (appId: string) => {
@@ -512,7 +652,6 @@ const goToLogs = (appId: string) => {
 const fetchAnomalyData = async () => {
   if (!currentAppId.value) return
 
-  // Fetch new errors from last hour
   loadingNewErrors.value = true
   try {
     const { data } = await logApi.getNewErrors({ app_id: currentAppId.value, since: 60 })
@@ -524,19 +663,6 @@ const fetchAnomalyData = async () => {
     loadingNewErrors.value = false
   }
 
-  // Fetch recent alert triggers
-  loadingAlerts.value = true
-  try {
-    const { data } = await logApi.getAlertTriggers({ limit: 5 })
-    alertTriggers.value = data.data || []
-  } catch (error) {
-    console.error('Failed to fetch alert triggers:', error)
-    alertTriggers.value = []
-  } finally {
-    loadingAlerts.value = false
-  }
-
-  // Fetch active sessions
   loadingSessions.value = true
   try {
     const { data } = await logApi.getActiveSessions({ app_id: currentAppId.value, limit: 5 })
@@ -548,7 +674,6 @@ const fetchAnomalyData = async () => {
     loadingSessions.value = false
   }
 
-  // Fetch stats comparison
   try {
     const { data } = await logApi.getStatsComparison({ app_id: currentAppId.value })
     statsComparison.value = data
@@ -557,12 +682,7 @@ const fetchAnomalyData = async () => {
     statsComparison.value = null
   }
 
-  // Fetch issues data
   fetchIssuesData()
-}
-
-const refreshSessions = () => {
-  fetchAnomalyData()
 }
 
 const goToLogsWithError = (errorMessage: string) => {
@@ -574,10 +694,6 @@ const goToLogsWithError = (errorMessage: string) => {
 
 const goToAlerts = () => {
   router.push(`/alerts/${currentAppId.value}`)
-}
-
-const goToSession = (sessionId: string) => {
-  router.push(`/sessions/${currentAppId.value}/${sessionId}`)
 }
 
 // Quick action methods
@@ -613,16 +729,6 @@ const goToThisWeekTop = () => {
 }
 
 // Alert helper methods
-const getAlertClass = (severity: string) => {
-  const classes: Record<string, string> = {
-    critical: 'alert-critical',
-    high: 'alert-high',
-    medium: 'alert-medium',
-    low: 'alert-low'
-  }
-  return classes[severity] || ''
-}
-
 const getAlertTagType = (severity: string) => {
   const types: Record<string, string> = {
     critical: 'danger',
@@ -633,17 +739,19 @@ const getAlertTagType = (severity: string) => {
   return types[severity] || 'info'
 }
 
+const getAlertIconClass = (alert: any) => {
+  return alert.severity === 'critical' ? 'alert-icon-critical' : 'alert-icon-warning'
+}
+
 // Issues methods
 const fetchIssuesData = async () => {
   if (!currentAppId.value) return
 
   loadingIssues.value = true
   try {
-    // Fetch issue stats
     const { data: statsData } = await logApi.getIssueStats({ app_id: currentAppId.value })
     issueStats.value = statsData
 
-    // Fetch recent open issues
     const { data: issuesData } = await logApi.getIssues({
       app_id: currentAppId.value,
       status: 'open',
@@ -678,7 +786,6 @@ const goToIssues = () => {
 
 const goToIssue = (issueId: number) => {
   router.push(`/issues/${currentAppId.value}`)
-  // Could also open a modal with issue details here
 }
 
 const getPriorityTagType = (priority: string) => {
@@ -693,15 +800,10 @@ const getPriorityTagType = (priority: string) => {
 
 onMounted(() => {
   fetchData()
+  fetchTrendData()
+  fetchTopErrors()
+  fetchRecentAlerts()
   fetchAnomalyData()
-})
-
-onUnmounted(() => {
-  // Dispose of chart instance to prevent memory leak
-  if (trendChart) {
-    trendChart.dispose()
-    trendChart = null
-  }
 })
 </script>
 
@@ -747,7 +849,11 @@ onUnmounted(() => {
 }
 
 .chart-card {
-  height: 400px;
+  min-height: 200px;
+}
+
+.trend-card {
+  min-height: 280px;
 }
 
 .card-header {
@@ -756,56 +862,271 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.top-errors {
-  max-height: 280px;
+.mt-4 {
+  margin-top: 20px;
+}
+
+/* 7-Day Trend Chart Styles */
+.trend-chart-container {
+  min-height: 200px;
+  padding: 20px 0;
+}
+
+.trend-chart {
+  width: 100%;
+  height: 200px;
+}
+
+.trend-bars {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  height: 100%;
+  padding: 0 20px;
+}
+
+.trend-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  max-width: 80px;
+  position: relative;
+}
+
+.trend-bar {
+  width: 40px;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  transition: height 0.3s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.trend-bar:hover {
+  transform: scaleX(1.1);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
+}
+
+.bar-tooltip {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.bar-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #1f2937;
+}
+
+.tooltip-date {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 2px;
+}
+
+.tooltip-count {
+  font-weight: 600;
+}
+
+.trend-label {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.trend-count {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Ranking Card Styles */
+.ranking-card {
+  min-height: 320px;
+}
+
+.ranking-content {
+  min-height: 240px;
+}
+
+/* Top Errors List */
+.top-errors-list {
+  max-height: 260px;
   overflow-y: auto;
 }
 
-.error-item {
+.top-error-item {
   display: flex;
   align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--color-border);
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
-.error-item:last-child {
-  border-bottom: none;
+.top-error-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.top-error-item:last-child {
+  margin-bottom: 0;
 }
 
 .error-rank {
   width: 28px;
   height: 28px;
-  background: var(--color-bg-tertiary);
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
+  font-weight: 600;
   color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
   margin-right: 12px;
+  flex-shrink: 0;
 }
 
-.error-rank:nth-child(1) {
+.error-rank.rank-1 {
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: #fff;
 }
 
-.error-message {
+.error-rank.rank-2 {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+  color: #fff;
+}
+
+.error-rank.rank-3 {
+  background: linear-gradient(135deg, #b45309, #92400e);
+  color: #fff;
+}
+
+.error-content {
   flex: 1;
-  color: var(--color-text);
+  min-width: 0;
+}
+
+.error-title {
   font-size: 13px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.error-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.error-count {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.error-users {
+  color: #f59e0b;
+}
+
+.error-time {
+  margin-left: auto;
+}
+
+.arrow-icon {
+  color: var(--color-text-tertiary);
+  margin-left: 8px;
+}
+
+/* Recent Alerts List */
+.alerts-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.alert-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.alert-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.alert-item:last-child {
+  margin-bottom: 0;
+}
+
+.alert-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.alert-icon-critical {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.alert-icon-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.alert-name {
+  font-size: 13px;
+  color: var(--color-text);
+  font-weight: 500;
+  margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.error-count {
-  padding: 4px 10px;
-  background: var(--color-bg-tertiary);
-  border-radius: 12px;
+.alert-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
-  color: #ef4444;
-  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 /* Anomaly Workstation Styles */
@@ -817,12 +1138,6 @@ onUnmounted(() => {
   min-height: 200px;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
 .empty-state {
   display: flex;
   justify-content: center;
@@ -830,7 +1145,6 @@ onUnmounted(() => {
   min-height: 160px;
 }
 
-/* New Errors List */
 .error-list {
   max-height: 240px;
   overflow-y: auto;
@@ -880,135 +1194,7 @@ onUnmounted(() => {
   margin-left: auto;
 }
 
-/* Alert Triggers List */
-.alert-list {
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.alert-item {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: var(--color-bg-secondary);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.alert-item:hover {
-  background: var(--color-bg-tertiary);
-}
-
-.alert-item:last-child {
-  margin-bottom: 0;
-}
-
-.alert-item.alert-critical {
-  border-left: 3px solid #ef4444;
-}
-
-.alert-item.alert-high {
-  border-left: 3px solid #f59e0b;
-}
-
-.alert-item.alert-medium {
-  border-left: 3px solid #3b82f6;
-}
-
-.alert-item.alert-low {
-  border-left: 3px solid #6b7280;
-}
-
-.alert-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.alert-name {
-  font-size: 13px;
-  color: var(--color-text);
-  font-weight: 500;
-  margin-bottom: 4px;
-}
-
-.alert-meta {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-/* Active Sessions List */
-.session-list {
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.session-item {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: var(--color-bg-secondary);
-  border-radius: 8px;
-}
-
-.session-item:last-child {
-  margin-bottom: 0;
-}
-
-.session-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.session-url {
-  font-size: 13px;
-  color: var(--color-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 4px;
-}
-
-.session-meta {
-  display: flex;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-/* Quick Actions Card */
-.quick-actions-card {
-  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
-}
-
-.quick-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-/* Stat Card Enhancements */
-.stat-comparison {
-  font-size: 12px;
-  margin-top: 4px;
-  font-weight: 500;
-}
-
-.trend-good {
-  color: #10b981;
-}
-
-.trend-bad {
-  color: #ef4444;
-}
-
-.trend-neutral {
-  color: var(--color-text-secondary);
-}
-
-/* Issues List */
+/* Issues Styles */
 .issue-stats {
   padding: 16px 0;
 }
@@ -1077,12 +1263,85 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 
-.issue-info {
+/* Quick Actions */
+.quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Stat Card Enhancements */
+.stat-comparison {
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.trend-good {
+  color: #10b981;
+}
+
+.trend-bad {
+  color: #ef4444;
+}
+
+.trend-neutral {
+  color: var(--color-text-secondary);
+}
+
+/* Top Content Styles */
+.top-content {
+  padding: 16px 0;
+}
+
+.top-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.top-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.top-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+}
+
+.top-item:last-child {
+  margin-bottom: 0;
+}
+
+.top-rank {
+  width: 28px;
+  height: 28px;
+  background: var(--color-bg-tertiary);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-right: 12px;
+}
+
+.top-rank.rank-1 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+}
+
+.top-info {
   flex: 1;
   min-width: 0;
 }
 
-.issue-title {
+.top-key {
   font-size: 13px;
   color: var(--color-text);
   overflow: hidden;
@@ -1091,11 +1350,45 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 
-.issue-meta {
+.top-meta {
   display: flex;
   gap: 8px;
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.new-badge {
+  padding: 2px 6px;
+  background: #10b981;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.top-score {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.top-item-new {
+  border-left: 3px solid #10b981;
+}
+
+.text-error {
+  color: #ef4444;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Responsive adjustments */
@@ -1105,8 +1398,8 @@ onUnmounted(() => {
   }
 
   .error-list,
-  .alert-list,
-  .issue-list {
+  .alerts-list,
+  .top-errors-list {
     max-height: 200px;
   }
 }
