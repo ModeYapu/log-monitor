@@ -34,6 +34,7 @@ type EventStore interface {
 	GetClusterStats(appID, fingerprint string) (ClusterStats, error)
 	GetErrorClusters(appID, errorMessage string, threshold float64, limit int, projectID int64) ([]ErrorCluster, error)
 	GetRecentEvents(limit int) ([]EventRecord, error)
+	CountRecentErrors(sinceMs int64) (int64, error)
 }
 
 // IssueStore handles issue CRUD operations and lifecycle management
@@ -100,6 +101,7 @@ type SystemStore interface {
 	CleanupOldDataWithDays(days int) CleanupResult
 	DeleteEventsBefore(before time.Time) (int64, error)
 	DeleteRecordingsBefore(before time.Time) (int64, error)
+	Ping() error
 }
 
 // RecordingRepository handles session recordings

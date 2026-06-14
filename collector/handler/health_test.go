@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/logmonitor/collector/storage"
 )
@@ -24,7 +25,7 @@ func TestHealthEndpoint(t *testing.T) {
 	defer db.Close()
 
 	// Create health handler
-	handler := NewHealthHandler(db)
+	handler := NewHealthHandler(":memory:", db, db, db)
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -109,7 +110,7 @@ func TestHealthDatabaseDegraded(t *testing.T) {
 	db.Close()
 
 	// Create health handler
-	handler := NewHealthHandler(db)
+	handler := NewHealthHandler(":memory:", db, db, db)
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -153,7 +154,7 @@ func TestHealthResponseFields(t *testing.T) {
 	defer db.Close()
 
 	// Create health handler
-	handler := NewHealthHandler(db)
+	handler := NewHealthHandler(":memory:", db, db, db)
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -208,7 +209,7 @@ func TestHealthEndpointWithDatabase(t *testing.T) {
 	defer db.Close()
 
 	// Create health handler with database check
-	handler := NewHealthHandler(db)
+	handler := NewHealthHandler(":memory:", db, db, db)
 
 	// Create test request
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -242,6 +243,50 @@ func TestHealthEndpointWithDatabase(t *testing.T) {
 	}
 }
 
+// TestHealthRecentErrors verifies the recent error count surfaces errors inserted
+// within the look-back window (R013).
+func TestHealthRecentErrors(t *testing.T) {
+	cfg := storage.Config{Path: ":memory:", RetentionDays: 30}
+	db, err := storage.NewDB(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer db.Close()
+
+	// Insert 5 fresh error events and 3 fresh info events.
+	now := time.Now().UnixMilli()
+	events := []storage.EventRecord{
+		{AppID: "app-1", Type: "error", Level: "error", Message: "boom", CreatedAt: now},
+		{AppID: "app-1", Type: "error", Level: "error", Message: "boom2", CreatedAt: now},
+		{AppID: "app-1", Type: "error", Level: "error", Message: "boom3", CreatedAt: now},
+		{AppID: "app-1", Type: "error", Level: "error", Message: "boom4", CreatedAt: now},
+		{AppID: "app-1", Type: "error", Level: "error", Message: "boom5", CreatedAt: now},
+		{AppID: "app-1", Type: "info", Level: "info", Message: "ok", CreatedAt: now},
+		{AppID: "app-1", Type: "info", Level: "info", Message: "ok2", CreatedAt: now},
+		{AppID: "app-1", Type: "info", Level: "info", Message: "ok3", CreatedAt: now},
+	}
+	if err := db.InsertEvents(events); err != nil {
+		t.Fatalf("failed to seed events: %v", err)
+	}
+
+	handler := NewHealthHandler(":memory:", db, db, db)
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	w := httptest.NewRecorder()
+	handler.Health(w, req)
+
+	var response HealthResponse
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if response.RecentErrors != 5 {
+		t.Errorf("expected 5 recent errors, got %d", response.RecentErrors)
+	}
+	if response.EventCount < 8 {
+		t.Errorf("expected event count >= 8, got %d", response.EventCount)
+	}
+}
+
 // TestHealthInvalidMethod tests that non-GET requests are handled
 func TestHealthInvalidMethod(t *testing.T) {
 	// Create test database
@@ -257,7 +302,7 @@ func TestHealthInvalidMethod(t *testing.T) {
 	defer db.Close()
 
 	// Create health handler
-	handler := NewHealthHandler(db)
+	handler := NewHealthHandler(":memory:", db, db, db)
 
 	// Create POST request
 	req := httptest.NewRequest(http.MethodPost, "/api/health", nil)

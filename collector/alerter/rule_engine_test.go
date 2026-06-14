@@ -178,6 +178,10 @@ func (m *MockEventStore) GetRecentEvents(limit int) ([]storage.EventRecord, erro
 	return []storage.EventRecord{}, nil
 }
 
+func (m *MockEventStore) CountRecentErrors(sinceMs int64) (int64, error) {
+	return 0, nil
+}
+
 func TestRuleEngine_LoadRules(t *testing.T) {
 	mockStore := &MockAlertStore{
 		rules: []storage.AlertRule{

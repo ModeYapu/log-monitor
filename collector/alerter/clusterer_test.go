@@ -88,6 +88,10 @@ func (m *MockEventStoreForClusters) GetRecentEvents(limit int) ([]storage.EventR
 	return []storage.EventRecord{}, nil
 }
 
+func (m *MockEventStoreForClusters) CountRecentErrors(sinceMs int64) (int64, error) {
+	return 0, nil
+}
+
 func TestClusterer_ProcessEvents(t *testing.T) {
 	mockStore := &MockEventStoreForClusters{}
 	clusterer := NewClusterer(mockStore)

@@ -83,7 +83,7 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	authHandler := handler.NewAuthHandler(rc.UserStorage, rc.JWT)
 	clustersHandler := handler.NewClustersHandler(rc.Store.Events())
 	issuesHandler := handler.NewIssuesHandler(rc.DB)
-	healthHandler := handler.NewHealthHandler(rc.DB)
+	healthHandler := handler.NewHealthHandler(rc.Config.Database.Path, rc.Store.Analytics(), rc.Store.System(), rc.Store.Events())
 	alertsHandler := handler.NewAlertsHandler(rc.DB)
 	systemHandler := handler.NewSystemHandler(rc.DB, rc.Config.Database.Path, rc.Config.Database.RetentionDays)
 	adminHandler := handler.NewAdminHandler(rc.DB)

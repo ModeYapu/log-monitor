@@ -93,6 +93,10 @@ func (w *systemStoreWrapper) DeleteRecordingsBefore(before time.Time) (int64, er
 	return w.db.DeleteRecordingsBefore(before)
 }
 
+func (w *systemStoreWrapper) Ping() error {
+	return w.db.Ping()
+}
+
 // Recordings returns the recording repository
 func (s *SQLiteStore) Recordings() RecordingRepository {
 	return s.db

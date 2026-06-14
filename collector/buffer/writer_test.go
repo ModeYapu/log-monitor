@@ -83,6 +83,10 @@ func (m *mockEventStore) GetRecentEvents(limit int) ([]storage.EventRecord, erro
 	return nil, nil
 }
 
+func (m *mockEventStore) CountRecentErrors(sinceMs int64) (int64, error) {
+	return 0, nil
+}
+
 // helper to create a test event
 func makeEvent(id int) storage.EventRecord {
 	return storage.EventRecord{

@@ -420,6 +420,35 @@ func (db *DB) Conn() *sql.DB {
 	return db.conn
 }
 
+// Ping verifies the database connection is alive by issuing a trivial query.
+// Used by the health endpoint to report database reachability.
+func (db *DB) Ping() error {
+	if db.closed.Load() {
+		return fmt.Errorf("database is closed")
+	}
+	var result int
+	return db.conn.QueryRow("SELECT 1").Scan(&result)
+}
+
+// CountRecentErrors returns the number of error-level events recorded since
+// sinceMs (epoch milliseconds). Used by the health endpoint to surface a recent
+// error rate. It scans all apps (no app_id filter) so the value reflects overall
+// system health; idx_events_created_at serves the time-bounded scan.
+func (db *DB) CountRecentErrors(sinceMs int64) (int64, error) {
+	if db.closed.Load() {
+		return 0, fmt.Errorf("database is closed")
+	}
+	var count int64
+	err := db.conn.QueryRow(
+		"SELECT COUNT(*) FROM events WHERE level = 'error' AND created_at >= ?",
+		sinceMs,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count recent errors: %w", err)
+	}
+	return count, nil
+}
+
 // Closed returns whether the database has been closed.
 func (db *DB) Closed() bool {
 	return db.closed.Load()
