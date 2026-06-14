@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -82,10 +83,24 @@ func (j *JWT) ValidateToken(tokenString string) (*model.TokenClaims, error) {
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		// Two-value type assertions: a malformed or partial token must surface
+		// ErrInvalidKey rather than panic the process.
+		userID, ok := claims["user_id"].(float64)
+		if !ok {
+			return nil, fmt.Errorf("invalid token: missing user_id: %w", jwt.ErrInvalidKey)
+		}
+		username, ok := claims["username"].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid token: missing username: %w", jwt.ErrInvalidKey)
+		}
+		role, ok := claims["role"].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid token: missing role: %w", jwt.ErrInvalidKey)
+		}
 		return &model.TokenClaims{
-			UserID:   int64(claims["user_id"].(float64)),
-			Username: claims["username"].(string),
-			Role:     claims["role"].(string),
+			UserID:   int64(userID),
+			Username: username,
+			Role:     role,
 		}, nil
 	}
 
@@ -135,8 +150,8 @@ func (j *JWT) Handler(next http.Handler) http.Handler {
 // RequireAdmin is a middleware that requires admin role
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		role := r.Context().Value(RoleKey)
-		if role == nil || role.(string) != "admin" {
+		roleStr, ok := r.Context().Value(RoleKey).(string)
+		if !ok || roleStr != "admin" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(map[string]interface{}{

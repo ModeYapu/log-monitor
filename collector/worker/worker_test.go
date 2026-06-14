@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,8 +12,9 @@ import (
 // mockWorker is a mock implementation of the Worker interface for testing
 type mockWorker struct {
 	name        string
+	mu          sync.Mutex // guards status (written by Start/Stop, read by Status)
 	startCalled atomic.Int32
-	stopCalled atomic.Int32
+	stopCalled  atomic.Int32
 	startError  error
 	stopError   error
 	status      WorkerStatus
@@ -31,8 +33,10 @@ func newMockWorker(name string) *mockWorker {
 
 func (m *mockWorker) Start(ctx context.Context) error {
 	m.startCalled.Add(1)
+	m.mu.Lock()
 	m.status.Running = true
-	m.status.LastRunAt = time.Now().Unix()
+	m.status.LastRunAt = time.Now().UnixMilli()
+	m.mu.Unlock()
 	if m.startError != nil {
 		return m.startError
 	}
@@ -43,7 +47,9 @@ func (m *mockWorker) Start(ctx context.Context) error {
 
 func (m *mockWorker) Stop() error {
 	m.stopCalled.Add(1)
+	m.mu.Lock()
 	m.status.Running = false
+	m.mu.Unlock()
 	if m.stopError != nil {
 		return m.stopError
 	}
@@ -55,6 +61,8 @@ func (m *mockWorker) Name() string {
 }
 
 func (m *mockWorker) Status() WorkerStatus {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.status
 }
 

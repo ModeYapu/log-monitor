@@ -23,7 +23,6 @@ type DB struct {
 	conn   *sql.DB
 	path   string
 	closed atomic.Bool
-	stopCh chan struct{} // Channel to signal goroutines to stop
 }
 
 // Config holds database configuration
@@ -50,10 +49,18 @@ func NewDB(cfg Config) (*DB, error) {
 	conn.SetMaxOpenConns(1) // SQLite writes need single connection
 	conn.SetMaxIdleConns(1)
 
+	// Enable incremental auto-vacuum on fresh databases so that large TTL
+	// deletions can later reclaim free pages via PRAGMA incremental_vacuum
+	// (cheap, non-exclusive) instead of a full VACUUM that rewrites and locks
+	// the whole database. Only takes effect before the first table is created;
+	// on existing databases this is a harmless no-op.
+	if _, err := conn.Exec(`PRAGMA auto_vacuum = 2`); err != nil {
+		slog.Warn("Failed to enable incremental auto_vacuum", "error", err)
+	}
+
 	db := &DB{
-		conn:   conn,
-		path:   cfg.Path,
-		stopCh: make(chan struct{}),
+		conn: conn,
+		path: cfg.Path,
 	}
 
 	// Initialize schema via migration tool (with inline fallback)
@@ -65,8 +72,9 @@ func NewDB(cfg Config) (*DB, error) {
 		}
 	}
 
-	// Start retention cleanup goroutine
-	go db.retentionCleanup(cfg.RetentionDays)
+	// Retention/TTL cleanup is owned by worker.CleanupWorker — the single
+	// cleanup path. No storage-internal goroutine is started here, so there is
+	// no duplicate cleanup path racing the worker over the same connection.
 
 	return db, nil
 }
@@ -316,13 +324,24 @@ func (db *DB) DeleteEventsBefore(before time.Time) (int64, error) {
 
 	count, _ := result.RowsAffected()
 
-	// If we deleted more than 1000 records, run VACUUM to reclaim space
+	// Reclaim the freed pages incrementally rather than with a blocking full
+	// VACUUM. incremental_vacuum is non-exclusive and only frees pages when the
+	// database was created with auto_vacuum = INCREMENTAL.
 	if count > 1000 {
-		slog.Info("Running VACUUM to reclaim space after large deletion", "deleted", count)
-		_, _ = db.conn.Exec("VACUUM")
+		slog.Info("Running incremental vacuum to reclaim space after large deletion", "deleted", count)
+		db.reclaimSpace()
 	}
 
 	return count, nil
+}
+
+// reclaimSpace runs PRAGMA incremental_vacuum to reclaim free pages left by
+// large deletions without an exclusive full VACUUM. It is a no-op (and
+// non-fatal) when the database was not created with auto_vacuum = INCREMENTAL.
+func (db *DB) reclaimSpace() {
+	if _, err := db.conn.Exec(`PRAGMA incremental_vacuum`); err != nil {
+		slog.Debug("incremental_vacuum did not run", "error", err)
+	}
 }
 
 // DeleteRecordingsBefore deletes recordings and their events older than the specified time
@@ -396,10 +415,10 @@ func (db *DB) DeleteRecordingsBefore(before time.Time) (int64, error) {
 
 	slog.Info("Deleted old recordings", "recordings", recordingCount, "totalRows", totalDeleted)
 
-	// If we deleted more than 1000 records, run VACUUM to reclaim space
+	// Reclaim freed pages incrementally instead of a blocking full VACUUM.
 	if totalDeleted > 1000 {
-		slog.Info("Running VACUUM to reclaim space after large deletion", "deleted", totalDeleted)
-		_, _ = db.conn.Exec("VACUUM")
+		slog.Info("Running incremental vacuum to reclaim space after large deletion", "deleted", totalDeleted)
+		db.reclaimSpace()
 	}
 
 	return totalDeleted, nil
@@ -410,8 +429,6 @@ func (db *DB) Close() error {
 	if db.closed.Swap(true) {
 		return nil
 	}
-
-	close(db.stopCh) // Signal goroutines to stop
 	return db.conn.Close()
 }
 
@@ -454,53 +471,12 @@ func (db *DB) Closed() bool {
 	return db.closed.Load()
 }
 
-// Closed returns whether the database has been closed.
-
-// retentionCleanup periodically deletes old events (runs daily at midnight)
-func (db *DB) retentionCleanup(retentionDays int) {
-	if retentionDays <= 0 {
-		return
-	}
-
-	// Run once on startup
-	db.cleanupOldData(retentionDays)
-
-	// Calculate time until next midnight
-	nextMidnight := time.Now().AddDate(1, 0, 0) // Tomorrow
-	nextMidnight = time.Date(nextMidnight.Year(), nextMidnight.Month(), nextMidnight.Day(), 0, 0, 0, 0, nextMidnight.Location())
-	initialDelay := nextMidnight.Sub(time.Now())
-
-	// Create a timer for the first midnight
-	timer := time.NewTimer(initialDelay)
-	defer timer.Stop()
-
-	slog.Info("Scheduled daily cleanup", "firstRun", initialDelay)
-
-	for {
-		select {
-		case <-timer.C:
-			// Run cleanup
-			db.cleanupOldData(retentionDays)
-			// Reset timer for next day
-			timer.Reset(24 * time.Hour)
-		case <-db.stopCh:
-			timer.Stop()
-			return
-		}
-	}
-}
-
 // cleanupOldData deletes events older than retention days and cleans orphaned recording_events and alert_logs
 func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
+	start := time.Now()
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
 
-	result := CleanupResult{
-		DeletedEvents:      0,
-		DeletedScreenshots: 0,
-		TotalFilesFreed:     0,
-		TotalBytesFreed:     0,
-		Duration:           0,
-	}
+	result := CleanupResult{}
 
 	// Delete old events
 	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
@@ -535,51 +511,7 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 		slog.Info("Deleted old alert_logs", "count", alertDeleted, "olderThan", retentionDays)
 	}
 
-	return result
-}
-
-// cleanupOldDataInternal performs the actual cleanup operation
-func (db *DB) cleanupOldDataInternal(retentionDays int) cleanupResultInternal {
-	cutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
-
-	if db.closed.Load() {
-		return cleanupResultInternal{}
-	}
-
-	result := cleanupResultInternal{}
-
-	// Delete old events
-	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
-	if err != nil {
-		slog.Error("Failed to delete old events", "error", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		result.EventsDeleted = rowsAffected
-		slog.Info("Deleted old events", "count", rowsAffected, "olderThan", retentionDays)
-	}
-
-	// Clean orphaned recording_events (events without a corresponding recording)
-	rows, err = db.conn.Exec(`
-		DELETE FROM recording_events
-		WHERE session_id NOT IN (SELECT session_id FROM recordings)
-	`)
-	if err != nil {
-		slog.Error("Failed to delete orphaned recording_events", "error", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		orphanDeleted := rowsAffected
-		result.RecordingEventsDeleted += orphanDeleted
-		slog.Info("Deleted orphaned recording_events", "count", orphanDeleted)
-	}
-
-	// Delete old alert logs
-	alertsCutoff := time.Now().AddDate(0, 0, -retentionDays).UnixMilli()
-	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
-	if err != nil {
-		slog.Error("Failed to delete old alert_logs", "error", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		result.AlertLogsDeleted = rowsAffected
-		slog.Info("Deleted old alert_logs", "count", rowsAffected, "olderThan", retentionDays)
-	}
-
+	result.Duration = time.Since(start)
 	return result
 }
 

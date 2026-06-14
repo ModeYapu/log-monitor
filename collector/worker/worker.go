@@ -113,7 +113,7 @@ func (m *Manager) Status() []WorkerStatus {
 			statuses = append(statuses, WorkerStatus{
 				Name:      worker.Name(),
 				Running:   true, // Assume running if registered
-				LastRunAt: m.startTime.Unix(),
+				LastRunAt: m.startTime.UnixMilli(),
 			})
 		}
 	}

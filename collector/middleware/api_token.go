@@ -77,8 +77,11 @@ func (a *APIKey) Handler(next http.Handler) http.Handler {
 			return
 		}
 
-		// No authentication method worked
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		// No X-API-Key header present and no JWT fallback configured.
+		// Pass through to the downstream handler so it can authenticate via an
+		// alternate channel (e.g. an API key embedded in the request body) and
+		// return 401 itself if no valid credential resolves.
+		next.ServeHTTP(w, r)
 	})
 }
 

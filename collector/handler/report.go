@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/logmonitor/collector/buffer"
+	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/model"
 	"github.com/logmonitor/collector/storage"
 )
@@ -73,20 +74,32 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get project ID from request (via project_id or api_key)
-	var projectID int64
-	if req.ProjectID != 0 {
-		projectID = req.ProjectID
-	} else if req.APIKey != "" {
-		// Look up project by API key
+	// Resolve the project from the authenticated context. The API key
+	// middleware (X-API-Key header) together with ProjectContext populates the
+	// context; legacy SDKs that send the key in the request body are resolved
+	// here as a fallback. The project_id is ALWAYS derived from a validated
+	// API key — a client-supplied projectId is only honored when it matches.
+	projectID := middleware.GetProjectIDFromContext(r)
+	if projectID == 0 && req.APIKey != "" {
 		project, err := h.projectStore.GetProjectByAPIKey(req.APIKey)
 		if err != nil {
 			slog.Warn("Invalid API key provided", "error", err)
-			// Don't reject the request, just continue without project association
-			projectID = 0
-		} else {
-			projectID = project.ID
+			writeReportError(w, http.StatusUnauthorized, "invalid or missing API key")
+			return
 		}
+		projectID = project.ID
+	}
+	if projectID == 0 {
+		writeReportError(w, http.StatusUnauthorized, "authentication required: provide a valid X-API-Key header or apiKey field")
+		return
+	}
+	// Enforce multi-tenant isolation: a client-supplied projectId must match
+	// the project the resolved API key is authorized for.
+	if req.ProjectID != 0 && req.ProjectID != projectID {
+		slog.Warn("projectId does not match API key project",
+			"requested", req.ProjectID, "authorized", projectID)
+		writeReportError(w, http.StatusForbidden, "projectId does not match the API key's project")
+		return
 	}
 
 	// Get client IP
@@ -155,66 +168,25 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// truncateString truncates a string to max length
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen]
+// writeReportError writes a JSON error response for ingestion requests.
+// The Content-Type header is expected to already be set to application/json.
+func writeReportError(w http.ResponseWriter, status int, message string) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{"error": message})
 }
 
-// classifyEvent extracts additional context based on event type
-// This enables specialized handling for different event categories
-func classifyEvent(e model.Event) (string, map[string]interface{}) {
-	// Returns: (subType, extractedContext)
-	subType := ""
-	context := make(map[string]interface{})
-
-	switch e.Type {
-	case model.EventTypeResource:
-		// Extract resource URL, type, failure reason
-		subType = "resource_error"
-		if url, ok := e.Extra["url"].(string); ok {
-			context["resource_url"] = url
-		}
-		if resType, ok := e.Tags["resource_type"].(string); ok {
-			context["resource_type"] = resType
-		}
-		if reason, ok := e.Extra["reason"].(string); ok {
-			context["failure_reason"] = reason
-		}
-
-	case model.EventTypeAPIError:
-		// Extract API URL, status code, duration
-		subType = "api_failure"
-		if url, ok := e.Extra["url"].(string); ok {
-			context["api_url"] = url
-		}
-		if status, ok := e.Extra["status_code"].(float64); ok {
-			context["status_code"] = int(status)
-		}
-		if duration, ok := e.Extra["duration"].(float64); ok {
-			context["duration_ms"] = duration
-		}
-		if method, ok := e.Extra["method"].(string); ok {
-			context["method"] = method
-		}
-
-	case model.EventTypeUserAction:
-		// Extract action name, target element
-		subType = "user_behavior"
-		if action, ok := e.Extra["action"].(string); ok {
-			context["action_name"] = action
-		}
-		if target, ok := e.Extra["target"].(string); ok {
-			context["target_selector"] = target
-		}
-		if page, ok := e.Extra["page"].(string); ok {
-			context["page_url"] = page
-		}
+// truncateString truncates a string to at most maxLen runes. Truncating by rune
+// (rather than byte) avoids splitting multi-byte UTF-8 sequences, which would
+// otherwise yield invalid UTF-8 in the stored message.
+func truncateString(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
 	}
-
-	return subType, context
+	r := []rune(s)
+	if len(r) <= maxLen {
+		return s
+	}
+	return string(r[:maxLen])
 }
 
 // toJSON converts a map to JSON string

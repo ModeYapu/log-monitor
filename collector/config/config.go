@@ -147,6 +147,12 @@ func Load(path string) (*Config, error) {
 	if cfg.Alert.CheckInterval == 0 {
 		cfg.Alert.CheckInterval = 60000
 	}
+	// Default JWT token lifetime. Without this, a config file omitting
+	// token_expire_hours yields a 0-hour expiry and tokens that are invalid the
+	// instant they are issued.
+	if cfg.Auth.TokenExpireHours == 0 {
+		cfg.Auth.TokenExpireHours = 24
+	}
 
 	return &cfg, nil
 }

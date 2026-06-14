@@ -131,14 +131,6 @@ type TrendPoint struct {
 	Count     int64 `json:"count"`
 }
 
-// cleanupResultInternal represents the internal result of a cleanup operation
-type cleanupResultInternal struct {
-	EventsDeleted          int64
-	RecordingEventsDeleted int64
-	ScreenshotsDeleted     int64
-	AlertLogsDeleted       int64
-}
-
 // TopListParams represents parameters for top lists queries
 type TopListParams struct {
 	AppID     string

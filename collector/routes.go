@@ -6,6 +6,7 @@ import (
 
 	"github.com/logmonitor/collector/buffer"
 	"github.com/logmonitor/collector/config"
+	apperrors "github.com/logmonitor/collector/errors"
 	"github.com/logmonitor/collector/handler"
 	"github.com/logmonitor/collector/middleware"
 	"github.com/logmonitor/collector/storage"
@@ -14,20 +15,20 @@ import (
 
 // RouterConfig holds all dependencies needed to set up HTTP routes.
 type RouterConfig struct {
-	DB             *storage.DB
-	Store          storage.Store
-	UserStorage    *storage.UserStorage
-	SMStorage      *storage.SourceMapStorage
-	Writer         *buffer.Writer
-	Config         *config.Config
-	JWT            *middleware.JWT
-	CORS           *middleware.CORS
-	WebhookManager *webhook.Manager
-	OpenAPISpec    []byte
-	PerformanceHandler *handler.PerformanceHandler
-	RuleEngineHandler   *handler.RuleEngineHandler
+	DB                    *storage.DB
+	Store                 storage.Store
+	UserStorage           *storage.UserStorage
+	SMStorage             *storage.SourceMapStorage
+	Writer                *buffer.Writer
+	Config                *config.Config
+	JWT                   *middleware.JWT
+	CORS                  *middleware.CORS
+	WebhookManager        *webhook.Manager
+	OpenAPISpec           []byte
+	PerformanceHandler    *handler.PerformanceHandler
+	RuleEngineHandler     *handler.RuleEngineHandler
 	ChannelManagerHandler *handler.ChannelManagerHandler
-	ClustererHandler    *handler.ClustererHandler
+	ClustererHandler      *handler.ClustererHandler
 }
 
 // Route represents a single HTTP route.
@@ -38,8 +39,8 @@ type Route struct {
 
 // RouteGroup manages a group of routes with common middleware.
 type RouteGroup struct {
-	mux       *http.ServeMux
-	prefix    string
+	mux        *http.ServeMux
+	prefix     string
 	middleware []func(http.Handler) http.Handler
 }
 
@@ -105,10 +106,15 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	// === Write API group (SDK data ingestion) ===
 	// - Rate limit: 100 req/s
 	// - CORS enabled
-	// - No auth required (SDK uses API key in request body)
+	// - API key auth (X-API-Key header); invalid key -> 401.
+	//   When no header is present the request is passed through so the handler
+	//   can still authenticate via the SDK's body "apiKey" field.
+	// - ProjectContext resolves the API key's project into the request context.
 	writeGroup := NewRouteGroup(mux, "")
 	writeGroup.Use(rc.CORS.Handler)
 	writeGroup.Use(middleware.NewRateLimiter(100, time.Second).Handler)
+	writeGroup.Use(middleware.NewAPIKey(&middleware.APIKeyConfig{Store: projectAPIKeyStore{db: rc.DB}}).Handler)
+	writeGroup.Use(middleware.ProjectContext(rc.DB))
 	writeGroup.Handle("/api/report", reportHandler)
 	writeGroup.Handle("/api/events", reportHandler)
 	writeGroup.Handle("/api/report/screenshot", screenshotHandler)
@@ -284,4 +290,29 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	mux.Handle("/", dashboardFS)
 
 	return mux
+}
+
+// projectAPIKeyStore adapts *storage.DB to the middleware.APIKeyStore interface
+// so the API key middleware can validate write API credentials against the
+// projects table. API keys are full read-write credentials for their project.
+type projectAPIKeyStore struct {
+	db *storage.DB
+}
+
+// ValidateAPIKey resolves an API key to its project. Returns an error (which
+// the middleware turns into a 401) when the key is unknown or belongs to a
+// deleted project.
+func (s projectAPIKeyStore) ValidateAPIKey(apiKey string) (*middleware.APIKeyInfo, error) {
+	if apiKey == "" {
+		return nil, apperrors.NewUnauthorizedError("missing API key")
+	}
+	project, err := s.db.GetProjectByAPIKey(apiKey)
+	if err != nil {
+		return nil, err
+	}
+	return &middleware.APIKeyInfo{
+		ProjectID: project.ID,
+		Name:      project.Name,
+		ReadOnly:  false,
+	}, nil
 }

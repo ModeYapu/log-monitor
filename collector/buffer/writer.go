@@ -10,6 +10,14 @@ import (
 	"github.com/logmonitor/collector/storage"
 )
 
+// Retry policy for a failed flush attempt: bounded retries with exponential
+// backoff avoid losing a batch to a momentary database error while keeping the
+// flush loop from blocking indefinitely.
+const (
+	maxFlushAttempts    = 3
+	initialFlushBackoff = 100 * time.Millisecond
+)
+
 // Writer manages buffered batch writing to database
 type Writer struct {
 	db            storage.EventStore
@@ -21,6 +29,7 @@ type Writer struct {
 	wg            sync.WaitGroup
 	flushCount    atomic.Int64
 	droppedCount  atomic.Int64
+	closeOnce     sync.Once
 }
 
 // Config holds writer configuration
@@ -93,11 +102,30 @@ func (w *Writer) flushLoop() {
 			return
 		}
 
-		if err := w.db.InsertEvents(batch); err != nil {
-			slog.Error("Failed to insert batch", "error", err)
-			// Re-queue events on failure (simplified: just log)
-		} else {
-			w.flushCount.Add(int64(len(batch)))
+		// Retry transient database failures with exponential backoff (up to 3
+		// attempts) before giving up. Only when every attempt fails do we drop
+		// the batch; on success the flushed count is credited.
+		var lastErr error
+		backoff := initialFlushBackoff
+		for attempt := 1; attempt <= maxFlushAttempts; attempt++ {
+			if err := w.db.InsertEvents(batch); err != nil {
+				lastErr = err
+				if attempt < maxFlushAttempts {
+					slog.Warn("Failed to insert batch, retrying",
+						"attempt", attempt, "events", len(batch), "backoff", backoff, "error", err)
+					time.Sleep(backoff)
+					backoff *= 2
+					continue
+				}
+			} else {
+				lastErr = nil
+				w.flushCount.Add(int64(len(batch)))
+			}
+			break
+		}
+		if lastErr != nil {
+			slog.Error("Failed to insert batch after retries, dropping batch",
+				"attempts", maxFlushAttempts, "events", len(batch), "error", lastErr)
 		}
 
 		// Clear batch
@@ -131,12 +159,6 @@ func (w *Writer) flushLoop() {
 	}
 }
 
-// Flush triggers an immediate flush of buffered events
-func (w *Writer) Flush() {
-	// The flushLoop will handle this on next tick
-	// For immediate flush, we could add a signal channel
-}
-
 // Stats returns current writer statistics
 func (w *Writer) Stats() map[string]interface{} {
 	return map[string]interface{}{
@@ -146,9 +168,12 @@ func (w *Writer) Stats() map[string]interface{} {
 	}
 }
 
-// Close gracefully stops the writer
+// Close gracefully stops the writer. Guarded with sync.Once so a second close
+// (e.g. deferred + explicit) does not panic on the already-closed stopCh.
 func (w *Writer) Close() error {
-	close(w.stopCh)
+	w.closeOnce.Do(func() {
+		close(w.stopCh)
+	})
 	w.wg.Wait()
 	return nil
 }
