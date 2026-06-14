@@ -254,6 +254,28 @@ func (db *DB) initSchema() error {
 		}
 	}
 
+	// Migration: Add composite indexes for high-frequency query paths (R013)
+	// These cover the dominant access patterns in QueryEvents / GetTopN / GetErrorClusters.
+	// SQLite uses leftmost-prefix matching, so column order follows the WHERE-clause selectivity.
+	performanceIndexMigrations := []string{
+		// Multi-tenant filtered queries: WHERE app_id = ? AND project_id = ? [AND level = ?] [AND created_at range]
+		// project_id was previously unindexed, forcing full scans on scoped dashboards.
+		`CREATE INDEX IF NOT EXISTS idx_events_app_project_level_created ON events(app_id, project_id, level, created_at)`,
+		// project-scoped time-range scans when app_id is not filtered
+		`CREATE INDEX IF NOT EXISTS idx_events_project_created ON events(project_id, created_at)`,
+		// GetTopN "errors" (WHERE app_id, level='error' GROUP BY message) + GetErrorClusters sample lookup
+		`CREATE INDEX IF NOT EXISTS idx_events_app_level_message ON events(app_id, level, message)`,
+		// GetTopN "pages" (WHERE app_id GROUP BY url)
+		`CREATE INDEX IF NOT EXISTS idx_events_app_url ON events(app_id, url)`,
+		// TTL cleanup deletes by created_at threshold; an ascending created_at index speeds the scan + delete
+		`CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at)`,
+	}
+	for _, m := range performanceIndexMigrations {
+		if _, mErr := db.conn.Exec(m); mErr != nil {
+			slog.Info("Migration notice", "error", mErr)
+		}
+	}
+
 	// Migration: Create webhook_deliveries table for persistent retry
 	webhookTableMigrations := []string{
 		`CREATE TABLE IF NOT EXISTS webhook_deliveries (
