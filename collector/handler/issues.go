@@ -12,22 +12,12 @@ import (
 // IssuesHandler handles issue-related requests
 type IssuesHandler struct {
 	issueStore storage.IssueStore
-	db         *storage.DB // Keep for legacy methods
 }
 
 // NewIssuesHandler creates a new issues handler
-func NewIssuesHandler(db *storage.DB) *IssuesHandler {
-	return &IssuesHandler{
-		issueStore: db,
-		db:         db,
-	}
-}
-
-// NewIssuesHandlerWithStore creates a new issues handler with explicit store
-func NewIssuesHandlerWithStore(issueStore storage.IssueStore, db *storage.DB) *IssuesHandler {
+func NewIssuesHandler(issueStore storage.IssueStore) *IssuesHandler {
 	return &IssuesHandler{
 		issueStore: issueStore,
-		db:         db,
 	}
 }
 
@@ -58,7 +48,7 @@ func (h *IssuesHandler) GetIssues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query issues
-	issues, total, err := h.db.GetIssues(filter)
+	issues, total, err := h.issueStore.GetIssues(filter)
 	if err != nil {
 		slog.Error("Failed to get issues", "error", err)
 		http.Error(w, "Failed to get issues", http.StatusInternalServerError)
@@ -94,7 +84,7 @@ func (h *IssuesHandler) GetIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get issue
-	issue, err := h.db.GetIssue(id)
+	issue, err := h.issueStore.GetIssue(id)
 	if err != nil {
 		slog.Error("Failed to get issue", "error", err)
 		http.Error(w, "Failed to get issue", http.StatusInternalServerError)
@@ -102,7 +92,7 @@ func (h *IssuesHandler) GetIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get recent events for this issue
-	events, total, err := h.db.GetIssueEvents(id, 1, 20)
+	events, total, err := h.issueStore.GetIssueEvents(id, 1, 20)
 	if err != nil {
 		slog.Error("Failed to get issue events", "error", err)
 		http.Error(w, "Failed to get issue events", http.StatusInternalServerError)
@@ -168,14 +158,14 @@ func (h *IssuesHandler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update issue
-	if err := h.db.UpdateIssue(id, updates); err != nil {
+	if err := h.issueStore.UpdateIssue(id, updates); err != nil {
 		slog.Error("Failed to update issue", "error", err)
 		http.Error(w, "Failed to update issue", http.StatusInternalServerError)
 		return
 	}
 
 	// Get updated issue
-	issue, err := h.db.GetIssue(id)
+	issue, err := h.issueStore.GetIssue(id)
 	if err != nil {
 		slog.Error("Failed to get updated issue", "error", err)
 		http.Error(w, "Failed to get updated issue", http.StatusInternalServerError)
@@ -218,14 +208,14 @@ func (h *IssuesHandler) ResolveIssue(w http.ResponseWriter, r *http.Request) {
 		"status": storage.IssueStatusResolved,
 	}
 
-	if err := h.db.UpdateIssue(id, updates); err != nil {
+	if err := h.issueStore.UpdateIssue(id, updates); err != nil {
 		slog.Error("Failed to resolve issue", "error", err)
 		http.Error(w, "Failed to resolve issue", http.StatusInternalServerError)
 		return
 	}
 
 	// Get updated issue
-	issue, err := h.db.GetIssue(id)
+	issue, err := h.issueStore.GetIssue(id)
 	if err != nil {
 		slog.Error("Failed to get resolved issue", "error", err)
 		http.Error(w, "Failed to get resolved issue", http.StatusInternalServerError)
@@ -268,14 +258,14 @@ func (h *IssuesHandler) IgnoreIssue(w http.ResponseWriter, r *http.Request) {
 		"status": storage.IssueStatusIgnored,
 	}
 
-	if err := h.db.UpdateIssue(id, updates); err != nil {
+	if err := h.issueStore.UpdateIssue(id, updates); err != nil {
 		slog.Error("Failed to ignore issue", "error", err)
 		http.Error(w, "Failed to ignore issue", http.StatusInternalServerError)
 		return
 	}
 
 	// Get updated issue
-	issue, err := h.db.GetIssue(id)
+	issue, err := h.issueStore.GetIssue(id)
 	if err != nil {
 		slog.Error("Failed to get ignored issue", "error", err)
 		http.Error(w, "Failed to get ignored issue", http.StatusInternalServerError)
@@ -300,7 +290,7 @@ func (h *IssuesHandler) GetIssueStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := h.db.GetIssueStats(appID)
+	stats, err := h.issueStore.GetIssueStats(appID)
 	if err != nil {
 		slog.Error("Failed to get issue stats", "error", err)
 		http.Error(w, "Failed to get issue stats", http.StatusInternalServerError)

@@ -9,15 +9,16 @@ import (
 	"github.com/logmonitor/collector/storage"
 )
 
-// PerformanceHandler handles performance metric queries
+// PerformanceHandler handles performance metric queries.
+// Depends on PerformanceStore interface (R013 migration).
 type PerformanceHandler struct {
-	db *storage.DB
+	perfStore storage.PerformanceStore
 }
 
 // NewPerformanceHandler creates a new performance handler
-func NewPerformanceHandler(db *storage.DB) *PerformanceHandler {
+func NewPerformanceHandler(perfStore storage.PerformanceStore) *PerformanceHandler {
 	return &PerformanceHandler{
-		db: db,
+		perfStore: perfStore,
 	}
 }
 
@@ -70,7 +71,7 @@ func (h *PerformanceHandler) GetPerformanceSummary(w http.ResponseWriter, r *htt
 		period = "7d"
 	}
 
-	summary, err := h.db.GetPerformanceSummaryByPage(projectID, metricName, period)
+	summary, err := h.perfStore.GetPerformanceSummaryByPage(projectID, metricName, period)
 	if err != nil {
 		slog.Error("Failed to get performance summary", "error", err)
 		http.Error(w, "Failed to get performance summary", http.StatusInternalServerError)
@@ -138,7 +139,7 @@ func (h *PerformanceHandler) GetPerformanceTrend(w http.ResponseWriter, r *http.
 		}
 	}
 
-	trend, err := h.db.GetPerformanceTrendByPage(projectID, pageURL, metricName, days)
+	trend, err := h.perfStore.GetPerformanceTrendByPage(projectID, pageURL, metricName, days)
 	if err != nil {
 		slog.Error("Failed to get performance trend", "error", err)
 		http.Error(w, "Failed to get performance trend", http.StatusInternalServerError)
@@ -202,7 +203,7 @@ func (h *PerformanceHandler) GetPerformanceComparison(w http.ResponseWriter, r *
 		return
 	}
 
-	comparison, err := h.db.GetPerformanceComparison(projectID, metricName, releaseA, releaseB)
+	comparison, err := h.perfStore.GetPerformanceComparison(projectID, metricName, releaseA, releaseB)
 	if err != nil {
 		slog.Error("Failed to get performance comparison", "error", err)
 		http.Error(w, "Failed to get performance comparison", http.StatusInternalServerError)
@@ -247,7 +248,7 @@ func (h *PerformanceHandler) GetPerformanceRegressions(w http.ResponseWriter, r 
 		return
 	}
 
-	regressions, err := h.db.DetectPerformanceRegressions(projectID, currentRelease, previousRelease)
+	regressions, err := h.perfStore.DetectPerformanceRegressions(projectID, currentRelease, previousRelease)
 	if err != nil {
 		slog.Error("Failed to detect regressions", "error", err)
 		http.Error(w, "Failed to detect regressions", http.StatusInternalServerError)

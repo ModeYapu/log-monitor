@@ -12,31 +12,20 @@ import (
 	"github.com/logmonitor/collector/storage"
 )
 
-// QueryHandler handles log query requests
+// QueryHandler handles log query requests.
+// Depends on EventStore + AnalyticsStore interfaces (R013 migration).
 
 type QueryHandler struct {
 	eventStore     storage.EventStore
 	analyticsStore storage.AnalyticsStore
-	db             *storage.DB // Keep for legacy methods
 	screenshotDir  string
 }
 
 // NewQueryHandler creates a new query handler
-func NewQueryHandler(db *storage.DB) *QueryHandler {
-	return &QueryHandler{
-		eventStore:     db,
-		analyticsStore: db,
-		db:             db, // Keep for backward compatibility
-		screenshotDir:  "./data/screenshots",
-	}
-}
-
-// NewQueryHandlerWithStores creates a new query handler with explicit stores
-func NewQueryHandlerWithStores(eventStore storage.EventStore, analyticsStore storage.AnalyticsStore, db *storage.DB) *QueryHandler {
+func NewQueryHandler(eventStore storage.EventStore, analyticsStore storage.AnalyticsStore) *QueryHandler {
 	return &QueryHandler{
 		eventStore:     eventStore,
 		analyticsStore: analyticsStore,
-		db:             db,
 		screenshotDir:  "./data/screenshots",
 	}
 }
@@ -89,7 +78,7 @@ func (h *QueryHandler) generateErrorTrend(appID string, duration time.Duration) 
 			PageSize:  1,
 		}
 
-		result, err := h.db.QueryEvents(query)
+		result, err := h.eventStore.QueryEvents(query)
 		count := int64(0)
 		if err == nil {
 			count = result.Total

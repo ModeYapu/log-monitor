@@ -9,15 +9,18 @@ import (
 	"github.com/logmonitor/collector/storage"
 )
 
-// SessionHandler handles user session queries
+// SessionHandler handles user session queries.
+// Depends on EventStore + RecordingRepository interfaces (R013 migration).
 type SessionHandler struct {
-	db *storage.DB
+	events     storage.EventStore
+	recordings storage.RecordingRepository
 }
 
 // NewSessionHandler creates a new session handler
-func NewSessionHandler(db *storage.DB) *SessionHandler {
+func NewSessionHandler(events storage.EventStore, recordings storage.RecordingRepository) *SessionHandler {
 	return &SessionHandler{
-		db: db,
+		events:     events,
+		recordings: recordings,
 	}
 }
 
@@ -69,7 +72,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get sessions and total count
-	sessions, err := h.db.GetSessionList(filters, limit, offset)
+	sessions, err := h.events.GetSessionList(filters, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -78,7 +81,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	total, err := h.db.GetSessionListCount(filters)
+	total, err := h.events.GetSessionListCount(filters)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -132,7 +135,7 @@ func (h *SessionHandler) GetSessionDetail(w http.ResponseWriter, r *http.Request
 
 	// Get session summary from events
 	filters := map[string]interface{}{"session_id": sessionID}
-	summaries, err := h.db.GetSessionList(filters, 1, 0)
+	summaries, err := h.events.GetSessionList(filters, 1, 0)
 	if err != nil || len(summaries) == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -144,7 +147,7 @@ func (h *SessionHandler) GetSessionDetail(w http.ResponseWriter, r *http.Request
 	summary := summaries[0]
 
 	// Get events for the session
-	events, err := h.db.GetSessionEvents(sessionID, eventLimit)
+	events, err := h.events.GetSessionEvents(sessionID, eventLimit)
 	if err != nil {
 		events = []storage.EventRecord{}
 	}
@@ -175,7 +178,7 @@ func (h *SessionHandler) GetSessionDetail(w http.ResponseWriter, r *http.Request
 	}
 
 	// Check for recording
-	recording, _ := h.db.GetRecording(sessionID)
+	recording, _ := h.recordings.GetRecording(sessionID)
 	var recordingInfo map[string]interface{}
 	if recording != nil {
 		recordingInfo = map[string]interface{}{
@@ -230,7 +233,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	events, err := h.db.GetSessionEvents(sessionID, limit)
+	events, err := h.events.GetSessionEvents(sessionID, limit)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -239,7 +242,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	errorCount, err := h.db.GetSessionErrorCount(sessionID)
+	errorCount, err := h.events.GetSessionErrorCount(sessionID)
 	if err != nil {
 		errorCount = 0
 	}
@@ -259,7 +262,7 @@ func (h *SessionHandler) GetSessionJourney(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	events, err := h.db.GetSessionJourney(sessionID)
+	events, err := h.events.GetSessionJourney(sessionID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{

@@ -35,6 +35,10 @@ type EventStore interface {
 	GetErrorClusters(appID, errorMessage string, threshold float64, limit int, projectID int64) ([]ErrorCluster, error)
 	GetRecentEvents(limit int) ([]EventRecord, error)
 	CountRecentErrors(sinceMs int64) (int64, error)
+	// Session tracking queries (used by SessionHandler)
+	GetSessionList(filters map[string]interface{}, limit, offset int) ([]SessionSummary, error)
+	GetSessionListCount(filters map[string]interface{}) (int64, error)
+	GetSessionJourney(sessionID string) ([]EventRecord, error)
 }
 
 // IssueStore handles issue CRUD operations and lifecycle management
@@ -61,6 +65,7 @@ type ProjectStore interface {
 	GetProjectMembers(projectID int64) ([]ProjectMember, error)
 	UpdateProjectMemberRole(projectID, userID int64, newRole string) error
 	RegenerateApiKey(projectID int64) (string, error)
+	GetUserRole(projectID, userID int64) (string, error)
 }
 
 // AlertStore handles alert rules and alert logs
@@ -88,6 +93,15 @@ type AnalyticsStore interface {
 	GetReleaseHealth(appID string, startTime, endTime int64) (*ReleaseHealthResult, error)
 	GetSessionStats(appID string, startTime, endTime int64) (*SessionStatsResult, error)
 	GetClusterStats(appID, fingerprint string) (ClusterStats, error)
+	// Performance & anomaly analytics (used by QueryHandler)
+	GetPerformanceSummary(appID string, timeRange string) (*PerformanceMetricsSummary, error)
+	GetPerformanceTrend(appID, metric, granularity string) ([]PerformanceTrendData, error)
+	GetPagePerformanceRanking(appID, timeRange string) ([]PagePerformanceData, error)
+	GetPerformanceRegressions(appID string) ([]PerformanceRegression, error)
+	GetNewErrors(appID string, sinceMinutes int) ([]NewError, error)
+	GetRecentAlertTriggers(limit int) ([]AlertTrigger, error)
+	GetActiveSessions(appID string, limit int) ([]ActiveSession, error)
+	GetStatsComparison(appID string) (*StatsComparison, error)
 }
 
 // SystemStore handles system metadata and storage operations
@@ -102,6 +116,10 @@ type SystemStore interface {
 	DeleteEventsBefore(before time.Time) (int64, error)
 	DeleteRecordingsBefore(before time.Time) (int64, error)
 	Ping() error
+	// Structured retention policy (used by SystemHandler admin endpoints)
+	GetRetentionPolicy() (*RetentionPolicy, error)
+	SetRetentionPolicy(policy *RetentionPolicy) error
+	CleanupOldDataWithPolicy(policy *RetentionPolicy) (*CleanupResultDetail, error)
 }
 
 // RecordingRepository handles session recordings
@@ -123,6 +141,7 @@ type SourceMapRepository interface {
 	GetSourceMapByBuildID(buildID string) (*SourceMapRecord, error)
 	ListSourceMaps(appID string, limit int) ([]SourceMapRecord, error)
 	DeleteSourceMap(id int64) error
+	DeleteSourceMapsByRelease(appID, release string) (int, error)
 	EnsureSourceMapsTable() error
 }
 
@@ -151,6 +170,7 @@ type PerformanceStore interface {
 	GetPerformanceSummaryByPage(projectID int64, metricName string, period string) ([]*model.PagePerformanceSummary, error)
 	GetPerformanceTrendByPage(projectID int64, pageURL string, metricName string, days int) ([]*model.DailyMetric, error)
 	GetPerformanceComparison(projectID int64, metricName string, releaseA, releaseB string) ([]*model.ReleaseComparison, error)
+	DetectPerformanceRegressions(projectID int64, currentRelease, previousRelease string) ([]*model.PerformanceRegression, error)
 }
 
 // Store combines all repositories for easy dependency injection
@@ -161,6 +181,7 @@ type Store interface {
 	Alerts() AlertStore
 	Analytics() AnalyticsStore
 	System() SystemStore
+	PerformanceMetrics() PerformanceStore
 	Recordings() RecordingRepository
 	SourceMaps() SourceMapRepository
 	Users() UserRepository

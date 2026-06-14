@@ -27,9 +27,10 @@ type cachedParser struct {
 	record   *storage.SourceMapRecord
 }
 
-// SourceMapHandler handles source map upload and retrieval
+// SourceMapHandler handles source map upload and retrieval.
+// Depends on SourceMapRepository interface (R013 migration).
 type SourceMapHandler struct {
-	db             *storage.DB
+	repo           storage.SourceMapRepository
 	smStorage      *storage.SourceMapStorage
 	allowedOrigins []string
 	// parserCache caches parsed source maps by key (appId:release:buildId)
@@ -38,9 +39,9 @@ type SourceMapHandler struct {
 }
 
 // NewSourceMapHandler creates a new source map handler
-func NewSourceMapHandler(db *storage.DB, smStorage *storage.SourceMapStorage) *SourceMapHandler {
+func NewSourceMapHandler(repo storage.SourceMapRepository, smStorage *storage.SourceMapStorage) *SourceMapHandler {
 	return &SourceMapHandler{
-		db:          db,
+		repo:        repo,
 		smStorage:   smStorage,
 		parserCache: make(map[string]*cachedParser),
 	}
@@ -197,7 +198,7 @@ func (h *SourceMapHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			UploadedAt:  time.Now().UnixMilli(),
 		}
 
-		id, err := h.db.CreateSourceMap(record)
+		id, err := h.repo.CreateSourceMap(record)
 		if err != nil {
 			slog.Error("Failed to create source map record", "file", filename, "error", err)
 			uploadErrors = append(uploadErrors, map[string]interface{}{
@@ -241,7 +242,7 @@ func (h *SourceMapHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	records, err := h.db.ListSourceMaps(appID, 100)
+	records, err := h.repo.ListSourceMaps(appID, 100)
 	if err != nil {
 		slog.Error("Failed to list source maps", "error", err)
 		http.Error(w, "Failed to list source maps", http.StatusInternalServerError)
@@ -271,9 +272,9 @@ func (h *SourceMapHandler) Download(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if release != "" && env != "" {
-		record, err = h.db.GetSourceMap(appID, release, env, buildID)
+		record, err = h.repo.GetSourceMap(appID, release, env, buildID)
 	} else {
-		record, err = h.db.GetSourceMapByBuildID(buildID)
+		record, err = h.repo.GetSourceMapByBuildID(buildID)
 	}
 
 	if err != nil {
@@ -322,7 +323,7 @@ func (h *SourceMapHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.DeleteSourceMap(id); err != nil {
+	if err := h.repo.DeleteSourceMap(id); err != nil {
 		slog.Error("Failed to delete source map", "error", err)
 		http.Error(w, "Failed to delete source map", http.StatusInternalServerError)
 		return
@@ -361,7 +362,7 @@ func (h *SourceMapHandler) DeleteRelease(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	count, err := h.db.DeleteSourceMapsByRelease(appID, release)
+	count, err := h.repo.DeleteSourceMapsByRelease(appID, release)
 	if err != nil {
 		slog.Error("Failed to delete source maps by release", "error", err)
 		http.Error(w, "Failed to delete source maps", http.StatusInternalServerError)
@@ -410,13 +411,13 @@ func (h *SourceMapHandler) Deobfuscate(w http.ResponseWriter, r *http.Request) {
 
 	if req.BuildID != "" {
 		if req.Release != "" && req.Env != "" {
-			record, err = h.db.GetSourceMap(req.AppID, req.Release, req.Env, req.BuildID)
+			record, err = h.repo.GetSourceMap(req.AppID, req.Release, req.Env, req.BuildID)
 		} else {
-			record, err = h.db.GetSourceMapByBuildID(req.BuildID)
+			record, err = h.repo.GetSourceMapByBuildID(req.BuildID)
 		}
 	} else {
 		// Try to find by app_id and release only (most recent)
-		records, listErr := h.db.ListSourceMaps(req.AppID, 1)
+		records, listErr := h.repo.ListSourceMaps(req.AppID, 1)
 		if listErr == nil && len(records) > 0 {
 			record = &records[0]
 		}
@@ -565,7 +566,7 @@ func (h *SourceMapHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// List source maps for this app/release to find matching build IDs
-	records, err := h.db.ListSourceMaps(req.AppID, 100)
+	records, err := h.repo.ListSourceMaps(req.AppID, 100)
 	if err != nil {
 		slog.Error("Failed to list source maps", "error", err)
 		http.Error(w, "Failed to query source maps", http.StatusInternalServerError)

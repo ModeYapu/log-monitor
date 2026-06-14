@@ -11,27 +11,17 @@ import (
 	"github.com/logmonitor/collector/storage"
 )
 
-// ProjectsHandler handles project-related requests
+// ProjectsHandler handles project-related requests.
+// Depends on ProjectStore interface (R013 migration).
 type ProjectsHandler struct {
 	projectStore storage.ProjectStore
-	db           *storage.DB // Keep for legacy methods
 	userStorage  *storage.UserStorage
 }
 
 // NewProjectsHandler creates a new projects handler
-func NewProjectsHandler(db *storage.DB, userStorage *storage.UserStorage) *ProjectsHandler {
-	return &ProjectsHandler{
-		projectStore: db,
-		db:           db,
-		userStorage:  userStorage,
-	}
-}
-
-// NewProjectsHandlerWithStore creates a new projects handler with explicit store
-func NewProjectsHandlerWithStore(projectStore storage.ProjectStore, db *storage.DB, userStorage *storage.UserStorage) *ProjectsHandler {
+func NewProjectsHandler(projectStore storage.ProjectStore, userStorage *storage.UserStorage) *ProjectsHandler {
 	return &ProjectsHandler{
 		projectStore: projectStore,
-		db:           db,
 		userStorage:  userStorage,
 	}
 }
@@ -66,12 +56,12 @@ func (h *ProjectsHandler) CreateProject(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check if slug already exists
-	if _, err := h.db.GetProject(req.Slug); err == nil {
+	if _, err := h.projectStore.GetProject(req.Slug); err == nil {
 		http.Error(w, "Project with this slug already exists", http.StatusConflict)
 		return
 	}
 
-	project, err := h.db.CreateProject(req.Name, req.Slug, req.Description)
+	project, err := h.projectStore.CreateProject(req.Name, req.Slug, req.Description)
 	if err != nil {
 		slog.Error("Failed to create project", "error", err)
 		http.Error(w, "Failed to create project", http.StatusInternalServerError)
@@ -81,7 +71,7 @@ func (h *ProjectsHandler) CreateProject(w http.ResponseWriter, r *http.Request) 
 	// Get current user ID and add as owner
 	userID := getUserIDFromContext(r)
 	if userID != 0 {
-		if err := h.db.AddProjectMember(project.ID, userID, "owner"); err != nil {
+		if err := h.projectStore.AddProjectMember(project.ID, userID, "owner"); err != nil {
 			slog.Warn("Failed to add user as project owner", "error", err)
 		}
 	}
@@ -104,10 +94,10 @@ func (h *ProjectsHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 
 	if userRole == "admin" {
 		// Admin can see all projects
-		projects, err = h.db.ListProjects(0)
+		projects, err = h.projectStore.ListProjects(0)
 	} else {
 		// Regular users only see their projects
-		projects, err = h.db.ListProjects(userID)
+		projects, err = h.projectStore.ListProjects(userID)
 	}
 
 	if err != nil {
@@ -128,7 +118,7 @@ func (h *ProjectsHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		result[i].Project = project
 
 		// Get member count
-		members, err := h.db.GetProjectMembers(project.ID)
+		members, err := h.projectStore.GetProjectMembers(project.ID)
 		if err == nil {
 			result[i].MemberCount = len(members)
 		}
@@ -161,7 +151,7 @@ func (h *ProjectsHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project, err := h.db.GetProject(id)
+	project, err := h.projectStore.GetProject(id)
 	if err != nil {
 		slog.Error("Failed to get project", "error", err)
 		http.Error(w, "Project not found", http.StatusNotFound)
@@ -174,7 +164,7 @@ func (h *ProjectsHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 
 	if userRole != "admin" {
 		// Check if user is a member
-		role, err := h.db.GetUserRole(project.ID, userID)
+		role, err := h.projectStore.GetUserRole(project.ID, userID)
 		if err != nil || role == "" {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
@@ -221,7 +211,7 @@ func (h *ProjectsHandler) UpdateProject(w http.ResponseWriter, r *http.Request) 
 
 	if userRole != "admin" {
 		// Check if user is owner or developer
-		role, err := h.db.GetUserRole(id, userID)
+		role, err := h.projectStore.GetUserRole(id, userID)
 		if err != nil || (role != "owner" && role != "developer") {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
@@ -244,14 +234,14 @@ func (h *ProjectsHandler) UpdateProject(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.db.UpdateProject(id, updates); err != nil {
+	if err := h.projectStore.UpdateProject(id, updates); err != nil {
 		slog.Error("Failed to update project", "error", err)
 		http.Error(w, "Failed to update project", http.StatusInternalServerError)
 		return
 	}
 
 	// Return updated project
-	project, err := h.db.GetProject(id)
+	project, err := h.projectStore.GetProject(id)
 	if err != nil {
 		slog.Error("Failed to get updated project", "error", err)
 		http.Error(w, "Failed to retrieve updated project", http.StatusInternalServerError)
@@ -288,7 +278,7 @@ func (h *ProjectsHandler) DeleteProject(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.db.DeleteProject(id); err != nil {
+	if err := h.projectStore.DeleteProject(id); err != nil {
 		slog.Error("Failed to delete project", "error", err)
 		http.Error(w, "Failed to delete project", http.StatusInternalServerError)
 		return
@@ -324,14 +314,14 @@ func (h *ProjectsHandler) RegenerateApiKey(w http.ResponseWriter, r *http.Reques
 
 	if userRole != "admin" {
 		// Check if user is owner
-		role, err := h.db.GetUserRole(id, userID)
+		role, err := h.projectStore.GetUserRole(id, userID)
 		if err != nil || role != "owner" {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
 		}
 	}
 
-	newKey, err := h.db.RegenerateApiKey(id)
+	newKey, err := h.projectStore.RegenerateApiKey(id)
 	if err != nil {
 		slog.Error("Failed to regenerate API key", "error", err)
 		http.Error(w, "Failed to regenerate API key", http.StatusInternalServerError)
@@ -368,14 +358,14 @@ func (h *ProjectsHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 
 	if userRole != "admin" {
 		// Check if user is a member
-		role, err := h.db.GetUserRole(id, userID)
+		role, err := h.projectStore.GetUserRole(id, userID)
 		if err != nil || role == "" {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
 		}
 	}
 
-	members, err := h.db.GetProjectMembers(id)
+	members, err := h.projectStore.GetProjectMembers(id)
 	if err != nil {
 		slog.Error("Failed to list project members", "error", err)
 		http.Error(w, "Failed to list project members", http.StatusInternalServerError)
@@ -447,14 +437,14 @@ func (h *ProjectsHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 
 	if userRole != "admin" {
 		// Only owners can add members
-		role, err := h.db.GetUserRole(projectID, userID)
+		role, err := h.projectStore.GetUserRole(projectID, userID)
 		if err != nil || role != "owner" {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
 		}
 	}
 
-	if err := h.db.AddProjectMember(projectID, req.UserID, req.Role); err != nil {
+	if err := h.projectStore.AddProjectMember(projectID, req.UserID, req.Role); err != nil {
 		slog.Error("Failed to add project member", "error", err)
 		http.Error(w, "Failed to add project member", http.StatusInternalServerError)
 		return
@@ -511,14 +501,14 @@ func (h *ProjectsHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Reques
 
 	if userRole != "admin" {
 		// Only owners can update roles
-		role, err := h.db.GetUserRole(projectID, userID)
+		role, err := h.projectStore.GetUserRole(projectID, userID)
 		if err != nil || role != "owner" {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
 		}
 	}
 
-	if err := h.db.UpdateProjectMemberRole(projectID, targetUserID, req.Role); err != nil {
+	if err := h.projectStore.UpdateProjectMemberRole(projectID, targetUserID, req.Role); err != nil {
 		slog.Error("Failed to update member role", "error", err)
 		http.Error(w, "Failed to update member role", http.StatusInternalServerError)
 		return
@@ -560,14 +550,14 @@ func (h *ProjectsHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 
 	if userRole != "admin" {
 		// Only owners can remove members
-		role, err := h.db.GetUserRole(projectID, userID)
+		role, err := h.projectStore.GetUserRole(projectID, userID)
 		if err != nil || role != "owner" {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
 		}
 	}
 
-	if err := h.db.RemoveProjectMember(projectID, targetUserID); err != nil {
+	if err := h.projectStore.RemoveProjectMember(projectID, targetUserID); err != nil {
 		slog.Error("Failed to remove project member", "error", err)
 		http.Error(w, "Failed to remove project member", http.StatusInternalServerError)
 		return

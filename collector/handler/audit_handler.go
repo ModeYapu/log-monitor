@@ -16,9 +16,9 @@ type AuditHandler struct {
 }
 
 // NewAuditHandler creates a new audit handler
-func NewAuditHandler(db *storage.DB) *AuditHandler {
+func NewAuditHandler(auditStore storage.AuditStore) *AuditHandler {
 	return &AuditHandler{
-		auditStore: db,
+		auditStore: auditStore,
 	}
 }
 

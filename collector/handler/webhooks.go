@@ -11,17 +11,16 @@ import (
 	"github.com/logmonitor/collector/webhook"
 )
 
-// WebhooksHandler handles webhook-related requests
+// WebhooksHandler handles webhook-related requests.
+// Depends only on the webhook manager (no direct *storage.DB dependency).
 type WebhooksHandler struct {
 	webhookManager *webhook.Manager
-	db             *storage.DB // Keep for legacy methods
 }
 
 // NewWebhooksHandler creates a new webhooks handler
-func NewWebhooksHandler(db *storage.DB, webhookManager *webhook.Manager) *WebhooksHandler {
+func NewWebhooksHandler(webhookManager *webhook.Manager) *WebhooksHandler {
 	return &WebhooksHandler{
 		webhookManager: webhookManager,
-		db:             db,
 	}
 }
 

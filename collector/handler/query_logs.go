@@ -66,7 +66,7 @@ func (h *QueryHandler) QueryLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query database
-	result, err := h.db.QueryEvents(query)
+	result, err := h.eventStore.QueryEvents(query)
 	if err != nil {
 		slog.Error("Failed to query logs", "error", err)
 		http.Error(w, "Failed to query logs", http.StatusInternalServerError)
@@ -102,7 +102,7 @@ func (h *QueryHandler) QueryStats(w http.ResponseWriter, r *http.Request) {
 	// Extract project_id from context for data isolation
 	projectID := middleware.GetProjectIDFromContext(r)
 
-	stats, err := h.db.GetStats(appID, projectID)
+	stats, err := h.eventStore.GetStats(appID, projectID)
 	if err != nil {
 		slog.Error("Failed to get stats", "error", err)
 		http.Error(w, "Failed to get stats", http.StatusInternalServerError)
@@ -129,7 +129,7 @@ func (h *QueryHandler) QueryApps(w http.ResponseWriter, r *http.Request) {
 	// Extract project_id from context for data isolation
 	projectID := middleware.GetProjectIDFromContext(r)
 
-	apps, err := h.db.GetApps(projectID)
+	apps, err := h.eventStore.GetApps(projectID)
 	if err != nil {
 		slog.Error("Failed to get apps", "error", err)
 		http.Error(w, "Failed to get apps", http.StatusInternalServerError)
@@ -190,7 +190,7 @@ func (h *QueryHandler) QueryTop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query database
-	result, err := h.db.GetTopN(appID, topType, orderBy, limit, filters)
+	result, err := h.eventStore.GetTopN(appID, topType, orderBy, limit, filters)
 	if err != nil {
 		slog.Error("Failed to query top N", "error", err)
 		http.Error(w, "Failed to query top N", http.StatusInternalServerError)
@@ -225,7 +225,7 @@ func (h *QueryHandler) QuerySimilar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query database for error clustering
-	clusters, err := h.db.GetSimilarErrors(appID, message, threshold, limit, middleware.GetProjectIDFromContext(r))
+	clusters, err := h.eventStore.GetSimilarErrors(appID, message, threshold, limit, middleware.GetProjectIDFromContext(r))
 	if err != nil {
 		slog.Error("Failed to query similar errors", "error", err)
 		http.Error(w, "Failed to query similar errors", http.StatusInternalServerError)
@@ -284,7 +284,7 @@ func (h *QueryHandler) QueryExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query database
-	result, err := h.db.QueryEvents(query)
+	result, err := h.eventStore.QueryEvents(query)
 	if err != nil {
 		slog.Error("Failed to query events for export", "error", err)
 		http.Error(w, "Failed to query events", http.StatusInternalServerError)

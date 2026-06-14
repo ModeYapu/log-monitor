@@ -182,6 +182,18 @@ func (m *MockEventStore) CountRecentErrors(sinceMs int64) (int64, error) {
 	return 0, nil
 }
 
+func (m *MockEventStore) GetSessionList(filters map[string]interface{}, limit, offset int) ([]storage.SessionSummary, error) {
+	return nil, nil
+}
+
+func (m *MockEventStore) GetSessionListCount(filters map[string]interface{}) (int64, error) {
+	return 0, nil
+}
+
+func (m *MockEventStore) GetSessionJourney(sessionID string) ([]storage.EventRecord, error) {
+	return nil, nil
+}
+
 func TestRuleEngine_LoadRules(t *testing.T) {
 	mockStore := &MockAlertStore{
 		rules: []storage.AlertRule{

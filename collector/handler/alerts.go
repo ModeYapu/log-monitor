@@ -15,22 +15,12 @@ import (
 // AlertsHandler handles alert-related requests
 type AlertsHandler struct {
 	alertStore storage.AlertStore
-	db         *storage.DB // Keep for legacy methods
 }
 
 // NewAlertsHandler creates a new alerts handler
-func NewAlertsHandler(db *storage.DB) *AlertsHandler {
-	return &AlertsHandler{
-		alertStore: db,
-		db:         db,
-	}
-}
-
-// NewAlertsHandlerWithStore creates a new alerts handler with explicit store
-func NewAlertsHandlerWithStore(alertStore storage.AlertStore, db *storage.DB) *AlertsHandler {
+func NewAlertsHandler(alertStore storage.AlertStore) *AlertsHandler {
 	return &AlertsHandler{
 		alertStore: alertStore,
-		db:         db,
 	}
 }
 
@@ -54,14 +44,14 @@ func (h *AlertsHandler) GetAlerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rules, err := h.db.GetAlertRules(appID)
+	rules, err := h.alertStore.GetAlertRules(appID)
 	if err != nil {
 		slog.Error("Failed to get alert rules", "error", err)
 		http.Error(w, "Failed to get alert rules", http.StatusInternalServerError)
 		return
 	}
 
-	logs, err := h.db.GetAlertLogs(appID, 100)
+	logs, err := h.alertStore.GetAlertLogs(appID, 100)
 	if err != nil {
 		slog.Error("Failed to get alert logs", "error", err)
 	}
@@ -127,7 +117,7 @@ func (h *AlertsHandler) CreateAlert(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:       time.Now().UnixMilli(),
 	}
 
-	id, err := h.db.CreateAlertRule(rule)
+	id, err := h.alertStore.CreateAlertRule(rule)
 	if err != nil {
 		slog.Error("Failed to create alert rule", "error", err)
 		http.Error(w, "Failed to create alert rule", http.StatusInternalServerError)
@@ -162,7 +152,7 @@ func (h *AlertsHandler) DeleteAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.DeleteAlertRule(id); err != nil {
+	if err := h.alertStore.DeleteAlertRule(id); err != nil {
 		slog.Error("Failed to delete alert rule", "error", err)
 		http.Error(w, "Failed to delete alert rule", http.StatusInternalServerError)
 		return
@@ -311,7 +301,7 @@ func (h *AlertsHandler) SilenceAlert(w http.ResponseWriter, r *http.Request) {
 
 	silencedUntil := time.Now().Add(time.Duration(duration) * time.Minute).UnixMilli()
 
-	if err := h.db.SilenceAlertRule(req.ID, silencedUntil); err != nil {
+	if err := h.alertStore.SilenceAlertRule(req.ID, silencedUntil); err != nil {
 		slog.Error("Failed to silence alert", "error", err)
 		http.Error(w, "Failed to silence alert", http.StatusInternalServerError)
 		return
@@ -349,7 +339,7 @@ func (h *AlertsHandler) UnsilenceAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.UnsilenceAlertRule(req.ID); err != nil {
+	if err := h.alertStore.UnsilenceAlertRule(req.ID); err != nil {
 		slog.Error("Failed to unsilence alert", "error", err)
 		http.Error(w, "Failed to unsilence alert", http.StatusInternalServerError)
 		return

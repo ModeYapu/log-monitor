@@ -78,27 +78,27 @@ func SetupRoutes(rc *RouterConfig) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Initialize handlers
-	reportHandler := handler.NewReportHandler(rc.Writer, &rc.Config.Server, rc.DB)
-	queryHandler := handler.NewQueryHandler(rc.DB)
+	reportHandler := handler.NewReportHandler(rc.Writer, rc.Store.Projects())
+	queryHandler := handler.NewQueryHandler(rc.Store.Events(), rc.Store.Analytics())
 	authHandler := handler.NewAuthHandler(rc.UserStorage, rc.JWT)
 	clustersHandler := handler.NewClustersHandler(rc.Store.Events())
-	issuesHandler := handler.NewIssuesHandler(rc.DB)
+	issuesHandler := handler.NewIssuesHandler(rc.Store.Issues())
 	healthHandler := handler.NewHealthHandler(rc.Config.Database.Path, rc.Store.Analytics(), rc.Store.System(), rc.Store.Events())
-	alertsHandler := handler.NewAlertsHandler(rc.DB)
-	systemHandler := handler.NewSystemHandler(rc.DB, rc.Config.Database.Path, rc.Config.Database.RetentionDays)
-	adminHandler := handler.NewAdminHandler(rc.DB)
-	projectsHandler := handler.NewProjectsHandler(rc.DB, rc.UserStorage)
-	webhooksHandler := handler.NewWebhooksHandler(rc.DB, rc.WebhookManager)
-	sourceMapHandler := handler.NewSourceMapHandler(rc.DB, rc.SMStorage)
+	alertsHandler := handler.NewAlertsHandler(rc.Store.Alerts())
+	systemHandler := handler.NewSystemHandler(rc.Store.System(), rc.Store.Events(), rc.Store.Recordings(), rc.Config.Database.Path, rc.Config.Database.RetentionDays)
+	adminHandler := handler.NewAdminHandler(rc.Store.System())
+	projectsHandler := handler.NewProjectsHandler(rc.Store.Projects(), rc.UserStorage)
+	webhooksHandler := handler.NewWebhooksHandler(rc.WebhookManager)
+	sourceMapHandler := handler.NewSourceMapHandler(rc.Store.SourceMaps(), rc.SMStorage)
 	openapiHandler := handler.NewOpenAPIHandler(rc.OpenAPISpec)
 	screenshotHandler := handler.NewScreenshotHandler("./data/screenshots")
 	screenshotFileHandler := handler.NewScreenshotFileHandler("./data/screenshots")
-	auditHandler := handler.NewAuditHandler(rc.DB)
+	auditHandler := handler.NewAuditHandler(rc.Store.AuditLogs())
 	performanceHandler := rc.PerformanceHandler
 	if performanceHandler == nil {
-		performanceHandler = handler.NewPerformanceHandler(rc.DB)
+		performanceHandler = handler.NewPerformanceHandler(rc.Store.PerformanceMetrics())
 	}
-	sessionHandler := handler.NewSessionHandler(rc.DB)
+	sessionHandler := handler.NewSessionHandler(rc.Store.Events(), rc.Store.Recordings())
 
 	sourceMapHandler.SetAllowedOrigins(rc.Config.Server.AllowedOrigins)
 

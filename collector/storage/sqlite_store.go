@@ -97,6 +97,18 @@ func (w *systemStoreWrapper) Ping() error {
 	return w.db.Ping()
 }
 
+func (w *systemStoreWrapper) GetRetentionPolicy() (*RetentionPolicy, error) {
+	return w.db.GetRetentionPolicy()
+}
+
+func (w *systemStoreWrapper) SetRetentionPolicy(policy *RetentionPolicy) error {
+	return w.db.SetRetentionPolicy(policy)
+}
+
+func (w *systemStoreWrapper) CleanupOldDataWithPolicy(policy *RetentionPolicy) (*CleanupResultDetail, error) {
+	return w.db.CleanupOldDataWithPolicy(policy)
+}
+
 // Recordings returns the recording repository
 func (s *SQLiteStore) Recordings() RecordingRepository {
 	return s.db

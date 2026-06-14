@@ -87,6 +87,18 @@ func (m *mockEventStore) CountRecentErrors(sinceMs int64) (int64, error) {
 	return 0, nil
 }
 
+func (m *mockEventStore) GetSessionList(filters map[string]interface{}, limit, offset int) ([]storage.SessionSummary, error) {
+	return nil, nil
+}
+
+func (m *mockEventStore) GetSessionListCount(filters map[string]interface{}) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockEventStore) GetSessionJourney(sessionID string) ([]storage.EventRecord, error) {
+	return nil, nil
+}
+
 // helper to create a test event
 func makeEvent(id int) storage.EventRecord {
 	return storage.EventRecord{

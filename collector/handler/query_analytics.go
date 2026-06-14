@@ -24,7 +24,7 @@ func (h *QueryHandler) QueryPerformanceSummary(w http.ResponseWriter, r *http.Re
 		timeRange = "24h"
 	}
 
-	summary, err := h.db.GetPerformanceSummary(appID, timeRange)
+	summary, err := h.analyticsStore.GetPerformanceSummary(appID, timeRange)
 	if err != nil {
 		slog.Error("Failed to get performance summary", "error", err)
 		http.Error(w, "Failed to get performance summary", http.StatusInternalServerError)
@@ -55,7 +55,7 @@ func (h *QueryHandler) QueryPerformanceTrend(w http.ResponseWriter, r *http.Requ
 		granularity = "1h"
 	}
 
-	trend, err := h.db.GetPerformanceTrend(appID, metric, granularity)
+	trend, err := h.analyticsStore.GetPerformanceTrend(appID, metric, granularity)
 	if err != nil {
 		slog.Error("Failed to get performance trend", "error", err)
 		http.Error(w, "Failed to get performance trend", http.StatusInternalServerError)
@@ -84,7 +84,7 @@ func (h *QueryHandler) QueryPerformancePages(w http.ResponseWriter, r *http.Requ
 		timeRange = "7d"
 	}
 
-	pages, err := h.db.GetPagePerformanceRanking(appID, timeRange)
+	pages, err := h.analyticsStore.GetPagePerformanceRanking(appID, timeRange)
 	if err != nil {
 		slog.Error("Failed to get page performance ranking", "error", err)
 		http.Error(w, "Failed to get page performance ranking", http.StatusInternalServerError)
@@ -107,7 +107,7 @@ func (h *QueryHandler) QueryPerformanceRegression(w http.ResponseWriter, r *http
 		return
 	}
 
-	regressions, err := h.db.GetPerformanceRegressions(appID)
+	regressions, err := h.analyticsStore.GetPerformanceRegressions(appID)
 	if err != nil {
 		slog.Error("Failed to get performance regressions", "error", err)
 		http.Error(w, "Failed to get performance regressions", http.StatusInternalServerError)
@@ -132,7 +132,7 @@ func (h *QueryHandler) QueryNewErrors(w http.ResponseWriter, r *http.Request) {
 
 	since := parseIntParam(r.URL.Query().Get("since"), 60) // Default 60 minutes
 
-	newErrors, err := h.db.GetNewErrors(appID, since)
+	newErrors, err := h.analyticsStore.GetNewErrors(appID, since)
 	if err != nil {
 		slog.Error("Failed to get new errors", "error", err)
 		http.Error(w, "Failed to get new errors", http.StatusInternalServerError)
@@ -152,7 +152,7 @@ func (h *QueryHandler) QueryAlertTriggers(w http.ResponseWriter, r *http.Request
 
 	limit := parseIntParam(r.URL.Query().Get("limit"), 5) // Default 5 triggers
 
-	triggers, err := h.db.GetRecentAlertTriggers(limit)
+	triggers, err := h.analyticsStore.GetRecentAlertTriggers(limit)
 	if err != nil {
 		slog.Error("Failed to get alert triggers", "error", err)
 		http.Error(w, "Failed to get alert triggers", http.StatusInternalServerError)
@@ -177,7 +177,7 @@ func (h *QueryHandler) QueryActiveSessions(w http.ResponseWriter, r *http.Reques
 
 	limit := parseIntParam(r.URL.Query().Get("limit"), 5) // Default 5 sessions
 
-	sessions, err := h.db.GetActiveSessions(appID, limit)
+	sessions, err := h.analyticsStore.GetActiveSessions(appID, limit)
 	if err != nil {
 		slog.Error("Failed to get active sessions", "error", err)
 		http.Error(w, "Failed to get active sessions", http.StatusInternalServerError)
@@ -200,7 +200,7 @@ func (h *QueryHandler) QueryStatsComparison(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	comparison, err := h.db.GetStatsComparison(appID)
+	comparison, err := h.analyticsStore.GetStatsComparison(appID)
 	if err != nil {
 		slog.Error("Failed to get stats comparison", "error", err)
 		http.Error(w, "Failed to get stats comparison", http.StatusInternalServerError)

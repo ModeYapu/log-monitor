@@ -92,6 +92,18 @@ func (m *MockEventStoreForClusters) CountRecentErrors(sinceMs int64) (int64, err
 	return 0, nil
 }
 
+func (m *MockEventStoreForClusters) GetSessionList(filters map[string]interface{}, limit, offset int) ([]storage.SessionSummary, error) {
+	return nil, nil
+}
+
+func (m *MockEventStoreForClusters) GetSessionListCount(filters map[string]interface{}) (int64, error) {
+	return 0, nil
+}
+
+func (m *MockEventStoreForClusters) GetSessionJourney(sessionID string) ([]storage.EventRecord, error) {
+	return nil, nil
+}
+
 func TestClusterer_ProcessEvents(t *testing.T) {
 	mockStore := &MockEventStoreForClusters{}
 	clusterer := NewClusterer(mockStore)

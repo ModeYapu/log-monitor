@@ -34,7 +34,7 @@ func setupHandlerDB(t *testing.T) *storage.DB {
 func setupHandler(t *testing.T) (*QueryHandler, *storage.DB) {
 	t.Helper()
 	db := setupHandlerDB(t)
-	handler := NewQueryHandler(db)
+	handler := NewQueryHandler(db, db)
 	return handler, db
 }
 

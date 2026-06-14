@@ -11,10 +11,12 @@ import (
 	"github.com/logmonitor/collector/storage"
 )
 
-// SystemHandler handles system-related requests
+// SystemHandler handles system-related requests.
+// Depends on SystemStore + EventStore + RecordingRepository interfaces (R013 migration).
 type SystemHandler struct {
 	systemStore   storage.SystemStore
-	db            *storage.DB // Keep for legacy methods
+	events        storage.EventStore
+	recordings    storage.RecordingRepository
 	dbPath        string
 	startTime     time.Time
 	retentionDays int
@@ -22,22 +24,11 @@ type SystemHandler struct {
 }
 
 // NewSystemHandler creates a new system handler
-func NewSystemHandler(db *storage.DB, dbPath string, retentionDays int) *SystemHandler {
-	return &SystemHandler{
-		systemStore:   db,
-		db:            db,
-		dbPath:        dbPath,
-		startTime:     time.Now(),
-		retentionDays: retentionDays,
-		version:       "1.0.0",
-	}
-}
-
-// NewSystemHandlerWithStore creates a new system handler with explicit store
-func NewSystemHandlerWithStore(systemStore storage.SystemStore, db *storage.DB, dbPath string, retentionDays int) *SystemHandler {
+func NewSystemHandler(systemStore storage.SystemStore, events storage.EventStore, recordings storage.RecordingRepository, dbPath string, retentionDays int) *SystemHandler {
 	return &SystemHandler{
 		systemStore:   systemStore,
-		db:            db,
+		events:        events,
+		recordings:    recordings,
 		dbPath:        dbPath,
 		startTime:     time.Now(),
 		retentionDays: retentionDays,
@@ -78,7 +69,7 @@ func (h *SystemHandler) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Get total events count
 	totalEvents := int64(0)
-	if apps, err := h.db.GetApps(0); err == nil {
+	if apps, err := h.events.GetApps(0); err == nil {
 		for _, app := range apps {
 			totalEvents += app.TotalEvents
 		}
@@ -86,12 +77,12 @@ func (h *SystemHandler) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Get total recordings count
 	totalRecordings := int64(0)
-	if recordings, err := h.db.GetRecordings(1000, 0, nil); err == nil {
+	if recordings, err := h.recordings.GetRecordings(1000, 0, nil); err == nil {
 		totalRecordings = int64(len(recordings))
 	}
 
 	// Get last cleanup time
-	lastCleanupTime := h.db.GetLastCleanupTime()
+	lastCleanupTime := h.systemStore.GetLastCleanupTime()
 
 	info := SystemInfo{
 		Status:          "ok",
@@ -127,7 +118,7 @@ func (h *SystemHandler) TriggerCleanup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Perform cleanup
-	cleanupResult := h.db.CleanupOldDataWithDays(days)
+	cleanupResult := h.systemStore.CleanupOldDataWithDays(days)
 
 	slog.Info("[cleanup] Manual cleanup triggered", "days", days)
 	slog.Info("[cleanup] Deleted", "events", cleanupResult.DeletedEvents, "recording_events", cleanupResult.DeletedScreenshots, "alert_logs", cleanupResult.TotalFilesFreed)
@@ -137,14 +128,15 @@ func (h *SystemHandler) TriggerCleanup(w http.ResponseWriter, r *http.Request) {
 
 // ==================== Slice 4: Admin APIs ====================
 
-// AdminHandler handles admin-specific requests
+// AdminHandler handles admin-specific requests.
+// Depends on SystemStore interface (R013 migration).
 type AdminHandler struct {
-	db *storage.DB
+	systemStore storage.SystemStore
 }
 
 // NewAdminHandler creates a new admin handler
-func NewAdminHandler(db *storage.DB) *AdminHandler {
-	return &AdminHandler{db: db}
+func NewAdminHandler(systemStore storage.SystemStore) *AdminHandler {
+	return &AdminHandler{systemStore: systemStore}
 }
 
 // GetStorageStats returns storage statistics
@@ -156,7 +148,7 @@ func (h *AdminHandler) GetStorageStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, err := h.db.GetStorageStats()
+	stats, err := h.systemStore.GetStorageStats()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -174,7 +166,7 @@ func (h *AdminHandler) GetRetentionPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	policy, err := h.db.GetRetentionPolicy()
+	policy, err := h.systemStore.GetRetentionPolicy()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -198,7 +190,7 @@ func (h *AdminHandler) SetRetentionPolicy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.db.SetRetentionPolicy(&policy); err != nil {
+	if err := h.systemStore.SetRetentionPolicy(&policy); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -221,14 +213,14 @@ func (h *AdminHandler) TriggerManualCleanup(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Get current retention policy
-	policy, err := h.db.GetRetentionPolicy()
+	policy, err := h.systemStore.GetRetentionPolicy()
 	if err != nil {
 		http.Error(w, "Failed to get retention policy", http.StatusInternalServerError)
 		return
 	}
 
 	// Perform cleanup with policy
-	result, err := h.db.CleanupOldDataWithPolicy(policy)
+	result, err := h.systemStore.CleanupOldDataWithPolicy(policy)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

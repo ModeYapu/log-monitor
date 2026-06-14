@@ -9,22 +9,22 @@ import (
 	"time"
 
 	"github.com/logmonitor/collector/buffer"
-	"github.com/logmonitor/collector/config"
 	"github.com/logmonitor/collector/model"
 	"github.com/logmonitor/collector/storage"
 )
 
-// ReportHandler handles log report requests from SDK
+// ReportHandler handles log report requests from SDK.
+// Depends on ProjectStore (interface) rather than the concrete *storage.DB.
 type ReportHandler struct {
-	writer *buffer.Writer
-	db     *storage.DB
+	writer       *buffer.Writer
+	projectStore storage.ProjectStore
 }
 
 // NewReportHandler creates a new report handler
-func NewReportHandler(writer *buffer.Writer, cfg *config.ServerConfig, db *storage.DB) *ReportHandler {
+func NewReportHandler(writer *buffer.Writer, projectStore storage.ProjectStore) *ReportHandler {
 	return &ReportHandler{
-		writer: writer,
-		db:     db,
+		writer:       writer,
+		projectStore: projectStore,
 	}
 }
 
@@ -79,7 +79,7 @@ func (h *ReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		projectID = req.ProjectID
 	} else if req.APIKey != "" {
 		// Look up project by API key
-		project, err := h.db.GetProjectByAPIKey(req.APIKey)
+		project, err := h.projectStore.GetProjectByAPIKey(req.APIKey)
 		if err != nil {
 			slog.Warn("Invalid API key provided", "error", err)
 			// Don't reject the request, just continue without project association
