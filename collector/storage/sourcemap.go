@@ -247,7 +247,12 @@ func (db *DB) DeleteSourceMapsByRelease(appID, release string) (int, error) {
 		}
 	}
 
-	count, _ := result.RowsAffected()
+	count, raErr := result.RowsAffected()
+	if raErr != nil {
+		// Records were deleted; the count is only returned for reporting, so
+		// log and proceed rather than failing the operation.
+		slog.Warn("Failed to read rows affected for source map deletion", "error", raErr)
+	}
 	return int(count), nil
 }
 
@@ -346,8 +351,11 @@ func (s *SourceMapStorage) GetSourceMap(appID, release, filename string) ([]byte
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Sanitize inputs
+	// Sanitize all user-supplied path segments to prevent path traversal.
+	// appID/release/buildID are user-controlled; sanitizePathSegment strips
+	// separators and "..", so no segment can escape baseDir.
 	appDir := filepath.Join(s.baseDir, sanitizePathSegment(appID))
+	safeFilename := sanitizePathSegment(filename)
 
 	// If filename doesn't have .map extension, add it with release prefix
 	ext := filepath.Ext(filename)
@@ -359,17 +367,17 @@ func (s *SourceMapStorage) GetSourceMap(appID, release, filename string) ([]byte
 			return nil, fmt.Errorf("failed to read app directory: %w", err)
 		}
 		for _, entry := range entries {
-			if entry.Name() == filename {
-				filePath = filepath.Join(appDir, filename)
+			if entry.Name() == safeFilename {
+				filePath = filepath.Join(appDir, safeFilename)
 				break
 			}
 		}
 		if filePath == "" {
-			return nil, fmt.Errorf("source map file not found: %s", filename)
+			return nil, fmt.Errorf("source map file not found: %s", safeFilename)
 		}
 	} else {
 		// buildID provided - construct the filename
-		filePath = s.GetPath(appID, release, filename)
+		filePath = s.GetPath(appID, release, safeFilename)
 	}
 
 	content, err := os.ReadFile(filePath)

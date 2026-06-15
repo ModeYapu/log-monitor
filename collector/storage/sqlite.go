@@ -322,7 +322,12 @@ func (db *DB) DeleteEventsBefore(before time.Time) (int64, error) {
 		return 0, fmt.Errorf("failed to delete events: %w", err)
 	}
 
-	count, _ := result.RowsAffected()
+	count, raErr := result.RowsAffected()
+	if raErr != nil {
+		// The deletion itself succeeded; the affected-count is only used to
+		// decide whether to run incremental vacuum, so log and proceed with 0.
+		slog.Warn("Failed to read rows affected for event deletion", "error", raErr)
+	}
 
 	// Reclaim the freed pages incrementally rather than with a blocking full
 	// VACUUM. incremental_vacuum is non-exclusive and only frees pages when the
@@ -398,7 +403,11 @@ func (db *DB) DeleteRecordingsBefore(before time.Time) (int64, error) {
 		if err != nil {
 			slog.Error("Failed to delete recording events batch", "error", err)
 		} else {
-			if n, _ := result.RowsAffected(); n > 0 {
+			n, raErr := result.RowsAffected()
+			if raErr != nil {
+				slog.Warn("Failed to read rows affected for recording events batch", "error", raErr)
+			}
+			if n > 0 {
 				totalDeleted += n
 			}
 		}
@@ -410,7 +419,10 @@ func (db *DB) DeleteRecordingsBefore(before time.Time) (int64, error) {
 		return totalDeleted, fmt.Errorf("failed to delete recordings: %w", err)
 	}
 
-	recordingCount, _ := result.RowsAffected()
+	recordingCount, raErr := result.RowsAffected()
+	if raErr != nil {
+		slog.Warn("Failed to read rows affected for recording deletion", "error", raErr)
+	}
 	totalDeleted += recordingCount
 
 	slog.Info("Deleted old recordings", "recordings", recordingCount, "totalRows", totalDeleted)
@@ -482,9 +494,15 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 	rows, err := db.conn.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
 	if err != nil {
 		slog.Error("Failed to delete old events", "error", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		result.DeletedEvents = rowsAffected
-		slog.Info("Deleted old events", "count", rowsAffected, "olderThan", retentionDays)
+	} else {
+		rowsAffected, raErr := rows.RowsAffected()
+		if raErr != nil {
+			slog.Warn("Failed to read rows affected for old events deletion", "error", raErr)
+		}
+		if rowsAffected > 0 {
+			result.DeletedEvents = rowsAffected
+			slog.Info("Deleted old events", "count", rowsAffected, "olderThan", retentionDays)
+		}
 	}
 
 	// Clean orphaned recording_events
@@ -494,10 +512,16 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 	`)
 	if err != nil {
 		slog.Error("Failed to delete orphaned recording_events", "error", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		orphanDeleted := rowsAffected
-		result.TotalFilesFreed += orphanDeleted
-		slog.Info("Deleted orphaned recording_events", "count", orphanDeleted)
+	} else {
+		rowsAffected, raErr := rows.RowsAffected()
+		if raErr != nil {
+			slog.Warn("Failed to read rows affected for orphaned recording_events", "error", raErr)
+		}
+		if rowsAffected > 0 {
+			orphanDeleted := rowsAffected
+			result.TotalFilesFreed += orphanDeleted
+			slog.Info("Deleted orphaned recording_events", "count", orphanDeleted)
+		}
 	}
 
 	// Delete old alert logs
@@ -505,10 +529,16 @@ func (db *DB) cleanupOldData(retentionDays int) CleanupResult {
 	rows, err = db.conn.Exec("DELETE FROM alert_logs WHERE created_at < ?", alertsCutoff)
 	if err != nil {
 		slog.Error("Failed to delete old alert_logs", "error", err)
-	} else if rowsAffected, _ := rows.RowsAffected(); rowsAffected > 0 {
-		alertDeleted := rowsAffected
-		result.TotalFilesFreed += alertDeleted
-		slog.Info("Deleted old alert_logs", "count", alertDeleted, "olderThan", retentionDays)
+	} else {
+		rowsAffected, raErr := rows.RowsAffected()
+		if raErr != nil {
+			slog.Warn("Failed to read rows affected for old alert_logs deletion", "error", raErr)
+		}
+		if rowsAffected > 0 {
+			alertDeleted := rowsAffected
+			result.TotalFilesFreed += alertDeleted
+			slog.Info("Deleted old alert_logs", "count", alertDeleted, "olderThan", retentionDays)
+		}
 	}
 
 	result.Duration = time.Since(start)

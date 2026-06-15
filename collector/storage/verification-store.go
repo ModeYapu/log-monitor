@@ -66,7 +66,12 @@ func (db *DB) StoreVerificationResult(result *VerificationResult) error {
 		return fmt.Errorf("failed to insert verification result: %w", err)
 	}
 
-	id, _ := insertResult.LastInsertId()
+	id, lidErr := insertResult.LastInsertId()
+	if lidErr != nil {
+		// The row was inserted; the generated ID is only echoed back to the
+		// caller, so log and continue rather than failing the whole store.
+		slog.Warn("Failed to read last insert id for verification result", "error", lidErr)
+	}
 	result.ID = id
 
 	return nil
