@@ -6,14 +6,15 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID          int64  `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Role        string `json:"role"` // admin | user
-	Enabled     bool   `json:"enabled"`
-	LastLoginAt int64  `json:"last_login_at"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	ID                  int64  `json:"id"`
+	Username            string `json:"username"`
+	DisplayName         string `json:"display_name"`
+	Role                string `json:"role"` // admin | user
+	Enabled             bool   `json:"enabled"`
+	ForcePasswordChange bool   `json:"force_password_change"`
+	LastLoginAt         int64  `json:"last_login_at"`
+	CreatedAt           int64  `json:"created_at"`
+	UpdatedAt           int64  `json:"updated_at"`
 }
 
 // TokenClaims represents JWT token claims
@@ -37,10 +38,11 @@ type LoginResponse struct {
 
 // UserInfo represents user info returned to client (without sensitive data)
 type UserInfo struct {
-	ID          int64  `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
+	ID                  int64  `json:"id"`
+	Username            string `json:"username"`
+	DisplayName         string `json:"display_name"`
+	Role                string `json:"role"`
+	ForcePasswordChange bool   `json:"force_password_change"`
 }
 
 // CreateUserRequest represents a create user request (admin only)

@@ -104,10 +104,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(model.LoginResponse{
 		Token: token,
 		User: &model.UserInfo{
-			ID:          user.ID,
-			Username:    user.Username,
-			DisplayName: user.DisplayName,
-			Role:        user.Role,
+			ID:                  user.ID,
+			Username:            user.Username,
+			DisplayName:         user.DisplayName,
+			Role:                user.Role,
+			ForcePasswordChange: user.ForcePasswordChange,
 		},
 	})
 }
@@ -144,10 +145,11 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(model.UserInfo{
-		ID:          user.ID,
-		Username:    user.Username,
-		DisplayName: user.DisplayName,
-		Role:        user.Role,
+		ID:                  user.ID,
+		Username:            user.Username,
+		DisplayName:         user.DisplayName,
+		Role:                user.Role,
+		ForcePasswordChange: user.ForcePasswordChange,
 	})
 }
 
@@ -525,6 +527,11 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 			"error": "密码重置失败",
 		})
 		return
+	}
+
+	// An admin-chosen password must be changed by the user on next login.
+	if err := h.userStorage.MarkPasswordChangeRequired(id, true); err != nil {
+		slog.Warn("Failed to mark password change required after reset", "error", err)
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{

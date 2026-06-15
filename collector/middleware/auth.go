@@ -145,6 +145,45 @@ func (c *AuthConfig) AuthenticateWebSocket(r *http.Request, isAdmin bool) bool {
 	return userValid || adminValid
 }
 
+// AuthenticateWebSocketAnyRole validates a WebSocket connection's token before
+// the connection is upgraded. The token is read from the ?token= query param
+// (the conventional way to pass a credential to a browser WebSocket) or the
+// Authorization header, and is checked against configured admin tokens or the
+// JWT validator.
+//
+// Unlike AuthenticateWebSocket(isAdmin=false), it ALWAYS validates the token:
+// it never accepts an arbitrary non-empty token merely because no user tokens
+// are configured. Any valid JWT (regardless of role) or configured admin token
+// is accepted. Use this for endpoints (e.g. the cobrowse user socket) where the
+// session id is client-supplied and must not be trusted on its own.
+func (c *AuthConfig) AuthenticateWebSocketAnyRole(r *http.Request) bool {
+	if !c.Enabled {
+		return true
+	}
+
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		token = extractToken(r)
+	}
+	if token == "" {
+		return false
+	}
+
+	c.mu.RLock()
+	adminValid := c.AdminTokens[token]
+	validator := c.JWTValidator
+	c.mu.RUnlock()
+
+	if adminValid {
+		return true
+	}
+	if validator != nil {
+		_, err := validator.ValidateToken(token)
+		return err == nil
+	}
+	return false
+}
+
 // extractToken extracts token from Authorization header
 func extractToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")

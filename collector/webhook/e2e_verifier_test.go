@@ -217,7 +217,11 @@ func TestHandleVerificationResult_WrongAPIKey(t *testing.T) {
 	}
 }
 
-func TestHandleVerificationResult_APIKeyInQuery(t *testing.T) {
+// TestHandleVerificationResult_APIKeyInQueryRejected verifies that the API key
+// is NOT accepted via the ?api_key= query parameter. Query parameters leak into
+// access logs, browser history, and intermediary proxies, so the key must be
+// supplied only via the X-API-Key header.
+func TestHandleVerificationResult_APIKeyInQueryRejected(t *testing.T) {
 	store := &mockResultStore{}
 	alerter := &mockAlerter{}
 	handler := NewE2EVerifierHook("test-api-key", store, alerter)
@@ -229,8 +233,11 @@ func TestHandleVerificationResult_APIKeyInQuery(t *testing.T) {
 
 	handler.HandleVerificationResult(w, r)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 (query-param API key must be rejected), got %d", w.Code)
+	}
+	if store.lastResult != nil {
+		t.Error("Result must not be stored when the API key is only supplied via query param")
 	}
 }
 

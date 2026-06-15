@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,9 +20,21 @@ type Config struct {
 // ServerConfig holds HTTP server configuration
 type ServerConfig struct {
 	Port           int      `yaml:"port"`
+	Env            string   `yaml:"env"` // deployment environment: "production" | "development" (default)
 	CORS           bool     `yaml:"cors"`
 	AllowedOrigins []string `yaml:"allowed_origins"`
 	AdminTokens    []string `yaml:"admin_tokens"`
+}
+
+// IsProduction reports whether the server runs in production mode. It honors
+// the server.env config value and falls back to the NODE_ENV environment
+// variable, so deployments can select production mode without editing config.
+func (s ServerConfig) IsProduction() bool {
+	env := s.Env
+	if env == "" {
+		env = os.Getenv("NODE_ENV")
+	}
+	return strings.EqualFold(strings.TrimSpace(env), "production")
 }
 
 // DatabaseConfig holds database configuration
@@ -188,10 +201,14 @@ func Default() *Config {
 				FromName: "LogMonitor",
 			},
 		},
+		// DefaultPassword is intentionally empty: the initial admin password is
+		// resolved in main from ADMIN_PASSWORD/auth.default_password, or randomly
+		// generated in development (see seedAdminUser). A hardcoded default would
+		// be a known credential exploitable on any fresh install.
 		Auth: AuthConfig{
 			Enabled:          true,
 			JWTSecret:        "",
-			DefaultPassword:  "admin123",
+			DefaultPassword:  "",
 			TokenExpireHours: 24,
 		},
 	}

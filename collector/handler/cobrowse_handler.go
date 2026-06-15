@@ -26,6 +26,16 @@ func (h *CoBrowseHub) removeSession(sessionID string) {
 }
 
 func (h *CoBrowseHub) HandleUserConnection(w http.ResponseWriter, r *http.Request) {
+	// Authenticate before upgrading. The sessionID is client-supplied, so
+	// accepting it without a token would let an attacker connect to (or guess)
+	// a session id and inject forged recordings or hijack an active session.
+	// The connecting client must present a valid admin token or JWT via the
+	// ?token= query param or the Authorization header.
+	if !h.auth.AuthenticateWebSocketAnyRole(r) {
+		middleware.WriteAuthError(w, "Invalid or missing token")
+		return
+	}
+
 	// Check session limit to prevent resource exhaustion
 	h.mu.RLock()
 	if len(h.sessions) >= h.maxSessions {

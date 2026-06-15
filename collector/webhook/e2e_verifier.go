@@ -62,14 +62,18 @@ func (h *E2EVerifierHook) HandleVerificationResult(w http.ResponseWriter, r *htt
 
 	w.Header().Set("Content-Type", "application/json")
 
-	// Verify API key authentication
+	// Cap the request body so a client cannot exhaust server memory. This
+	// bounds both the signature read (verifySignature) and the payload read
+	// below — both ultimately drain r.Body through this limited reader.
+	const maxRequestSize = 10 * 1024 * 1024 // 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+
+	// Verify API key authentication. The key is accepted ONLY from the
+	// X-API-Key header — never a query parameter, which would leak into access
+	// logs, browser history, and intermediary proxies.
 	apiKey := r.Header.Get("X-API-Key")
-	if apiKey == "" {
-		// Also try query parameter
-		apiKey = r.URL.Query().Get("api_key")
-	}
 	if !h.verifyAPIKey(apiKey) {
-		slog.Warn("E2E verifier webhook: invalid API key", "remote_addr", r.RemoteAddr)
+		slog.Warn("E2E verifier webhook: invalid or missing X-API-Key", "remote_addr", r.RemoteAddr)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -198,7 +202,10 @@ func (h *E2EVerifierHook) verifyAPIKey(apiKey string) bool {
 	return hmac.Equal([]byte(apiKey), []byte(h.apiKey))
 }
 
-// verifySignature verifies the HMAC signature of the request
+// verifySignature verifies the HMAC signature of the request. The caller
+// (HandleVerificationResult) has already wrapped r.Body in an
+// http.MaxBytesReader, so this read — and the restored body it produces for the
+// subsequent payload read — is bounded to maxRequestSize bytes.
 func (h *E2EVerifierHook) verifySignature(r *http.Request, signature string) bool {
 	// Read body for signature verification
 	body, err := io.ReadAll(r.Body)

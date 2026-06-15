@@ -36,14 +36,16 @@ type JWT struct {
 // NewJWT creates a new JWT middleware
 func NewJWT(secret string, tokenExpireHours int) *JWT {
 	if secret == "" {
-		// Generate a random secret if not provided
+		// Dev-only fallback: generate a random secret. Production callers must
+		// gate this off (see main) and refuse to start without an explicit
+		// secret, since a random one invalidates all tokens on every restart.
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
 			slog.Error("Failed to generate JWT secret", "error", err)
 			os.Exit(1)
 		}
 		secret = base64.StdEncoding.EncodeToString(b)
-		slog.Info("Generated JWT secret (set auth.jwt_secret in config to persist)")
+		slog.Warn("Generated a random JWT secret (tokens will not survive a restart). Set auth.jwt_secret in config to persist.")
 	}
 	return &JWT{
 		secret:           []byte(secret),
